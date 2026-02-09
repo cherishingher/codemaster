@@ -5,3 +5,8 @@ node_modules/
 *.log
 .DS_Store
 prisma/migrations/
+infra/hustoj/mysql/data/
+storage/
+apps/web/storage/
+apps/web/.next/
+apps/web/node_modules/
