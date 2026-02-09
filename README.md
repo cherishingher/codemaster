@@ -17,6 +17,24 @@
    npm run dev
    ```
 
+## 部署所需组件
+- **Web 应用**：`apps/web`（Next.js）
+- **PostgreSQL**：主业务数据库（Prisma）
+- **Redis**：任务队列 / 缓存（评测任务流）
+- **HUSTOJ**：评测后端（含 MySQL）
+- **Judge Agent**：自建判题服务（`services/judge-agent`）
+- **Scratch GUI**：图形化入口（构建产物在 `apps/web/public/graphical`）
+
+## 部署顺序（建议）
+1. **基础服务**：启动 PostgreSQL、Redis
+2. **HUSTOJ**：启动 HUSTOJ（含 MySQL），确保能访问并初始化
+3. **Web**：
+   - 配置 `.env`
+   - 运行 Prisma 迁移/生成
+   - 启动 `apps/web`
+4. **Judge Agent**：启动 `services/judge-agent`（确保能连 Redis 与 Web API）
+5. **图形化**：如需 Scratch，确保 `apps/web/public/graphical` 已同步构建产物
+
 ## 阿里云验证码快速接入
 查看完整流程与最短执行清单：`docs/aliyun-auth-setup.md`
 
