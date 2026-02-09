@@ -1,0 +1,28 @@
+{
+  "name": "codemaster",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "services/*"
+  ],
+  "scripts": {
+    "dev": "npm --prefix apps/web run dev",
+    "build": "npm --prefix apps/web run build",
+    "lint": "npm --prefix apps/web run lint",
+    "db:generate": "npx prisma generate --schema packages/db/prisma/schema.prisma",
+    "db:migrate": "npx prisma migrate dev --schema packages/db/prisma/schema.prisma",
+    "judge:dev": "npm --prefix services/judge-agent run dev",
+    "graphical:install": "CHROMEDRIVER_SKIP_DOWNLOAD=1 npm --prefix apps/graphical install --ignore-scripts --legacy-peer-deps",
+    "graphical:build": "NODE_OPTIONS=--openssl-legacy-provider npm --prefix apps/graphical run build",
+    "graphical:sync": "node scripts/graphical-sync.mjs",
+    "graphical:prepare": "npm run graphical:install && npm run graphical:build && npm run graphical:sync"
+  },
+  "dependencies": {
+    "@hookform/resolvers": "^5.2.2",
+    "@types/unzipper": "^0.10.11",
+    "mysql2": "^3.16.2",
+    "react-hook-form": "^7.71.1",
+    "unzipper": "^0.12.3"
+  }
+}

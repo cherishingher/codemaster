@@ -1,0 +1,35 @@
+version: "3.9"
+
+services:
+  hustoj-mysql:
+    build:
+      context: ./hustoj
+      dockerfile: docker/mysql/Dockerfile
+    container_name: hustoj-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: jol
+      MYSQL_USER: root
+      MYSQL_PASSWORD: root
+    ports:
+      - "3307:3306"
+    volumes:
+      - ./mysql/data:/var/lib/mysql
+    restart: unless-stopped
+
+  hustoj-judge:
+    build:
+      context: ./hustoj
+      dockerfile: docker/judge/Dockerfile
+    container_name: hustoj-judge
+    privileged: true
+    environment:
+      HOSTNAME: hustoj-mysql
+      DATABASE: jol
+      USERNAME: hustoj
+      PASSWORD: hustoj
+    depends_on:
+      - hustoj-mysql
+    volumes:
+      - ./data:/home/judge/data
+    restart: unless-stopped

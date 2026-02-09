@@ -1,0 +1,421 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id          String   @id @default(cuid())
+  email       String?  @unique
+  phone       String?  @unique
+  emailVerifiedAt DateTime?
+  phoneVerifiedAt DateTime?
+  password    String
+  name        String?
+  status      String   @default("active")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  roles       UserRole[]
+  sessions    Session[]
+  submissions Submission[]
+  enrollments Enrollment[]
+  orders      Order[]
+  posts       Post[]
+  comments    Comment[]
+  contestParticipants ContestParticipant[]
+  moderationLogs ModerationLog[]
+  solutions   Solution[]
+  problemSets ProblemSet[]
+  problemProgress UserProblemProgress[]
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  target    String
+  type      String
+  purpose   String   @default("register")
+  codeHash  String
+  expiresAt DateTime
+  usedAt    DateTime?
+  attempts  Int      @default(0)
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([target, type, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+model Role {
+  id    String @id @default(cuid())
+  name  String @unique
+  users UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User  @relation(fields: [userId], references: [id])
+  role   Role  @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@index([roleId])
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId])
+}
+
+model Problem {
+  id          String   @id @default(cuid())
+  title       String
+  difficulty  Int
+  visibility  String   @default("public")
+  source      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  tags        ProblemTag[]
+  versions    ProblemVersion[]
+  submissions Submission[]
+  contestProblems ContestProblem[]
+  solutions   Solution[]
+  problemSetItems ProblemSetItem[]
+  stats       ProblemStat?
+  progress    UserProblemProgress[]
+  hustojMap   HustojProblemMap?
+
+  @@index([difficulty])
+}
+
+model ProblemVersion {
+  id            String @id @default(cuid())
+  problemId     String
+  version       Int
+  statement     String
+  constraints   String?
+  inputFormat   String?
+  outputFormat  String?
+  samples       Json?
+  scratchRules  Json?
+  notes         String?
+  timeLimitMs   Int
+  memoryLimitMb Int
+  problem       Problem @relation(fields: [problemId], references: [id])
+  testcases     Testcase[]
+  submissions   Submission[]
+  solutions     Solution[]
+
+  @@unique([problemId, version])
+  @@index([problemId])
+}
+
+model Testcase {
+  id        String @id @default(cuid())
+  versionId String
+  inputUri  String
+  outputUri String
+  score     Int
+  timeLimitMs Int?
+  memoryLimitKb Int?
+  subtaskId Int?
+  isPretest Boolean @default(false)
+  groupId   String?
+  isSample  Boolean @default(false)
+  orderIndex Int?
+  version   ProblemVersion @relation(fields: [versionId], references: [id])
+
+  @@index([versionId])
+}
+
+model Tag {
+  id       String @id @default(cuid())
+  name     String @unique
+  problems ProblemTag[]
+}
+
+model ProblemTag {
+  problemId String
+  tagId     String
+  problem   Problem @relation(fields: [problemId], references: [id])
+  tag       Tag     @relation(fields: [tagId], references: [id])
+
+  @@id([problemId, tagId])
+  @@index([tagId])
+}
+
+model Submission {
+  id        String   @id @default(cuid())
+  userId    String
+  problemId String
+  problemVersionId String
+  lang      String
+  codeUri   String?
+  code      String?  @db.Text
+  status    String   @default("QUEUED")
+  score     Int      @default(0)
+  judgeBackend String @default("hustoj")
+  hustojSolutionId Int?
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  problem   Problem  @relation(fields: [problemId], references: [id])
+  problemVersion ProblemVersion @relation(fields: [problemVersionId], references: [id])
+  cases     SubmissionCase[]
+
+  @@index([userId, createdAt])
+  @@index([problemId, createdAt])
+  @@index([status])
+}
+
+model HustojProblemMap {
+  id              String   @id @default(cuid())
+  problemId       String   @unique
+  hustojProblemId Int      @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  problem         Problem  @relation(fields: [problemId], references: [id])
+
+  @@index([hustojProblemId])
+}
+
+model SubmissionCase {
+  id           String @id @default(cuid())
+  submissionId String
+  testcaseId   String?
+  status       String
+  timeMs       Int
+  memoryMb     Int
+  score        Int
+  submission   Submission @relation(fields: [submissionId], references: [id])
+
+  @@index([submissionId])
+}
+
+model Contest {
+  id           String @id @default(cuid())
+  name         String
+  startAt      DateTime
+  endAt        DateTime
+  rule         String @default("ACM")
+  problems     ContestProblem[]
+  participants ContestParticipant[]
+
+  @@index([startAt, endAt])
+}
+
+model ContestProblem {
+  contestId String
+  problemId String
+  order     Int
+  contest   Contest @relation(fields: [contestId], references: [id])
+  problem   Problem @relation(fields: [problemId], references: [id])
+
+  @@id([contestId, problemId])
+  @@index([contestId, order])
+}
+
+model ContestParticipant {
+  contestId String
+  userId    String
+  status    String @default("joined")
+  contest   Contest @relation(fields: [contestId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
+
+  @@id([contestId, userId])
+  @@index([contestId])
+}
+
+model Course {
+  id          String @id @default(cuid())
+  title       String
+  status      String @default("draft")
+  sections    Section[]
+  enrollments Enrollment[]
+}
+
+model Section {
+  id       String @id @default(cuid())
+  courseId String
+  title    String
+  lessons  Lesson[]
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@index([courseId])
+}
+
+model Lesson {
+  id          String @id @default(cuid())
+  sectionId   String
+  title       String
+  type        String
+  assetUri    String?
+  durationSec Int?
+  section     Section @relation(fields: [sectionId], references: [id])
+
+  @@index([sectionId])
+}
+
+model Enrollment {
+  id       String @id @default(cuid())
+  userId   String
+  courseId String
+  status   String @default("active")
+  user     User   @relation(fields: [userId], references: [id])
+  course   Course @relation(fields: [courseId], references: [id])
+
+  @@index([userId])
+  @@index([courseId])
+}
+
+model Product {
+  id         String @id @default(cuid())
+  name       String
+  priceCents Int
+  type       String
+}
+
+model Order {
+  id          String @id @default(cuid())
+  userId      String
+  amountCents Int
+  status      String @default("created")
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+}
+
+model Payment {
+  id      String @id @default(cuid())
+  orderId String
+  channel String
+  status  String
+  paidAt  DateTime?
+
+  @@index([orderId])
+}
+
+model Entitlement {
+  id        String @id @default(cuid())
+  userId    String
+  productId String
+  expiresAt DateTime?
+
+  @@index([userId, productId])
+}
+
+model Post {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  content   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+  comments  Comment[]
+
+  @@index([status, createdAt])
+}
+
+model Comment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  status    String   @default("pending")
+  createdAt DateTime @default(now())
+  post      Post     @relation(fields: [postId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([postId, createdAt])
+}
+
+model Solution {
+  id         String   @id @default(cuid())
+  problemId  String
+  versionId  String?
+  type       String   @default("official") // official/ugc
+  title      String
+  content    String
+  videoUrl   String?
+  authorId   String
+  visibility String   @default("public")
+  createdAt  DateTime @default(now())
+  problem    Problem  @relation(fields: [problemId], references: [id])
+  author     User     @relation(fields: [authorId], references: [id])
+  version    ProblemVersion? @relation(fields: [versionId], references: [id])
+
+  @@index([problemId, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model ProblemSet {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  visibility  String   @default("public")
+  ownerId     String
+  createdAt   DateTime @default(now())
+  owner       User     @relation(fields: [ownerId], references: [id])
+  items       ProblemSetItem[]
+}
+
+model ProblemSetItem {
+  setId     String
+  problemId String
+  orderIndex Int
+  set       ProblemSet @relation(fields: [setId], references: [id])
+  problem   Problem    @relation(fields: [problemId], references: [id])
+
+  @@id([setId, problemId])
+  @@index([setId, orderIndex])
+}
+
+model ProblemStat {
+  problemId          String  @id
+  totalSubmissions   Int     @default(0)
+  acceptedSubmissions Int    @default(0)
+  passRate           Float   @default(0)
+  avgTimeMs          Int     @default(0)
+  avgMemoryMb        Int     @default(0)
+  updatedAt          DateTime @default(now())
+  problem            Problem @relation(fields: [problemId], references: [id])
+}
+
+model ModerationLog {
+  id         String   @id @default(cuid())
+  targetType String
+  targetId   String
+  action     String
+  reason     String?
+  adminId    String
+  createdAt  DateTime @default(now())
+  admin      User     @relation(fields: [adminId], references: [id])
+
+  @@index([targetType, targetId])
+  @@index([adminId, createdAt])
+}
+
+model UserProblemProgress {
+  userId          String
+  problemId       String
+  attempts        Int      @default(0)
+  bestScore       Int      @default(0)
+  lastStatus      String?
+  solvedAt        DateTime?
+  lastSubmissionId String?
+  updatedAt       DateTime @updatedAt
+  user            User     @relation(fields: [userId], references: [id])
+  problem         Problem  @relation(fields: [problemId], references: [id])
+
+  @@id([userId, problemId])
+  @@index([userId, updatedAt])
+  @@index([problemId])
+}
