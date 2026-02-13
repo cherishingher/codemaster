@@ -128,17 +128,19 @@ export function RegisterForm() {
           </div>
           <div className="grid gap-2">
             <Label htmlFor="code">验证码</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-col gap-2 sm:flex-row">
               <Input
                 id="code"
                 placeholder="6 位验证码"
                 type="text"
                 disabled={isLoading}
+                className="flex-1"
                 {...register("code")}
               />
               <Button
                 type="button"
                 variant="secondary"
+                className="shrink-0 whitespace-nowrap"
                 onClick={handleSendCode}
                 disabled={isSending || countdown > 0}
               >

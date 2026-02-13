@@ -468,11 +468,11 @@ export default function ProblemDetailPage() {
 
   return (
     <>
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col md:flex-row">
+    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col lg:flex-row">
       {/* Problem Description Side */}
       <div
-        className={`flex-1 border-r p-6 bg-zinc-900/50 ${
-          isScratch ? "md:w-[15%]" : "md:w-1/2"
+        className={`border-b p-4 sm:p-6 bg-zinc-900/50 lg:border-b-0 lg:border-r lg:overflow-y-auto ${
+          isScratch ? "lg:w-[20%] lg:min-w-[240px]" : "lg:w-1/2"
         }`}
       >
         <div className="mb-4">
@@ -563,12 +563,12 @@ export default function ProblemDetailPage() {
 
       {/* Code Editor Side */}
       <div
-        className={`flex min-w-0 flex-col bg-zinc-950 border-l border-zinc-800 ${
-          isScratch ? "md:w-[85%]" : "md:w-1/2"
+        className={`flex min-w-0 flex-col bg-zinc-950 lg:border-l lg:border-zinc-800 ${
+          isScratch ? "lg:w-[80%]" : "lg:w-1/2"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2">
-          <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-zinc-800 bg-zinc-900 px-3 py-2 sm:px-4">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
             <div className="flex items-center gap-2">
               <div className="text-sm font-medium text-zinc-400">语言</div>
               <select
@@ -639,7 +639,7 @@ export default function ProblemDetailPage() {
 
         <div className="flex flex-col gap-4 p-4">
           {isScratch ? (
-            <div className="flex h-[95vh] min-h-[700px] flex-col gap-3">
+            <div className="flex h-[50vh] min-h-[300px] flex-col gap-3 sm:h-[65vh] sm:min-h-[400px] lg:h-[80vh] lg:min-h-[500px]">
               <div className="flex-1 overflow-hidden rounded-md border border-zinc-800 bg-black">
                 <iframe
                   title="Scratch"
@@ -679,7 +679,7 @@ export default function ProblemDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="h-[60vh] min-h-[420px]">
+            <div className="h-[40vh] min-h-[250px] sm:h-[50vh] sm:min-h-[320px] lg:h-[60vh] lg:min-h-[400px]">
               <CodeEditor
                 value={code}
                 onChange={(val) => setCode(val || "")}

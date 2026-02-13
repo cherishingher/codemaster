@@ -36,8 +36,8 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container py-8 px-4 md:px-6">
-      <div className="grid gap-6 md:grid-cols-[300px_1fr]">
+    <div className="container py-6 sm:py-8">
+      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* User Info Sidebar */}
         <div className="space-y-6">
           <Card>
@@ -80,7 +80,7 @@ export default function ProfilePage() {
 
         {/* Main Content */}
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 grid-cols-1 sm:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -123,8 +123,8 @@ export default function ProfilePage() {
             <CardContent>
               <div className="space-y-4">
                 {stats.recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-4">
+                  <div key={activity.id} className="flex flex-col gap-2 border-b pb-4 last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-center gap-3 sm:gap-4">
                       <div className={`p-2 rounded-full ${activity.status === 'ACCEPTED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
                         {activity.status === 'ACCEPTED' ? <Target className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
                       </div>
@@ -133,7 +133,7 @@ export default function ProfilePage() {
                         <div className="text-xs text-muted-foreground">{activity.status}</div>
                       </div>
                     </div>
-                    <div className="text-sm text-muted-foreground flex items-center gap-1">
+                    <div className="text-sm text-muted-foreground flex items-center gap-1 pl-11 sm:pl-0">
                       <Calendar className="h-3 w-3" />
                       {activity.date}
                     </div>

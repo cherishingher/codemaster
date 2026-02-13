@@ -67,7 +67,7 @@ export default function ProblemsPage() {
   };
 
   return (
-    <div className="container py-8 px-4 md:px-6">
+    <div className="container py-6 sm:py-8">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">题库</h1>
@@ -119,13 +119,13 @@ export default function ProblemsPage() {
           return (
             <Link key={problem.id} href={`/problems/${problem.id}`}>
               <Card className="transition-all hover:bg-muted/50">
-                <CardContent className="flex items-center justify-between p-6">
+                <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-6">
                   <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <span className="font-mono text-muted-foreground">
+                    <div className="flex items-center gap-2 flex-wrap sm:gap-4">
+                      <span className="font-mono text-xs text-muted-foreground sm:text-sm">
                         #{problem.id}
                       </span>
-                      <span className="font-medium text-lg">
+                      <span className="font-medium text-base sm:text-lg">
                         {problem.title}
                       </span>
                       <Badge variant="secondary" className={getDifficultyColor(label)}>

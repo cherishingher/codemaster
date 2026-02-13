@@ -13,47 +13,53 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Code2, LogOut, User } from "lucide-react"
+import { Code2, LogOut, Menu, User, X } from "lucide-react"
+
+const NAV_LINKS = [
+  { href: "/problems", label: "题库" },
+  { href: "/contests", label: "竞赛" },
+  { href: "/discuss", label: "讨论" },
+  { href: "/graphical", label: "图形化" },
+]
 
 export function Navbar() {
   const { user, loggedIn, logout } = useAuth()
+  const [mobileOpen, setMobileOpen] = React.useState(false)
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <div className="container flex h-14 items-center px-4 md:px-6">
-        <Link href="/" className="mr-6 flex items-center space-x-2">
+      <div className="container flex h-14 items-center">
+        <Link href="/" className="mr-4 flex items-center space-x-2 md:mr-6">
           <Code2 className="h-6 w-6 text-primary" />
           <span className="hidden font-bold sm:inline-block">
             CodeMaster
           </span>
         </Link>
-        <nav className="flex items-center space-x-6 text-sm font-medium">
-          <Link
-            href="/problems"
-            className="transition-colors hover:text-foreground/80 text-foreground/60"
-          >
-            题库
-          </Link>
-          <Link
-            href="/contests"
-            className="transition-colors hover:text-foreground/80 text-foreground/60"
-          >
-            竞赛
-          </Link>
-          <Link
-            href="/discuss"
-            className="transition-colors hover:text-foreground/80 text-foreground/60"
-          >
-            讨论
-          </Link>
-          <Link
-            href="/graphical"
-            className="transition-colors hover:text-foreground/80 text-foreground/60"
-          >
-            图形化
-          </Link>
+
+        {/* Desktop Nav */}
+        <nav className="hidden items-center space-x-4 text-sm font-medium md:flex lg:space-x-6">
+          {NAV_LINKS.map((link) => (
+            <Link
+              key={link.href}
+              href={link.href}
+              className="transition-colors hover:text-foreground/80 text-foreground/60"
+            >
+              {link.label}
+            </Link>
+          ))}
         </nav>
-        <div className="ml-auto flex items-center space-x-4">
+
+        {/* Mobile Hamburger */}
+        <Button
+          variant="ghost"
+          size="sm"
+          className="mr-2 h-8 w-8 p-0 md:hidden"
+          onClick={() => setMobileOpen(!mobileOpen)}
+        >
+          {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+        </Button>
+
+        <div className="ml-auto flex items-center space-x-2 sm:space-x-4">
           {loggedIn ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -64,11 +70,11 @@ export function Navbar() {
                   </Avatar>
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuContent className="w-48 sm:w-56" align="end" forceMount>
                 <DropdownMenuLabel className="font-normal">
                   <div className="flex flex-col space-y-1">
                     <p className="text-sm font-medium leading-none">{user?.name || "User"}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
+                    <p className="text-xs leading-none text-muted-foreground truncate">
                       {user?.email}
                     </p>
                   </div>
@@ -89,16 +95,34 @@ export function Navbar() {
             </DropdownMenu>
           ) : (
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild>
+              <Button variant="ghost" size="sm" asChild>
                 <Link href="/login">登录</Link>
               </Button>
-              <Button asChild>
+              <Button size="sm" asChild>
                 <Link href="/register">注册</Link>
               </Button>
             </div>
           )}
         </div>
       </div>
+
+      {/* Mobile Menu Dropdown */}
+      {mobileOpen && (
+        <div className="border-t bg-background px-4 pb-4 pt-2 md:hidden">
+          <nav className="flex flex-col space-y-3 text-sm font-medium">
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="rounded-md px-3 py-2 transition-colors hover:bg-muted hover:text-foreground text-foreground/70"
+                onClick={() => setMobileOpen(false)}
+              >
+                {link.label}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
     </header>
   )
 }
