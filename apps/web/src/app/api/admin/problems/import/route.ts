@@ -150,7 +150,7 @@ export const POST = withAuth(async (req, _ctx, user) => {
         }
       }
 
-      if (item.versions?.length) {
+      if ('versions' in item && Array.isArray(item.versions) && item.versions.length) {
         let autoVersion = 1;
         for (const v of item.versions) {
           const createdVersion = await tx.problemVersion.create({
@@ -194,7 +194,7 @@ export const POST = withAuth(async (req, _ctx, user) => {
         }
       }
 
-      if (item.solutions?.length) {
+      if ('solutions' in item && Array.isArray(item.solutions) && item.solutions.length) {
         for (const s of item.solutions) {
           await tx.solution.create({
             data: {

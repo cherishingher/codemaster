@@ -21,7 +21,10 @@ interface Problem {
 }
 
 export default function ProblemsPage() {
-  const { data: problems, error, isLoading } = useSWR<Problem[]>('/problems', api.problems.list);
+  const { data: problems, error, isLoading } = useSWR<Problem[]>(
+    '/problems',
+    async () => (await api.problems.list()) as Problem[]
+  );
 
   const [search, setSearch] = React.useState("")
   const [scratchOnly, setScratchOnly] = React.useState(false)

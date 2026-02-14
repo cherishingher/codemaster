@@ -192,6 +192,7 @@ function extractInputs(
     const input = readInput(raw);
     if (!input) continue;
     if (input.kind === "literal") {
+      if (input.value === null) continue;
       result[name] = input.value;
       continue;
     }

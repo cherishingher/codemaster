@@ -285,7 +285,7 @@ export default function AdminProblemDetailPage() {
       if (res.ok) {
         const rawWarnings = Array.isArray(data.warnings) ? data.warnings : []
         const formattedWarnings = rawWarnings
-          .map((warning) => {
+          .map((warning: { code?: unknown; detail?: unknown } | null | undefined) => {
             const code =
               warning && typeof warning.code === "string" ? warning.code : "warning"
             const detail =
