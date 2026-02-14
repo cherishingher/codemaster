@@ -16,7 +16,7 @@ export interface Submission {
 export function useSubmission(submissionId: string | null) {
   const { data, error, isLoading } = useSWR<Submission>(
     submissionId ? `/submissions/${submissionId}` : null,
-    () => api.submissions.get(submissionId!),
+    async () => (await api.submissions.get(submissionId as string)) as Submission,
     {
       refreshInterval: (data) => {
         // Stop polling if finished

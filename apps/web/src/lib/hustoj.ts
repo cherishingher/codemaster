@@ -143,8 +143,23 @@ export async function ensureHustojProblem(problemId: string) {
 
   const v = problem.versions[0];
   const samples = Array.isArray(v.samples) ? v.samples : [];
-  const sampleInput = samples[0]?.input ?? "";
-  const sampleOutput = samples[0]?.output ?? "";
+  const firstSample = samples[0];
+  const sampleInput =
+    firstSample &&
+    typeof firstSample === "object" &&
+    !Array.isArray(firstSample) &&
+    "input" in firstSample &&
+    typeof (firstSample as { input?: unknown }).input === "string"
+      ? (firstSample as { input: string }).input
+      : "";
+  const sampleOutput =
+    firstSample &&
+    typeof firstSample === "object" &&
+    !Array.isArray(firstSample) &&
+    "output" in firstSample &&
+    typeof (firstSample as { output?: unknown }).output === "string"
+      ? (firstSample as { output: string }).output
+      : "";
   const timeLimitSec = Math.max(1, Math.round(v.timeLimitMs / 1000));
 
   const pool = getPool();
@@ -201,8 +216,12 @@ export async function syncHustojProblem(problemId: string) {
 
   const v = problem.versions[0];
   const samples = Array.isArray(v.samples) ? v.samples : [];
-  const sampleInput = samples[0]?.input ?? "";
-  const sampleOutput = samples[0]?.output ?? "";
+  const firstSample =
+    samples[0] && typeof samples[0] === "object" && !Array.isArray(samples[0])
+      ? (samples[0] as Record<string, unknown>)
+      : undefined;
+  const sampleInput = typeof firstSample?.input === "string" ? firstSample.input : "";
+  const sampleOutput = typeof firstSample?.output === "string" ? firstSample.output : "";
   const timeLimitSec = Math.max(1, Math.round(v.timeLimitMs / 1000));
 
   const pool = getPool();
@@ -259,7 +278,12 @@ export async function submitToHustoj(args: {
 export async function getHustojResult(solutionId: number) {
   const pool = getPool();
   const [rows] = await pool.query<
-    { result: number; time: number; memory: number; pass_rate: number }[]
+    (import("mysql2/promise").RowDataPacket & {
+      result: number;
+      time: number;
+      memory: number;
+      pass_rate: number;
+    })[]
   >("SELECT result, time, memory, pass_rate FROM solution WHERE solution_id = ?", [solutionId]);
   return rows[0] ?? null;
 }

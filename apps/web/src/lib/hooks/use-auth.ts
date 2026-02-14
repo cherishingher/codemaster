@@ -14,7 +14,10 @@ export function useAuth({
   redirectTo = '',
   redirectIfFound = false,
 } = {}) {
-  const { data: user, error, mutate } = useSWR<User>('/auth/me', api.auth.me, {
+  const { data: user, error, mutate } = useSWR<User>(
+    '/auth/me',
+    async () => (await api.auth.me()) as User,
+    {
     shouldRetryOnError: false,
   });
 
@@ -39,7 +42,7 @@ export function useAuth({
     mutate,
     logout: async () => {
       await api.auth.logout();
-      await mutate(null, false);
+      await mutate(undefined, false);
       router.push('/login');
     },
   };

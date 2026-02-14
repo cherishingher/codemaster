@@ -124,7 +124,7 @@ export default function ProblemDetailPage() {
   // Fetch problem (mock fallback)
   const { data: problem, error, isLoading } = useSWR<ProblemDetail>(
     id ? `/problems/${id}` : null,
-    () => api.problems.get(id)
+    async () => (await api.problems.get(id as string)) as ProblemDetail
   )
 
   const [language, setLanguage] = React.useState(LANGUAGES[0])
@@ -181,7 +181,7 @@ export default function ProblemDetailPage() {
     setIsSubmitting(true)
     setSubmissionId(null) // Clear previous result
     try {
-      const res = await api.problems.submit(id, code, language.value)
+      const res = (await api.problems.submit(id, code, language.value)) as { submissionId?: string } | null
       if (res && res.submissionId) {
         setSubmissionId(res.submissionId)
         if (storageKey) {
@@ -625,7 +625,7 @@ export default function ProblemDetailPage() {
               size="sm" 
               className="h-8 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground" 
               onClick={handleSubmit} 
-              disabled={isSubmitting || (submissionId && !isFinished && !submission)}
+              disabled={isSubmitting || Boolean(submissionId && !isFinished && !submission)}
             >
               {isSubmitting ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
