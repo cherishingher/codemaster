@@ -1,3 +1,4 @@
+import * as React from "react"
 import { LoginForm } from "@/components/auth/login-form"
 import { Code2 } from "lucide-react"
 
@@ -28,7 +29,9 @@ export default function LoginPage() {
               请输入您的邮箱或手机号进行登录
             </p>
           </div>
-          <LoginForm />
+          <React.Suspense fallback={<div className="text-sm text-muted-foreground text-center">加载中...</div>}>
+            <LoginForm />
+          </React.Suspense>
         </div>
       </div>
     </div>

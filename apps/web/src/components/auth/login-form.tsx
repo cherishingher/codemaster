@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError, api } from "@/lib/api-client"
-import { useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/lib/hooks/use-auth"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
@@ -24,6 +24,7 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { mutate } = useAuth()
 
   const {
@@ -44,7 +45,13 @@ export function LoginForm() {
         : { phone: data.identifier, password: data.password };
       await api.auth.login(payload)
       await mutate() // Revalidate user session
-      router.push("/problems")
+      
+      const callbackUrl = searchParams?.get("callbackUrl")
+      if (callbackUrl) {
+        router.push(decodeURIComponent(callbackUrl))
+      } else {
+        router.push("/problems")
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         const data = err.data as { message?: string };

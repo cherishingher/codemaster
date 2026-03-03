@@ -53,6 +53,14 @@ export async function client<T = unknown>(
     return data as T;
   }
 
+  if (response.status === 401 && typeof window !== "undefined") {
+    // 自动跳转到登录页，并带上当前页面路径以便登录后跳回
+    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
+    if (!window.location.pathname.startsWith('/login')) {
+      window.location.href = `/login?callbackUrl=${currentPath}`;
+    }
+  }
+
   throw new ApiError(response.status, getErrorMessage(data, response.statusText), data);
 }
 
@@ -69,7 +77,7 @@ export const api = {
     logout: () => client('/auth/logout', { method: 'POST' }),
   },
   problems: {
-    list: () => client('/problems'), // Assuming this exists or will exist
+    list: (params?: Record<string, string>) => client<{data: any[], meta: any}>('/problems', { params }),
     get: (id: string) => client(`/problems/${id}`),
     submit: (id: string, code: string, language: string) => 
       client(`/problems/${id}/submit`, { 
@@ -83,6 +91,7 @@ export const api = {
       }),
   },
   submissions: {
+    list: (params?: Record<string, string>) => client<{data: any[], meta: any}>('/submissions', { params }),
     get: (id: string) => client(`/submissions/${id}`),
   }
 };

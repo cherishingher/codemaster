@@ -35,6 +35,12 @@ export function Navbar() {
             题库
           </Link>
           <Link
+            href="/submissions"
+            className="transition-colors hover:text-foreground/80 text-foreground/60"
+          >
+            我的提交
+          </Link>
+          <Link
             href="/contests"
             className="transition-colors hover:text-foreground/80 text-foreground/60"
           >
@@ -74,8 +80,8 @@ export function Navbar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">
+                <DropdownMenuItem>
+                  <Link href="/profile" className="flex items-center w-full">
                     <User className="mr-2 h-4 w-4" />
                     <span>个人中心</span>
                   </Link>

@@ -129,6 +129,30 @@ export default function ProblemDetailPage() {
 
   const [language, setLanguage] = React.useState(LANGUAGES[0])
   const [code, setCode] = React.useState(LANGUAGES[0].template)
+
+  // Load code from localStorage on mount and when language changes
+  React.useEffect(() => {
+    if (!id || !language.value) return;
+    const isScratch = language.value.startsWith("scratch");
+    if (isScratch) return; // Skip draft for scratch files
+
+    const savedCode = localStorage.getItem(`cm:draft:${id}:${language.value}`);
+    if (savedCode !== null && savedCode !== undefined) {
+      setCode(savedCode);
+    } else {
+      setCode(language.template);
+    }
+  }, [id, language.value]);
+
+  // Save code to localStorage whenever it changes
+  React.useEffect(() => {
+    if (!id || !language.value || !code) return;
+    const isScratch = language.value.startsWith("scratch");
+    if (isScratch) return;
+    
+    // Only save if it's not the initial template (or if they actually edited it)
+    localStorage.setItem(`cm:draft:${id}:${language.value}`, code);
+  }, [id, language.value, code]);
   const [submissionId, setSubmissionId] = React.useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = React.useState(false)
   const [showRunPanel, setShowRunPanel] = React.useState(false)

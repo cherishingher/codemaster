@@ -1,165 +1,194 @@
-"use client"
+"use client";
 
-import * as React from "react"
-import Link from "next/link"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Card, CardContent } from "@/components/ui/card"
-import { Search } from "lucide-react"
-import { api } from "@/lib/api-client"
-import useSWR from "swr"
-
-// Type definition (move to types later)
-interface Problem {
-  id: string;
-  title: string;
-  difficulty: number;
-  source?: string | null;
-  version?: number | null;
-  tags?: string[];
-  visibility?: string | null;
-}
+import * as React from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Search } from "lucide-react";
+import { api } from "@/lib/api-client";
+import useSWR from "swr";
 
 export default function ProblemsPage() {
-  const { data: problems, error, isLoading } = useSWR<Problem[]>('/problems', api.problems.list);
+  const router = useRouter();
+  const searchParams = useSearchParams();
 
-  const [search, setSearch] = React.useState("")
-  const [scratchOnly, setScratchOnly] = React.useState(false)
+  const q = searchParams.get("q") || "";
+  const difficulty = searchParams.get("difficulty") || "";
+  const tag = searchParams.get("tag") || "";
+  const page = parseInt(searchParams.get("page") || "1");
 
-  const filteredProblems = (problems ?? [])
-    .filter((p) =>
-      p.title.toLowerCase().includes(search.toLowerCase()) ||
-      (p.tags ?? []).some((tag) => tag.toLowerCase().includes(search.toLowerCase()))
-    )
-    .filter((p) => {
-      if (!scratchOnly) return true
-      return (p.tags ?? []).some((tag) => tag.toLowerCase().includes("scratch"))
-    });
+  const [searchInput, setSearchInput] = React.useState(q);
+
+  const { data, error, isLoading } = useSWR(
+    `/problems?q=${q}&difficulty=${difficulty}&tag=${tag}&page=${page}`,
+    () => api.problems.list({ q, difficulty, tag, page: String(page) })
+  );
+
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    const params = new URLSearchParams(searchParams);
+    if (searchInput) params.set("q", searchInput);
+    else params.delete("q");
+    params.set("page", "1");
+    router.push(`/problems?${params.toString()}`);
+  };
+
+  const setDifficulty = (val: string) => {
+    const params = new URLSearchParams(searchParams);
+    if (val) params.set("difficulty", val);
+    else params.delete("difficulty");
+    params.set("page", "1");
+    router.push(`/problems?${params.toString()}`);
+  };
 
   const getDifficultyLabel = (value: number) => {
-    if (value <= 2) return "Easy"
-    if (value <= 4) return "Medium"
-    return "Hard"
-  }
+    if (value <= 2) return "简单";
+    if (value <= 4) return "中等";
+    return "困难";
+  };
 
-  const getDifficultyColor = (label: string) => {
-    switch (label) {
-      case "Easy":
-        return "bg-green-500/10 text-green-500 hover:bg-green-500/20"
-      case "Medium":
-        return "bg-yellow-500/10 text-yellow-500 hover:bg-yellow-500/20"
-      case "Hard":
-        return "bg-red-500/10 text-red-500 hover:bg-red-500/20"
-      default:
-        return "bg-gray-500/10 text-gray-500"
-    }
-  }
-
-  const getTagClass = (tag: string) => {
-    const normalized = tag.toLowerCase();
-    if (normalized.includes("scratch") && (normalized.includes("必") || normalized.includes("must"))) {
-      return "bg-red-500/10 text-red-300 border-red-500/30";
-    }
-    if (normalized.includes("scratch")) {
-      return "bg-emerald-500/10 text-emerald-300 border-emerald-500/30";
-    }
-    return "bg-zinc-800/70 text-zinc-200 border-zinc-700/60";
+  const getDifficultyColor = (value: number) => {
+    if (value <= 2) return "text-green-500";
+    if (value <= 4) return "text-yellow-500";
+    return "text-red-500";
   };
 
   return (
-    <div className="container py-8 px-4 md:px-6">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">题库</h1>
-          <p className="text-muted-foreground mt-2">
-            精选算法题目，提升编程能力
-          </p>
-        </div>
-        <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row md:items-center">
-          <div className="relative w-full md:w-72">
-            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              type="search"
-              placeholder="搜索题目或标签..."
-              className="pl-9"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <button
-            type="button"
-            className={`h-9 rounded-md border px-3 text-sm transition-colors ${
-              scratchOnly
-                ? "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
-                : "border-zinc-800 bg-zinc-900/60 text-zinc-200 hover:border-zinc-700"
-            }`}
-            onClick={() => setScratchOnly((v) => !v)}
+    <div className="container mx-auto py-8 px-4 max-w-5xl">
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">题库</h1>
+      </div>
+
+      {/* Filters */}
+      <div className="flex flex-col md:flex-row gap-4 mb-6">
+        <form onSubmit={handleSearch} className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="搜索题目..."
+            className="pl-9 bg-zinc-900 border-zinc-800"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
+          />
+        </form>
+
+        <div className="flex gap-2">
+          <select
+            className="h-10 rounded-md border border-zinc-800 bg-zinc-900 px-3 text-sm"
+            value={difficulty}
+            onChange={(e) => setDifficulty(e.target.value)}
           >
-            仅看 Scratch 题
-          </button>
+            <option value="">难度</option>
+            <option value="1">简单</option>
+            <option value="3">中等</option>
+            <option value="5">困难</option>
+          </select>
         </div>
       </div>
 
-      <div className="grid gap-4">
-        {error ? (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
-            题库加载失败，请稍后重试。
-          </div>
-        ) : null}
-        {isLoading ? (
-          <div className="text-sm text-muted-foreground">加载中...</div>
-        ) : null}
-        {!isLoading && !error && filteredProblems.length === 0 ? (
-          <div className="rounded-md border border-zinc-800 bg-zinc-900/60 p-4 text-sm text-zinc-300">
-            暂无公开题目。请在管理端将题目设为公开后再查看。
-          </div>
-        ) : null}
-        {filteredProblems.map((problem) => {
-          const label = getDifficultyLabel(problem.difficulty)
-          return (
-            <Link key={problem.id} href={`/problems/${problem.id}`}>
-              <Card className="transition-all hover:bg-muted/50">
-                <CardContent className="flex items-center justify-between p-6">
-                  <div className="flex flex-col gap-2">
-                    <div className="flex items-center gap-4 flex-wrap">
-                      <span className="font-mono text-muted-foreground">
-                        #{problem.id}
-                      </span>
-                      <span className="font-medium text-lg">
-                        {problem.title}
-                      </span>
-                      <Badge variant="secondary" className={getDifficultyColor(label)}>
-                        {label}
+      {/* Table */}
+      <div className="rounded-md border border-zinc-800 overflow-hidden bg-zinc-950">
+        <table className="w-full text-sm text-left">
+          <thead className="text-xs text-zinc-400 border-b border-zinc-800 bg-zinc-900/50">
+            <tr>
+              <th className="px-4 py-3 font-medium w-16">状态</th>
+              <th className="px-4 py-3 font-medium">题目</th>
+              <th className="px-4 py-3 font-medium w-24">难度</th>
+              <th className="px-4 py-3 font-medium hidden md:table-cell">标签</th>
+            </tr>
+          </thead>
+          <tbody>
+            {isLoading ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                  加载中...
+                </td>
+              </tr>
+            ) : error ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-red-500">
+                  加载失败
+                </td>
+              </tr>
+            ) : data?.data.length === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-zinc-500">
+                  没有找到题目
+                </td>
+              </tr>
+            ) : (
+              data?.data.map((problem: any, idx: number) => (
+                <tr
+                  key={problem.id}
+                  className={`border-b border-zinc-800 hover:bg-zinc-900/50 transition-colors ${
+                    idx % 2 === 0 ? "bg-zinc-950" : "bg-zinc-900/20"
+                  }`}
+                >
+                  <td className="px-4 py-3">
+                    {/* Placeholder for status icon (solved/attempted) */}
+                  </td>
+                  <td className="px-4 py-3">
+                    <Link
+                      href={`/problems/${problem.id}`}
+                      className="font-medium hover:text-blue-400 transition-colors"
+                    >
+                      {problem.title}
+                    </Link>
+                    {problem.visibility !== "public" && (
+                      <Badge variant="outline" className="ml-2 text-xs opacity-50">
+                        未公开
                       </Badge>
-                      {problem.visibility && problem.visibility !== "public" ? (
-                        <Badge variant="secondary" className="bg-orange-500/10 text-orange-400">
-                          未公开
-                        </Badge>
-                      ) : null}
+                    )}
+                  </td>
+                  <td className={`px-4 py-3 ${getDifficultyColor(problem.difficulty)}`}>
+                    {getDifficultyLabel(problem.difficulty)}
+                  </td>
+                  <td className="px-4 py-3 hidden md:table-cell">
+                    <div className="flex flex-wrap gap-1">
+                      {problem.tags?.map((t: string) => (
+                        <span key={t} className="text-xs bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full">
+                          {t}
+                        </span>
+                      ))}
                     </div>
-                    {problem.tags?.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {problem.tags.map((tag) => (
-                          <Badge
-                            key={`${problem.id}-${tag}`}
-                            variant="outline"
-                            className={getTagClass(tag)}
-                          >
-                            {tag}
-                          </Badge>
-                        ))}
-                      </div>
-                    ) : null}
-                  </div>
-                  <div className="text-sm text-muted-foreground">
-                    版本: {problem.version ?? "-"}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          )
-        })}
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
       </div>
+
+      {/* Pagination */}
+      {data?.meta && data.meta.totalPages > 1 && (
+        <div className="flex items-center justify-center gap-2 mt-6">
+          <button
+            disabled={page <= 1}
+            onClick={() => {
+              const params = new URLSearchParams(searchParams);
+              params.set("page", String(page - 1));
+              router.push(`/problems?${params.toString()}`);
+            }}
+            className="px-3 py-1 text-sm border border-zinc-800 rounded-md disabled:opacity-50 hover:bg-zinc-900"
+          >
+            上一页
+          </button>
+          <span className="text-sm text-zinc-500">
+            {page} / {data.meta.totalPages}
+          </span>
+          <button
+            disabled={page >= data.meta.totalPages}
+            onClick={() => {
+              const params = new URLSearchParams(searchParams);
+              params.set("page", String(page + 1));
+              router.push(`/problems?${params.toString()}`);
+            }}
+            className="px-3 py-1 text-sm border border-zinc-800 rounded-md disabled:opacity-50 hover:bg-zinc-900"
+          >
+            下一页
+          </button>
+        </div>
+      )}
     </div>
-  )
+  );
 }
