@@ -16,6 +16,7 @@ const statusMap: Record<SubmissionStatus, { label: string; color: string; icon: 
   PENDING: { label: "等待中", color: "bg-yellow-500/10 text-yellow-500", icon: Clock },
   JUDGING: { label: "评测中", color: "bg-blue-500/10 text-blue-500", icon: Loader2 },
   ACCEPTED: { label: "解答正确", color: "bg-green-500/10 text-green-500", icon: CheckCircle2 },
+  PARTIAL: { label: "部分正确", color: "bg-amber-500/10 text-amber-400", icon: CheckCircle2 },
   WRONG_ANSWER: { label: "答案错误", color: "bg-red-500/10 text-red-500", icon: XCircle },
   TIME_LIMIT_EXCEEDED: { label: "时间超限", color: "bg-orange-500/10 text-orange-500", icon: Clock },
   MEMORY_LIMIT_EXCEEDED: { label: "内存超限", color: "bg-orange-500/10 text-orange-500", icon: XCircle },
@@ -30,6 +31,7 @@ export function SubmissionResult({ submission, isLoading }: SubmissionResultProp
   const status = submission?.status || 'PENDING';
   const config = statusMap[status] || statusMap.PENDING;
   const Icon = config.icon;
+  const visibleCases = submission?.cases ?? [];
 
   return (
     <Card className="mt-4">
@@ -56,6 +58,62 @@ export function SubmissionResult({ submission, isLoading }: SubmissionResultProp
           <pre className="mt-4 p-4 rounded bg-muted text-xs font-mono overflow-auto max-h-40">
             {submission.errorMessage}
           </pre>
+        )}
+        {visibleCases.length > 0 && (
+          <div className="mt-4 space-y-3">
+            <div className="text-sm font-medium text-muted-foreground">测试点详情</div>
+            <div className="space-y-2">
+              {visibleCases.map((item) => (
+                <div key={item.id} className="rounded-md border bg-muted/30 p-3 text-xs">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">
+                      用例 {item.ordinal ?? "-"}
+                      {item.testcase?.title ? ` · ${item.testcase.title}` : ""}
+                    </div>
+                    <div className="text-muted-foreground">
+                      {item.status} · {item.timeMs}ms · {item.memoryMb}MB · score {item.score}
+                    </div>
+                  </div>
+                  {item.checkerMessage ? (
+                    <div className="mt-2 text-muted-foreground">{item.checkerMessage}</div>
+                  ) : null}
+                  {item.inputPreview || item.outputPreview || item.expectedPreview ? (
+                    <div className="mt-3 grid gap-2 md:grid-cols-3">
+                      {item.inputPreview ? (
+                        <div>
+                          <div className="mb-1 text-muted-foreground">输入预览</div>
+                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-background p-2">
+                            {item.inputPreview}
+                          </pre>
+                        </div>
+                      ) : null}
+                      {item.outputPreview ? (
+                        <div>
+                          <div className="mb-1 text-muted-foreground">输出预览</div>
+                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-background p-2">
+                            {item.outputPreview}
+                          </pre>
+                        </div>
+                      ) : null}
+                      {item.expectedPreview ? (
+                        <div>
+                          <div className="mb-1 text-muted-foreground">期望预览</div>
+                          <pre className="max-h-32 overflow-auto whitespace-pre-wrap rounded bg-background p-2">
+                            {item.expectedPreview}
+                          </pre>
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {submission?.rawStatus && submission.rawStatus !== submission.status && (
+          <div className="mt-2 text-xs text-muted-foreground">
+            原始状态：{submission.rawStatus}
+          </div>
         )}
       </CardContent>
     </Card>

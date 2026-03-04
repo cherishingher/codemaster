@@ -1,6 +1,6 @@
-import Redis from "ioredis";
+import { Redis } from "ioredis";
 import { z } from "zod";
-import { mkdtemp, readFile, writeFile } from "fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "fs/promises";
 import { tmpdir } from "os";
 import path from "path";
 import { spawn } from "child_process";
@@ -151,108 +151,112 @@ async function handleJob(payload: unknown) {
   const sourcePath = path.join(workDir, "main.cpp");
   const binPath = path.join(workDir, "main.out");
 
-  const timeLimit = job.timeLimitMs ?? 1000;
-  const testcases = job.testcases ?? [];
-  const cases: CaseResult[] = [];
+  try {
+    const timeLimit = job.timeLimitMs ?? 1000;
+    const testcases = job.testcases ?? [];
+    const cases: CaseResult[] = [];
 
-  const cppStdMap: Record<string, string> = {
-    cpp11: "c++11",
-    cpp14: "c++14",
-    cpp17: "c++17",
-  };
+    const cppStdMap: Record<string, string> = {
+      cpp11: "c++11",
+      cpp14: "c++14",
+      cpp17: "c++17",
+    };
 
-  const isCpp = Object.prototype.hasOwnProperty.call(cppStdMap, job.language);
-  const isPython = job.language === "python";
+    const isCpp = Object.prototype.hasOwnProperty.call(cppStdMap, job.language);
+    const isPython = job.language === "python";
 
-  await writeFile(sourcePath, code, "utf8");
+    await writeFile(sourcePath, code, "utf8");
 
-  if (isCpp) {
-    const std = cppStdMap[job.language];
-    const compile = await runCommand(
-      "g++",
-      ["-O2", `-std=${std}`, sourcePath, "-o", binPath],
-      {
-        cwd: workDir,
-        timeoutMs: 10000,
+    if (isCpp) {
+      const std = cppStdMap[job.language];
+      const compile = await runCommand(
+        "g++",
+        ["-O2", `-std=${std}`, sourcePath, "-o", binPath],
+        {
+          cwd: workDir,
+          timeoutMs: 10000,
+        }
+      );
+
+      if (compile.timedOut || compile.code !== 0) {
+        await reportResult(job.submissionId, "COMPILE_ERROR", 0, []);
+        return;
       }
-    );
-
-    if (compile.timedOut || compile.code !== 0) {
-      await reportResult(job.submissionId, "COMPILE_ERROR", 0, []);
+    } else if (!isPython) {
+      await reportResult(job.submissionId, "SYSTEM_ERROR", 0, []);
       return;
     }
-  } else if (!isPython) {
-    await reportResult(job.submissionId, "SYSTEM_ERROR", 0, []);
-    return;
-  }
 
-  let totalScore = 0;
-  for (const tc of testcases) {
-    const input = await readInput(tc.inputUri);
-    const expected = await readInput(tc.outputUri);
-    const start = Date.now();
-    const result = isCpp
-      ? await runCommand(binPath, [], {
-          cwd: workDir,
-          input,
-          timeoutMs: timeLimit,
-        })
-      : await runCommand("python3", [sourcePath], {
-          cwd: workDir,
-          input,
-          timeoutMs: timeLimit,
+    let totalScore = 0;
+    for (const tc of testcases) {
+      const input = await readInput(tc.inputUri);
+      const expected = await readInput(tc.outputUri);
+      const start = Date.now();
+      const result = isCpp
+        ? await runCommand(binPath, [], {
+            cwd: workDir,
+            input,
+            timeoutMs: timeLimit,
+          })
+        : await runCommand("python3", [sourcePath], {
+            cwd: workDir,
+            input,
+            timeoutMs: timeLimit,
+          });
+      const timeMs = Date.now() - start;
+
+      if (result.timedOut) {
+        cases.push({
+          testcaseId: tc.testcaseId,
+          status: "TIME_LIMIT_EXCEEDED",
+          timeMs,
+          memoryMb: 0,
+          score: 0,
         });
-    const timeMs = Date.now() - start;
+        continue;
+      }
 
-    if (result.timedOut) {
+      if (result.code !== 0) {
+        cases.push({
+          testcaseId: tc.testcaseId,
+          status: "RUNTIME_ERROR",
+          timeMs,
+          memoryMb: 0,
+          score: 0,
+        });
+        continue;
+      }
+
+      const ok = normalizeOutput(result.stdout) === normalizeOutput(expected);
       cases.push({
         testcaseId: tc.testcaseId,
-        status: "TIME_LIMIT_EXCEEDED",
+        status: ok ? "ACCEPTED" : "WRONG_ANSWER",
         timeMs,
         memoryMb: 0,
-        score: 0,
+        score: ok ? tc.score : 0,
       });
-      continue;
+      totalScore += ok ? tc.score : 0;
     }
 
-    if (result.code !== 0) {
-      cases.push({
-        testcaseId: tc.testcaseId,
-        status: "RUNTIME_ERROR",
-        timeMs,
-        memoryMb: 0,
-        score: 0,
-      });
-      continue;
-    }
+    const finalStatus = cases.some((c) => c.status !== "ACCEPTED")
+      ? cases.find((c) => c.status === "TIME_LIMIT_EXCEEDED")
+        ? "TIME_LIMIT_EXCEEDED"
+        : cases.find((c) => c.status === "RUNTIME_ERROR")
+          ? "RUNTIME_ERROR"
+          : "WRONG_ANSWER"
+      : "ACCEPTED";
 
-    const ok = normalizeOutput(result.stdout) === normalizeOutput(expected);
-    cases.push({
-      testcaseId: tc.testcaseId,
-      status: ok ? "ACCEPTED" : "WRONG_ANSWER",
-      timeMs,
-      memoryMb: 0,
-      score: ok ? tc.score : 0,
-    });
-    totalScore += ok ? tc.score : 0;
+    await reportResult(job.submissionId, finalStatus, totalScore, cases);
+  } finally {
+    await rm(workDir, { recursive: true, force: true }).catch(() => undefined);
   }
-
-  const finalStatus = cases.some((c) => c.status !== "ACCEPTED")
-    ? cases.find((c) => c.status === "TIME_LIMIT_EXCEEDED")
-      ? "TIME_LIMIT_EXCEEDED"
-      : cases.find((c) => c.status === "RUNTIME_ERROR")
-        ? "RUNTIME_ERROR"
-        : "WRONG_ANSWER"
-    : "ACCEPTED";
-
-  await reportResult(job.submissionId, finalStatus, totalScore, cases);
 }
 
 async function main() {
   await ensureGroup();
 
   while (true) {
-    const res = await redis.xreadgroup(
+    const res = (await (redis as any).xreadgroup(
       "GROUP",
       GROUP,
       CONSUMER,
@@ -263,21 +267,44 @@ async function main() {
       "STREAMS",
       "judge:jobs",
       ">"
-    );
+    )) as [string, [string, string[]][]][] | null;
 
     if (!res) continue;
     const [, messages] = res[0];
 
     for (const [id, fields] of messages) {
+      const payloadIndex = fields.findIndex((v: string) => v === "payload");
+      const payloadRaw = payloadIndex >= 0 ? fields[payloadIndex + 1] : "{}";
+      let payload: unknown = {};
+      let submissionId: string | null = null;
+
       try {
-        const payloadIndex = fields.findIndex((v) => v === "payload");
-        const payloadRaw = payloadIndex >= 0 ? fields[payloadIndex + 1] : "{}";
-        const payload = JSON.parse(payloadRaw);
+        payload = JSON.parse(payloadRaw);
+        if (
+          payload &&
+          typeof payload === "object" &&
+          "submissionId" in payload &&
+          typeof (payload as { submissionId?: unknown }).submissionId === "string"
+        ) {
+          submissionId = (payload as { submissionId: string }).submissionId;
+        }
+
         await handleJob(payload);
-        await redis.xack("judge:jobs", GROUP, id);
       } catch (err) {
-        // TODO: 记录错误与重试策略
         console.error("job failed", err);
+        if (submissionId) {
+          try {
+            await reportResult(submissionId, "SYSTEM_ERROR", 0, []);
+          } catch (reportErr) {
+            console.error("report system error failed", reportErr);
+          }
+        }
+      } finally {
+        try {
+          await redis.xack("judge:jobs", GROUP, id);
+        } catch (ackErr) {
+          console.error("xack failed", ackErr);
+        }
       }
     }
   }

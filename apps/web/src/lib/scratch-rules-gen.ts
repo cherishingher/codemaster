@@ -192,7 +192,9 @@ function extractInputs(
     const input = readInput(raw);
     if (!input) continue;
     if (input.kind === "literal") {
-      result[name] = input.value;
+      if (input.value != null) {
+        result[name] = input.value;
+      }
       continue;
     }
     const evaluated = evaluateExpression(input.blockId, blocks);

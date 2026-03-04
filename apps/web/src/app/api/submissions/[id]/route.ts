@@ -1,22 +1,45 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
-import { getHustojResult } from "@/lib/hustoj";
+import {
+  getHustojCompileInfo,
+  getHustojResult,
+  getHustojRuntimeInfo,
+} from "@/lib/hustoj";
 import { applyJudgeResult, mapJudgeStatus } from "@/lib/judge-stats";
+import { getSubmissionErrorMessage, mapSubmissionStatusToUi } from "@/lib/oj";
 
 export const runtime = "nodejs";
 
 export const GET = withAuth(async (_req, { params }, user) => {
-  const submission = await db.submission.findUnique({
+  let submission = await db.submission.findUnique({
     where: { id: params.id },
-    select: {
-      id: true,
-      userId: true,
-      judgeBackend: true,
-      hustojSolutionId: true,
-      status: true,
-      score: true,
-      createdAt: true,
+    include: {
+      problem: {
+        select: {
+          id: true,
+          slug: true,
+          title: true,
+        },
+      },
+      sourceCode: true,
+      compileInfo: true,
+      runtimeInfo: true,
+      cases: {
+        orderBy: [{ ordinal: "asc" }, { createdAt: "asc" }],
+        include: {
+          testcase: {
+            select: {
+              id: true,
+              title: true,
+              caseType: true,
+              isSample: true,
+              visible: true,
+              groupId: true,
+            },
+          },
+        },
+      },
     },
   });
 
@@ -28,76 +51,171 @@ export const GET = withAuth(async (_req, { params }, user) => {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
 
-  let currentStatus = submission.status;
-  let currentScore = submission.score;
-  let timeUsed: number | undefined;
-  let memoryUsed: number | undefined;
-
   if (submission.judgeBackend === "hustoj" && submission.hustojSolutionId) {
-    const result = await getHustojResult(submission.hustojSolutionId);
+    const [result, compileMessage, runtimeMessage] = await Promise.all([
+      getHustojResult(submission.hustojSolutionId),
+      getHustojCompileInfo(submission.hustojSolutionId),
+      getHustojRuntimeInfo(submission.hustojSolutionId),
+    ]);
+
     if (result) {
-      timeUsed = result.time ?? undefined;
-      memoryUsed = result.memory ?? undefined;
       const mapped = mapJudgeStatus(result.result);
-      if (mapped !== submission.status) {
-        const isFinal = ["AC", "WA", "TLE", "MLE", "RE", "CE", "PE", "OLE"].includes(mapped);
+      const isFinal = ["AC", "WA", "TLE", "MLE", "RE", "CE", "PE", "OLE"].includes(mapped);
+      const score = mapped === "AC" ? 100 : mapped === "PE" ? submission.score : 0;
+
+      if (
+        mapped !== submission.status ||
+        compileMessage !== submission.compileInfo?.message ||
+        runtimeMessage !== submission.runtimeInfo?.stderrPreview
+      ) {
         if (isFinal) {
-          const score = mapped === "AC" ? 100 : 0;
-          currentScore = score;
           await applyJudgeResult({
             submissionId: submission.id,
             status: mapped,
             score,
             maxTimeMs: result.time,
             maxMemoryMb: result.memory,
+            compileMessage,
+            runtimeMessage,
           });
         } else {
           await db.submission.update({
             where: { id: submission.id },
-            data: { status: mapped },
+            data: {
+              status: mapped,
+              judgeResult: result.result,
+              timeUsedMs: result.time ?? undefined,
+              memoryUsedKb: result.memory ?? undefined,
+            },
           });
+          if (compileMessage) {
+            await db.compileInfo.upsert({
+              where: { submissionId: submission.id },
+              update: { message: compileMessage },
+              create: { submissionId: submission.id, message: compileMessage },
+            });
+          }
+          if (runtimeMessage) {
+            await db.runtimeInfo.upsert({
+              where: { submissionId: submission.id },
+              update: { stderrPreview: runtimeMessage, checkerMessage: mapped },
+              create: {
+                submissionId: submission.id,
+                stderrPreview: runtimeMessage,
+                checkerMessage: mapped,
+              },
+            });
+          }
+        }
+        submission = await db.submission.findUnique({
+          where: { id: params.id },
+          include: {
+            problem: {
+              select: {
+                id: true,
+                slug: true,
+                title: true,
+              },
+            },
+            sourceCode: true,
+            compileInfo: true,
+            runtimeInfo: true,
+            cases: {
+              orderBy: [{ ordinal: "asc" }, { createdAt: "asc" }],
+              include: {
+                testcase: {
+                  select: {
+                    id: true,
+                    title: true,
+                    caseType: true,
+                    isSample: true,
+                    visible: true,
+                    groupId: true,
+                  },
+                },
+              },
+            },
+          },
+        });
+        if (!submission) {
+          return NextResponse.json({ error: "not_found" }, { status: 404 });
         }
       }
-      currentStatus = mapped;
     }
   }
 
-  const uiStatus = mapToUiStatus(currentStatus);
+  const uiStatus = mapSubmissionStatusToUi(submission.status);
+  const canSeeAllCaseMetadata = user.roles.includes("admin");
+  const cases = submission.cases
+    .filter((item) => {
+      if (canSeeAllCaseMetadata) return true;
+      return item.testcase?.isSample || item.testcase?.caseType === 0 || item.testcase?.visible;
+    })
+    .map((item) => ({
+      id: item.id,
+      testcaseId: item.testcaseId,
+      ordinal: item.ordinal,
+      status: item.status,
+      judgeResult: item.judgeResult,
+      timeMs: item.timeMs,
+      memoryMb: item.memoryMb,
+      score: item.score,
+      testcase: item.testcase
+        ? {
+            id: item.testcase.id,
+            title: item.testcase.title,
+            caseType: item.testcase.caseType,
+            groupId: item.testcase.groupId,
+            isSample: item.testcase.isSample,
+          }
+        : null,
+      inputPreview:
+        canSeeAllCaseMetadata || item.testcase?.isSample || item.testcase?.caseType === 0
+          ? item.inputPreview
+          : null,
+      outputPreview:
+        canSeeAllCaseMetadata || item.testcase?.isSample || item.testcase?.caseType === 0
+          ? item.outputPreview
+          : null,
+      expectedPreview:
+        canSeeAllCaseMetadata || item.testcase?.isSample || item.testcase?.caseType === 0
+          ? item.expectedPreview
+          : null,
+      checkerMessage: item.checkerMessage,
+    }));
 
   return NextResponse.json({
     id: submission.id,
     status: uiStatus,
-    score: currentScore,
-    timeUsed,
-    memoryUsed,
+    rawStatus: submission.status,
+    judgeResult: submission.judgeResult,
+    score: submission.score,
+    timeUsed: submission.timeUsedMs,
+    memoryUsed: submission.memoryUsedKb,
+    language: submission.lang,
+    languageId: submission.languageId,
+    judgeBackend: submission.judgeBackend,
     createdAt: submission.createdAt,
+    finishedAt: submission.finishedAt,
+    problem: submission.problem,
+    sourceCode: submission.sourceCode
+      ? {
+          storageType: submission.sourceCode.storageType,
+          source: submission.sourceCode.source,
+          objectKey: submission.sourceCode.objectKey,
+          sourceSize: submission.sourceCode.sourceSize,
+        }
+      : submission.code
+        ? {
+            storageType: "inline",
+            source: submission.code,
+            objectKey: null,
+            sourceSize: submission.code.length,
+          }
+        : null,
+    compileInfo: submission.compileInfo,
+    runtimeInfo: submission.runtimeInfo,
+    errorMessage: getSubmissionErrorMessage(submission),
+    cases,
   });
 });
-
-function mapToUiStatus(status: string) {
-  switch (status) {
-    case "QUEUED":
-      return "PENDING";
-    case "RUNNING":
-      return "JUDGING";
-    case "AC":
-      return "ACCEPTED";
-    case "WA":
-      return "WRONG_ANSWER";
-    case "TLE":
-      return "TIME_LIMIT_EXCEEDED";
-    case "MLE":
-      return "MEMORY_LIMIT_EXCEEDED";
-    case "RE":
-      return "RUNTIME_ERROR";
-    case "CE":
-      return "COMPILE_ERROR";
-    case "PE":
-    case "OLE":
-    case "UNKNOWN":
-    case "FAILED":
-      return "SYSTEM_ERROR";
-    default:
-      return status;
-  }
-}

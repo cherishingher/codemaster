@@ -1,8 +1,8 @@
 # TODO
 
 ## Now
-- [ ] 复制 `.env.example` 为 `.env` 并补齐配置（DB/Redis/对象存储）
-- [ ] 安装依赖：`npm install @alicloud/pop-core --workspace apps/web`
+- [x] 复制 `.env.example` 为 `.env` 并补齐配置（DB/Redis/对象存储）
+- [x] 安装依赖：`npm install @alicloud/pop-core --workspace apps/web`
 - [ ] 配置阿里云验证码环境变量（短信/邮件/密钥/Region）
 - [x] 阿里云验证码接入文档 `docs/aliyun-auth-setup.md`
 - [ ] 执行阿里云验证码“最短执行清单”（见 `docs/aliyun-auth-setup.md`）

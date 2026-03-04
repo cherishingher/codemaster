@@ -1,0 +1,82 @@
+{
+  "draft": true,
+  "source": "luogu:P1003",
+  "slug": "noip-2011",
+  "title": "[NOIP 2011 提高组] 铺地毯",
+  "metadata": {
+    "provider": "luogu",
+    "pid": "P1003",
+    "difficulty": 1,
+    "tags": [
+      "模拟",
+      "2011",
+      "NOIP 提高组",
+      "枚举"
+    ]
+  },
+  "todo": [
+    "Implement std.mjs with a trusted solution.",
+    "Implement brute.mjs for small-data differential checks.",
+    "Implement gen.mjs with group-specific generators.",
+    "Review samples and constraints, then set draft=false when ready."
+  ],
+  "samples": [
+    {
+      "input": "3\n1 0 2 3\n0 2 3 3\n2 1 3 3\n2 2\n",
+      "output": "3\n",
+      "title": "sample-1"
+    },
+    {
+      "input": "3\n1 0 2 3\n0 2 3 3\n2 1 3 3\n4 5",
+      "output": "-1",
+      "title": "sample-2"
+    }
+  ],
+  "verify": {
+    "generated": [
+      {
+        "group": "small-random",
+        "count": 20
+      },
+      {
+        "group": "edge",
+        "count": 10
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "sample",
+      "useSamples": true,
+      "score": 0,
+      "caseType": 0,
+      "visible": true,
+      "isSample": true,
+      "groupId": "sample"
+    },
+    {
+      "name": "small-random",
+      "count": 10,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-small"
+    },
+    {
+      "name": "edge",
+      "count": 8,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-edge"
+    },
+    {
+      "name": "stress",
+      "count": 4,
+      "score": 20,
+      "caseType": 2,
+      "visible": false,
+      "groupId": "stress"
+    }
+  ]
+}

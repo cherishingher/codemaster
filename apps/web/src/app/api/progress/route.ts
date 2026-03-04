@@ -8,13 +8,15 @@ export const GET = withAuth(async (_req, _ctx, user) => {
     orderBy: { updatedAt: "desc" },
     take: 50,
     include: {
-      problem: { select: { id: true, title: true, difficulty: true, source: true } },
+      problem: { select: { id: true, slug: true, title: true, difficulty: true, source: true } },
     },
   });
 
   return NextResponse.json(
     rows.map((r) => ({
       problem: r.problem,
+      slug: r.problem.slug,
+      status: r.status,
       attempts: r.attempts,
       bestScore: r.bestScore,
       lastStatus: r.lastStatus,

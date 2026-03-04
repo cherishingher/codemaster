@@ -3,6 +3,11 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 import { storeTextAsset } from "@/lib/storage";
+import {
+  buildJudgeConfigCreateManyInput,
+  buildProblemLifecycleData,
+  generateUniqueProblemSlug,
+} from "@/lib/problem-admin";
 
 const TestcaseSchema = z
   .object({
@@ -25,10 +30,12 @@ const TestcaseSchema = z
 const VersionSchema = z.object({
   version: z.number().int().positive().optional(),
   statement: z.string(),
+  statementMd: z.string().optional(),
   constraints: z.string().optional(),
   inputFormat: z.string().optional(),
   outputFormat: z.string().optional(),
   samples: z.any().optional(),
+  hints: z.string().optional(),
   notes: z.string().optional(),
   timeLimitMs: z.number().int().positive().default(1000),
   memoryLimitMb: z.number().int().positive().default(256),
@@ -119,21 +126,29 @@ function parseCsv(text: string) {
 
 export const POST = withAuth(async (req, _ctx, user) => {
   const contentType = req.headers.get("content-type") ?? "";
-  const payload =
+  const payload = PayloadSchema.parse(
     contentType.includes("text/csv") || contentType.includes("application/csv")
       ? { problems: parseCsv(await req.text()) }
-      : PayloadSchema.parse(await req.json());
+      : await req.json()
+  );
 
   let createdCount = 0;
 
   for (const item of payload.problems) {
     await db.$transaction(async (tx) => {
+      const slug = await generateUniqueProblemSlug(tx, item.title);
+      const lifecycle = buildProblemLifecycleData(item.visibility ?? "public");
       const problem = await tx.problem.create({
         data: {
+          slug,
           title: item.title,
           difficulty: item.difficulty,
+          status: lifecycle.status,
+          visible: lifecycle.visible,
+          defunct: lifecycle.defunct,
           visibility: item.visibility ?? "public",
           source: item.source,
+          publishedAt: lifecycle.publishedAt,
         },
       });
 
@@ -152,13 +167,16 @@ export const POST = withAuth(async (req, _ctx, user) => {
 
       if (item.versions?.length) {
         let autoVersion = 1;
+        let currentVersionId: string | null = null;
         for (const v of item.versions) {
           const createdVersion = await tx.problemVersion.create({
             data: {
               problemId: problem.id,
               version: v.version ?? autoVersion++,
               statement: v.statement,
+              statementMd: v.statementMd ?? v.statement,
               constraints: v.constraints,
+              hints: v.hints,
               inputFormat: v.inputFormat,
               outputFormat: v.outputFormat,
               samples: v.samples,
@@ -167,6 +185,7 @@ export const POST = withAuth(async (req, _ctx, user) => {
               memoryLimitMb: v.memoryLimitMb,
             },
           });
+          currentVersionId = createdVersion.id;
 
           if (v.testcases?.length) {
             for (const tc of v.testcases) {
@@ -179,6 +198,14 @@ export const POST = withAuth(async (req, _ctx, user) => {
                   versionId: createdVersion.id,
                   inputUri,
                   outputUri,
+                  title: tc.groupId ?? (tc.isSample ? "sample" : "hidden"),
+                  caseType:
+                    tc.isSample ?? false
+                      ? 0
+                      : tc.groupId?.toLowerCase() === "stress"
+                        ? 2
+                        : 1,
+                  visible: tc.isSample ?? false,
                   score: tc.score,
                   timeLimitMs: tc.timeLimitMs,
                   memoryLimitKb: tc.memoryLimitKb,
@@ -191,6 +218,26 @@ export const POST = withAuth(async (req, _ctx, user) => {
               });
             }
           }
+
+          const judgeConfigs = buildJudgeConfigCreateManyInput({
+            versionId: createdVersion.id,
+            tags: item.tags,
+            timeLimitMs: createdVersion.timeLimitMs,
+            memoryLimitMb: createdVersion.memoryLimitMb,
+          });
+          if (judgeConfigs.length) {
+            await tx.problemJudgeConfig.createMany({
+              data: judgeConfigs,
+              skipDuplicates: true,
+            });
+          }
+        }
+
+        if (currentVersionId) {
+          await tx.problem.update({
+            where: { id: problem.id },
+            data: { currentVersionId },
+          });
         }
       }
 

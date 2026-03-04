@@ -9,22 +9,36 @@ const CreateSetSchema = z.object({
   visibility: z.enum(["public", "private", "hidden"]).default("public"),
 });
 
-export const GET = withAuth(async () => {
-  const sets = await db.problemSet.findMany({
-    orderBy: { createdAt: "desc" },
-    include: { items: true, owner: { select: { id: true, name: true } } },
-  });
+export const GET = withAuth(async (req) => {
+  const { searchParams } = new URL(req.url);
+  const page = Math.max(1, Number(searchParams.get("page") ?? "1") || 1);
+  const pageSize = Math.min(100, Math.max(1, Number(searchParams.get("pageSize") ?? "20") || 20));
+  const skip = (page - 1) * pageSize;
 
-  return NextResponse.json(
-    sets.map((s) => ({
+  const [total, sets] = await Promise.all([
+    db.problemSet.count(),
+    db.problemSet.findMany({
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: pageSize,
+      include: { items: true, owner: { select: { id: true, name: true } } },
+    }),
+  ]);
+
+  return NextResponse.json({
+    items: sets.map((s) => ({
       id: s.id,
       title: s.title,
       description: s.description,
       visibility: s.visibility,
       owner: s.owner,
       count: s.items.length,
-    }))
-  );
+    })),
+    page,
+    pageSize,
+    total,
+    totalPages: Math.max(1, Math.ceil(total / pageSize)),
+  });
 }, { roles: "admin" });
 
 export const POST = withAuth(async (req, _ctx, user) => {

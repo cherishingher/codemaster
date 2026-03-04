@@ -38,7 +38,7 @@ export function Navbar() {
             href="/submissions"
             className="transition-colors hover:text-foreground/80 text-foreground/60"
           >
-            我的提交
+            提交
           </Link>
           <Link
             href="/contests"
@@ -65,7 +65,7 @@ export function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                   <Avatar className="h-8 w-8">
-                    <AvatarImage src={user?.avatar} alt={user?.name || "User"} />
+                    <AvatarImage src={user?.avatar ?? undefined} alt={user?.name || "User"} />
                     <AvatarFallback>{user?.name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
                   </Avatar>
                 </Button>
@@ -80,10 +80,16 @@ export function Navbar() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem>
-                  <Link href="/profile" className="flex items-center w-full">
+                <DropdownMenuItem asChild>
+                  <Link href="/profile">
                     <User className="mr-2 h-4 w-4" />
                     <span>个人中心</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link href="/submissions">
+                    <Code2 className="mr-2 h-4 w-4" />
+                    <span>我的提交</span>
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />

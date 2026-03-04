@@ -11,6 +11,7 @@ export const GET = withAuth(async (_req, { params }, user) => {
     progress ?? {
       userId: user.id,
       problemId: params.id,
+      status: 0,
       attempts: 0,
       bestScore: 0,
       lastStatus: null,

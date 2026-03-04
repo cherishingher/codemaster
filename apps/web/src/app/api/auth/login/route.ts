@@ -21,9 +21,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "email_or_phone_required" }, { status: 400 });
   }
 
+  const identifiers: Array<{ email: string } | { phone: string }> = [];
+  if (email) identifiers.push({ email });
+  if (phone) identifiers.push({ phone });
+
   const user = await db.user.findFirst({
     where: {
-      OR: [{ email: email ?? undefined }, { phone: phone ?? undefined }],
+      OR: identifiers,
     },
   });
 

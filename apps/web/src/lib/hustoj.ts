@@ -1,4 +1,5 @@
 import mysql from "mysql2/promise";
+import type { RowDataPacket } from "mysql2";
 import { db } from "@/lib/db";
 import { readFile, mkdir, writeFile } from "fs/promises";
 import path from "path";
@@ -75,6 +76,21 @@ function toFilePath(uri: string) {
   return uri;
 }
 
+function getFirstSampleIO(samples: unknown) {
+  if (!Array.isArray(samples) || samples.length === 0) {
+    return { input: "", output: "" };
+  }
+  const first = samples[0];
+  if (!first || typeof first !== "object") {
+    return { input: "", output: "" };
+  }
+  const sample = first as { input?: unknown; output?: unknown };
+  return {
+    input: typeof sample.input === "string" ? sample.input : "",
+    output: typeof sample.output === "string" ? sample.output : "",
+  };
+}
+
 export function mapLanguageToHustoj(lang: string) {
   const map = DEFAULT_LANG_MAP;
   const key = lang.toLowerCase();
@@ -130,6 +146,9 @@ export async function ensureHustojProblem(problemId: string) {
   const problem = await db.problem.findUnique({
     where: { id: problemId },
     include: {
+      currentVersion: {
+        include: { testcases: true },
+      },
       versions: {
         orderBy: { version: "desc" },
         take: 1,
@@ -137,35 +156,33 @@ export async function ensureHustojProblem(problemId: string) {
       },
     },
   });
-  if (!problem || !problem.versions[0]) {
+  const version = problem?.currentVersion ?? problem?.versions[0];
+  if (!problem || !version) {
     throw new Error("problem_not_found");
   }
 
-  const v = problem.versions[0];
-  const samples = Array.isArray(v.samples) ? v.samples : [];
-  const sampleInput = samples[0]?.input ?? "";
-  const sampleOutput = samples[0]?.output ?? "";
-  const timeLimitSec = Math.max(1, Math.round(v.timeLimitMs / 1000));
+  const { input: sampleInput, output: sampleOutput } = getFirstSampleIO(version.samples);
+  const timeLimitSec = Math.max(1, Math.round(version.timeLimitMs / 1000));
 
   const pool = getPool();
   const [result] = await pool.query<mysql.ResultSetHeader>(
     "INSERT INTO problem (title, description, input, output, sample_input, sample_output, hint, source, in_date, time_limit, memory_limit, defunct) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW(), ?, ?, 'N')",
     [
       problem.title,
-      v.statement ?? "",
-      v.inputFormat ?? "",
-      v.outputFormat ?? "",
+      version.statementMd ?? version.statement ?? "",
+      version.inputFormat ?? "",
+      version.outputFormat ?? "",
       sampleInput,
       sampleOutput,
-      v.notes ?? "",
+      version.notes ?? "",
       problem.source ?? "",
       timeLimitSec,
-      v.memoryLimitMb,
+      version.memoryLimitMb,
     ]
   );
   const hustojProblemId = result.insertId;
 
-  await writeHustojData(hustojProblemId, v.testcases);
+  await writeHustojData(hustojProblemId, version.testcases);
 
   await db.hustojProblemMap.create({
     data: {
@@ -188,6 +205,9 @@ export async function syncHustojProblem(problemId: string) {
   const problem = await db.problem.findUnique({
     where: { id: problemId },
     include: {
+      currentVersion: {
+        include: { testcases: true },
+      },
       versions: {
         orderBy: { version: "desc" },
         take: 1,
@@ -195,35 +215,33 @@ export async function syncHustojProblem(problemId: string) {
       },
     },
   });
-  if (!problem || !problem.versions[0]) {
+  const version = problem?.currentVersion ?? problem?.versions[0];
+  if (!problem || !version) {
     throw new Error("problem_not_found");
   }
 
-  const v = problem.versions[0];
-  const samples = Array.isArray(v.samples) ? v.samples : [];
-  const sampleInput = samples[0]?.input ?? "";
-  const sampleOutput = samples[0]?.output ?? "";
-  const timeLimitSec = Math.max(1, Math.round(v.timeLimitMs / 1000));
+  const { input: sampleInput, output: sampleOutput } = getFirstSampleIO(version.samples);
+  const timeLimitSec = Math.max(1, Math.round(version.timeLimitMs / 1000));
 
   const pool = getPool();
   await pool.query(
     "UPDATE problem SET title=?, description=?, input=?, output=?, sample_input=?, sample_output=?, hint=?, source=?, time_limit=?, memory_limit=?, defunct='N' WHERE problem_id=?",
     [
       problem.title,
-      v.statement ?? "",
-      v.inputFormat ?? "",
-      v.outputFormat ?? "",
+      version.statementMd ?? version.statement ?? "",
+      version.inputFormat ?? "",
+      version.outputFormat ?? "",
       sampleInput,
       sampleOutput,
-      v.notes ?? "",
+      version.notes ?? "",
       problem.source ?? "",
       timeLimitSec,
-      v.memoryLimitMb,
+      version.memoryLimitMb,
       mapping.hustojProblemId,
     ]
   );
 
-  await writeHustojData(mapping.hustojProblemId, v.testcases);
+  await writeHustojData(mapping.hustojProblemId, version.testcases);
   return mapping.hustojProblemId;
 }
 
@@ -258,8 +276,42 @@ export async function submitToHustoj(args: {
 
 export async function getHustojResult(solutionId: number) {
   const pool = getPool();
+  type HustojResultRow = RowDataPacket & {
+    result: number;
+    time: number;
+    memory: number;
+    pass_rate: number;
+  };
   const [rows] = await pool.query<
-    { result: number; time: number; memory: number; pass_rate: number }[]
+    HustojResultRow[]
   >("SELECT result, time, memory, pass_rate FROM solution WHERE solution_id = ?", [solutionId]);
   return rows[0] ?? null;
+}
+
+export async function getHustojCompileInfo(solutionId: number) {
+  const pool = getPool();
+  type CompileInfoRow = RowDataPacket & { error: string | null };
+  try {
+    const [rows] = await pool.query<CompileInfoRow[]>(
+      "SELECT error FROM compileinfo WHERE solution_id = ? LIMIT 1",
+      [solutionId]
+    );
+    return rows[0]?.error ?? null;
+  } catch {
+    return null;
+  }
+}
+
+export async function getHustojRuntimeInfo(solutionId: number) {
+  const pool = getPool();
+  type RuntimeInfoRow = RowDataPacket & { error: string | null };
+  try {
+    const [rows] = await pool.query<RuntimeInfoRow[]>(
+      "SELECT error FROM runtimeinfo WHERE solution_id = ? LIMIT 1",
+      [solutionId]
+    );
+    return rows[0]?.error ?? null;
+  } catch {
+    return null;
+  }
 }

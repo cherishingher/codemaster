@@ -1,0 +1,52 @@
+{
+  "source": "luogu:P1001",
+  "samples": [
+    {
+      "input": "20 30\n",
+      "output": "50\n",
+      "title": "sample-1"
+    }
+  ],
+  "verify": {
+    "generated": [
+      { "group": "small-random", "count": 30 },
+      { "group": "edge", "count": 20 }
+    ]
+  },
+  "groups": [
+    {
+      "name": "sample",
+      "useSamples": true,
+      "score": 0,
+      "caseType": 0,
+      "visible": true,
+      "isSample": true,
+      "groupId": "sample"
+    },
+    {
+      "name": "small-random",
+      "count": 10,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-small",
+      "args": { "min": -1000, "max": 1000 }
+    },
+    {
+      "name": "edge",
+      "count": 10,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-edge"
+    },
+    {
+      "name": "stress",
+      "count": 5,
+      "score": 20,
+      "caseType": 2,
+      "visible": false,
+      "groupId": "stress"
+    }
+  ]
+}

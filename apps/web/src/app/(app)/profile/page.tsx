@@ -1,31 +1,119 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
+import useSWR from "swr"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { api } from "@/lib/api-client"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-// Tabs removed until component is implemented
-import { Loader2, Trophy, Clock, Target, Calendar } from "lucide-react"
+import { Loader2, Trophy, Clock, Target, Calendar, CheckCircle2 } from "lucide-react"
 
-// Mock stats for now
-const stats = {
-  rank: 12450,
-  solved: {
-    total: 42,
-    easy: 25,
-    medium: 15,
-    hard: 2
-  },
-  recentActivity: [
-    { id: '1', problem: 'Two Sum', status: 'ACCEPTED', date: '2 hours ago' },
-    { id: '2', problem: 'Add Two Numbers', status: 'WRONG_ANSWER', date: '1 day ago' },
-    { id: '3', problem: 'Median of Two Sorted Arrays', status: 'ACCEPTED', date: '2 days ago' },
-  ]
+type ProgressRow = {
+  problem: {
+    id: string
+    slug: string
+    title: string
+    difficulty: number
+    source?: string | null
+  }
+  status: number
+  attempts: number
+  bestScore: number
+  lastStatus?: string | null
+  solvedAt?: string | null
+  lastSubmissionId?: string | null
+  updatedAt: string
+}
+
+type SubmissionListResponse = {
+  data: Array<{
+    id: string
+    status: string
+    rawStatus?: string
+    score?: number
+    createdAt: string
+    problem: {
+      id: string
+      slug: string
+      title: string
+    }
+  }>
+}
+
+function getStatusLabel(status?: string | null) {
+  switch ((status ?? "").toUpperCase()) {
+    case "ACCEPTED":
+    case "AC":
+      return "已通过"
+    case "WRONG_ANSWER":
+    case "WA":
+      return "答案错误"
+    case "PARTIAL":
+      return "部分通过"
+    case "TIME_LIMIT_EXCEEDED":
+    case "TLE":
+      return "超时"
+    case "MEMORY_LIMIT_EXCEEDED":
+    case "MLE":
+      return "超内存"
+    case "RUNTIME_ERROR":
+    case "RE":
+      return "运行错误"
+    case "COMPILE_ERROR":
+    case "CE":
+      return "编译错误"
+    case "PENDING":
+    case "QUEUED":
+      return "等待中"
+    case "JUDGING":
+    case "RUNNING":
+      return "评测中"
+    default:
+      return status ?? "未知"
+  }
+}
+
+function getDifficultyLabel(difficulty: number) {
+  switch (difficulty) {
+    case 1:
+      return "简单"
+    case 2:
+      return "中等"
+    case 3:
+      return "困难"
+    default:
+      return `难度 ${difficulty}`
+  }
 }
 
 export default function ProfilePage() {
-  const { user, loading } = useAuth({ redirectTo: '/login' })
+  const { user, loading } = useAuth({ redirectTo: "/login" })
+
+  const { data: progressRows } = useSWR<ProgressRow[]>(
+    user ? "/progress" : null,
+    () => api.progress.list<ProgressRow[]>()
+  )
+  const { data: submissions } = useSWR<SubmissionListResponse>(
+    user ? "/submissions?limit=10" : null,
+    () => api.submissions.list<SubmissionListResponse>({ limit: "10" })
+  )
+
+  const stats = React.useMemo(() => {
+    const rows = progressRows ?? []
+    const solvedRows = rows.filter((item) => item.status >= 20 || item.solvedAt)
+    return {
+      attempted: rows.length,
+      solved: {
+        total: solvedRows.length,
+        easy: solvedRows.filter((item) => item.problem.difficulty === 1).length,
+        medium: solvedRows.filter((item) => item.problem.difficulty === 2).length,
+        hard: solvedRows.filter((item) => item.problem.difficulty >= 3).length,
+      },
+      recentActivity: submissions?.data ?? [],
+    }
+  }, [progressRows, submissions?.data])
 
   if (loading || !user) {
     return (
@@ -38,21 +126,24 @@ export default function ProfilePage() {
   return (
     <div className="container py-8 px-4 md:px-6">
       <div className="grid gap-6 md:grid-cols-[300px_1fr]">
-        {/* User Info Sidebar */}
         <div className="space-y-6">
           <Card>
             <CardContent className="flex flex-col items-center pt-6">
-              <Avatar className="h-24 w-24 mb-4">
-                <AvatarImage src={user.avatar} />
-                <AvatarFallback className="text-2xl">{user.name?.[0] || user.email?.[0]?.toUpperCase() || 'U'}</AvatarFallback>
+              <Avatar className="mb-4 h-24 w-24">
+                <AvatarImage src={user.avatar ?? undefined} />
+                <AvatarFallback className="text-2xl">
+                  {user.name?.[0] || user.email?.[0]?.toUpperCase() || "U"}
+                </AvatarFallback>
               </Avatar>
               <h2 className="text-xl font-bold">{user.name || "Code Master"}</h2>
-              <p className="text-sm text-muted-foreground mb-4">{user.email}</p>
-              <Badge variant="secondary" className="mb-2">{user.role}</Badge>
-              <div className="w-full grid grid-cols-2 gap-4 mt-4 pt-4 border-t">
+              <p className="mb-4 text-sm text-muted-foreground">{user.email ?? user.phone}</p>
+              <Badge variant="secondary" className="mb-2">
+                {user.role ?? (user.roles?.includes("admin") ? "admin" : "student")}
+              </Badge>
+              <div className="mt-4 grid w-full grid-cols-2 gap-4 border-t pt-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">{stats.rank}</div>
-                  <div className="text-xs text-muted-foreground">排名</div>
+                  <div className="text-2xl font-bold">{stats.attempted}</div>
+                  <div className="text-xs text-muted-foreground">尝试题目</div>
                 </div>
                 <div className="text-center">
                   <div className="text-2xl font-bold">{stats.solved.total}</div>
@@ -64,54 +155,61 @@ export default function ProfilePage() {
 
           <Card>
             <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
+              <CardTitle className="flex items-center gap-2 text-base">
                 <Trophy className="h-4 w-4 text-yellow-500" />
-                成就
+                做题状态
               </CardTitle>
             </CardHeader>
-            <CardContent>
-              <div className="flex flex-wrap gap-2">
-                <Badge variant="outline" className="border-yellow-500/50 text-yellow-500 bg-yellow-500/10">初级刷题者</Badge>
-                <Badge variant="outline" className="border-blue-500/50 text-blue-500 bg-blue-500/10">坚持不懈</Badge>
+            <CardContent className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">简单</span>
+                <span className="font-medium">{stats.solved.easy}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">中等</span>
+                <span className="font-medium">{stats.solved.medium}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">困难</span>
+                <span className="font-medium">{stats.solved.hard}</span>
               </div>
             </CardContent>
           </Card>
         </div>
 
-        {/* Main Content */}
         <div className="space-y-6">
           <div className="grid gap-4 md:grid-cols-3">
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  简单题目
+                  已尝试题目
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-green-500">{stats.solved.easy}</div>
-                <p className="text-xs text-muted-foreground">已完成</p>
+                <div className="text-2xl font-bold">{stats.attempted}</div>
+                <p className="text-xs text-muted-foreground">累计有提交记录的题目</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  中等题目
+                  已通过题目
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-yellow-500">{stats.solved.medium}</div>
-                <p className="text-xs text-muted-foreground">已完成</p>
+                <div className="text-2xl font-bold text-green-500">{stats.solved.total}</div>
+                <p className="text-xs text-muted-foreground">聚合自 user_problem_progress</p>
               </CardContent>
             </Card>
             <Card>
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">
-                  困难题目
+                  最近提交
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-red-500">{stats.solved.hard}</div>
-                <p className="text-xs text-muted-foreground">已完成</p>
+                <div className="text-2xl font-bold">{stats.recentActivity.length}</div>
+                <p className="text-xs text-muted-foreground">最近 10 条提交</p>
               </CardContent>
             </Card>
           </div>
@@ -121,25 +219,121 @@ export default function ProfilePage() {
               <CardTitle>最近活动</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                {stats.recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0">
-                    <div className="flex items-center gap-4">
-                      <div className={`p-2 rounded-full ${activity.status === 'ACCEPTED' ? 'bg-green-500/10 text-green-500' : 'bg-red-500/10 text-red-500'}`}>
-                        {activity.status === 'ACCEPTED' ? <Target className="h-4 w-4" /> : <Clock className="h-4 w-4" />}
+              {stats.recentActivity.length === 0 ? (
+                <div className="text-sm text-muted-foreground">暂无提交记录</div>
+              ) : (
+                <div className="space-y-4">
+                  {stats.recentActivity.map((activity) => {
+                    const accepted =
+                      activity.status === "ACCEPTED" || activity.rawStatus === "AC"
+                    return (
+                      <div
+                        key={activity.id}
+                        className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                      >
+                        <div className="flex items-center gap-4">
+                          <div
+                            className={`rounded-full p-2 ${
+                              accepted
+                                ? "bg-green-500/10 text-green-500"
+                                : "bg-red-500/10 text-red-500"
+                            }`}
+                          >
+                            {accepted ? (
+                              <CheckCircle2 className="h-4 w-4" />
+                            ) : (
+                              <Clock className="h-4 w-4" />
+                            )}
+                          </div>
+                          <div>
+                            <Link
+                              href={`/problems/${activity.problem.slug}`}
+                              className="font-medium hover:underline"
+                            >
+                              {activity.problem.title}
+                            </Link>
+                            <div className="text-xs text-muted-foreground">
+                              {getStatusLabel(activity.status)}
+                              {activity.score !== undefined ? ` · ${activity.score} 分` : ""}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex flex-col items-end gap-2">
+                          <Link
+                            href={`/submissions/${activity.id}`}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            查看提交
+                          </Link>
+                          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+                            <Calendar className="h-3 w-3" />
+                            {new Date(activity.createdAt).toLocaleString()}
+                          </div>
+                        </div>
                       </div>
-                      <div>
-                        <div className="font-medium">{activity.problem}</div>
-                        <div className="text-xs text-muted-foreground">{activity.status}</div>
+                    )
+                  })}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>做题进度</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {!progressRows || progressRows.length === 0 ? (
+                <div className="text-sm text-muted-foreground">暂无做题进度</div>
+              ) : (
+                <div className="space-y-4">
+                  {progressRows.slice(0, 12).map((row) => (
+                    <div
+                      key={`${row.problem.id}-${row.lastSubmissionId ?? row.updatedAt}`}
+                      className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
+                    >
+                      <div className="space-y-1">
+                        <Link
+                          href={`/problems/${row.problem.slug}`}
+                          className="font-medium hover:underline"
+                        >
+                          {row.problem.title}
+                        </Link>
+                        <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                          <span>{getDifficultyLabel(row.problem.difficulty)}</span>
+                          <span>尝试 {row.attempts}</span>
+                          <span>最高分 {row.bestScore}</span>
+                          <span>{getStatusLabel(row.lastStatus)}</span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {row.lastSubmissionId ? (
+                          <Link
+                            href={`/submissions/${row.lastSubmissionId}`}
+                            className="text-xs font-medium text-primary hover:underline"
+                          >
+                            最近提交
+                          </Link>
+                        ) : null}
+                        {row.status >= 20 ? (
+                          <Badge className="bg-green-500/10 text-green-500" variant="outline">
+                            已通过
+                          </Badge>
+                        ) : (
+                          <Badge className="bg-yellow-500/10 text-yellow-500" variant="outline">
+                            进行中
+                          </Badge>
+                        )}
+                        {row.status >= 20 ? (
+                          <Target className="h-4 w-4 text-green-500" />
+                        ) : (
+                          <Clock className="h-4 w-4 text-muted-foreground" />
+                        )}
                       </div>
                     </div>
-                    <div className="text-sm text-muted-foreground flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      {activity.date}
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>

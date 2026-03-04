@@ -1,0 +1,75 @@
+{
+  "draft": false,
+  "source": "luogu:P1002",
+  "slug": "noip-2002",
+  "title": "[NOIP 2002 普及组] 过河卒",
+  "metadata": {
+    "provider": "luogu",
+    "pid": "P1002",
+    "difficulty": 1,
+    "tags": [
+      "动态规划",
+      "递推",
+      "2002",
+      "NOIP 普及组"
+    ]
+  },
+  "todo": [
+    "Review hidden/stress group distribution after the first full import.",
+    "If later you add stronger adversarial cases, increase verify.generated counts accordingly."
+  ],
+  "samples": [
+    {
+      "input": "6 6 3 3\n",
+      "output": "6\n",
+      "title": "sample-1"
+    }
+  ],
+  "verify": {
+    "generated": [
+      {
+        "group": "small-random",
+        "count": 20
+      },
+      {
+        "group": "edge",
+        "count": 10
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "sample",
+      "useSamples": true,
+      "score": 0,
+      "caseType": 0,
+      "visible": true,
+      "isSample": true,
+      "groupId": "sample"
+    },
+    {
+      "name": "small-random",
+      "count": 10,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-small"
+    },
+    {
+      "name": "edge",
+      "count": 8,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-edge"
+    },
+    {
+      "name": "stress",
+      "count": 4,
+      "score": 20,
+      "caseType": 2,
+      "visible": false,
+      "groupId": "stress"
+    }
+  ]
+}

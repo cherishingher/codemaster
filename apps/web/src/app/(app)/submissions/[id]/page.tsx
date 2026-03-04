@@ -1,192 +1,160 @@
-"use client";
+"use client"
 
-import * as React from "react";
-import { useParams } from "next/navigation";
-import useSWR from "swr";
-import Link from "next/link";
-import { api, ApiError } from "@/lib/api-client";
-import { Button } from "@/components/ui/button";
-import { SubmissionResult } from "@/components/problems/submission-result";
-import { Breadcrumbs } from "@/components/ui/breadcrumbs";
+import * as React from "react"
+import Link from "next/link"
+import { useParams } from "next/navigation"
+import { Loader2 } from "lucide-react"
+import { useAuth } from "@/lib/hooks/use-auth"
+import { useSubmission } from "@/lib/hooks/use-submission"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { SubmissionResult } from "@/components/problems/submission-result"
+
+function formatMaybeDate(value?: string | null) {
+  return value ? new Date(value).toLocaleString() : "-"
+}
 
 export default function SubmissionDetailPage() {
-  const params = useParams();
-  const rawId = params.id;
-  const id = Array.isArray(rawId) ? rawId[0] : rawId;
+  const { user, loading } = useAuth({ redirectTo: "/login" })
+  const params = useParams<{ id?: string | string[] }>()
+  const submissionId = Array.isArray(params.id) ? params.id[0] : params.id ?? null
+  const { submission, isLoading, isError } = useSubmission(submissionId)
 
-  const { data: submission, error, isLoading } = useSWR(
-    id ? `/submissions/${id}` : null,
-    () => api.submissions.get(id)
-  );
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "ACCEPTED":
-      case "AC":
-        return "text-green-500";
-      case "WRONG_ANSWER":
-      case "WA":
-      case "RUNTIME_ERROR":
-      case "RE":
-      case "COMPILE_ERROR":
-      case "CE":
-      case "TIME_LIMIT_EXCEEDED":
-      case "TLE":
-      case "MEMORY_LIMIT_EXCEEDED":
-      case "MLE":
-        return "text-red-500";
-      case "SYSTEM_ERROR":
-      case "SE":
-      case "FAILED":
-        return "text-zinc-500";
-      case "PENDING":
-      case "JUDGING":
-      case "QUEUED":
-      case "RUNNING":
-      default:
-        return "text-blue-500";
-    }
-  };
-
-  const getStatusLabel = (status: string) => {
-    switch (status) {
-      case "ACCEPTED":
-      case "AC":
-        return "通过";
-      case "WRONG_ANSWER":
-      case "WA":
-        return "解答错误";
-      case "TIME_LIMIT_EXCEEDED":
-      case "TLE":
-        return "超出时间限制";
-      case "MEMORY_LIMIT_EXCEEDED":
-      case "MLE":
-        return "超出内存限制";
-      case "RUNTIME_ERROR":
-      case "RE":
-        return "运行错误";
-      case "COMPILE_ERROR":
-      case "CE":
-        return "编译错误";
-      case "SYSTEM_ERROR":
-      case "SE":
-      case "FAILED":
-        return "系统错误";
-      case "PENDING":
-      case "QUEUED":
-        return "等待中";
-      case "JUDGING":
-      case "RUNNING":
-        return "评测中";
-      default:
-        return status;
-    }
-  };
-
-  if (!id) return null;
-
-  if (error) {
+  if (loading || !user) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center px-6">
-        <div className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
-          {(error as ApiError).status === 401
-            ? "请先登录查看提交记录"
-            : (error as ApiError).status === 403
-            ? "无权访问此提交记录"
-            : "加载失败，请稍后重试"}
-          <div className="mt-4 flex gap-2">
-            <Button asChild variant="secondary" size="sm">
-              <Link href="/submissions">返回列表</Link>
-            </Button>
-          </div>
+      <div className="flex h-[50vh] items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
+
+  if (isError) {
+    return (
+      <div className="container px-4 py-8 md:px-6">
+        <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          提交详情加载失败，请确认权限或稍后重试。
         </div>
       </div>
-    );
+    )
   }
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto py-8 px-4 max-w-5xl">
-        <div className="text-sm text-zinc-500">加载中...</div>
-      </div>
-    );
-  }
-
-  if (!submission) return null;
-
-  const isFinished = !["PENDING", "QUEUED", "JUDGING", "RUNNING"].includes(
-    submission.status
-  );
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-5xl">
-      <div className="mb-6">
-        <Breadcrumbs
-          items={[
-            { label: "我的提交", href: "/submissions" },
-            { label: "提交详情" },
-          ]}
-        />
+    <div className="container space-y-6 px-4 py-8 md:px-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-2">
+          <div className="text-sm text-muted-foreground">
+            <Link href="/submissions" className="hover:underline">
+              提交列表
+            </Link>
+            <span className="mx-2">/</span>
+            <span>{submissionId}</span>
+          </div>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {submission?.problem?.title ?? "提交详情"}
+          </h1>
+          <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            {submission?.problem?.slug ? (
+              <Link
+                href={`/problems/${submission.problem.slug}`}
+                className="font-medium text-primary hover:underline"
+              >
+                跳转题目
+              </Link>
+            ) : null}
+            <span>提交时间 {formatMaybeDate(submission?.createdAt)}</span>
+            <span>完成时间 {formatMaybeDate(submission?.finishedAt)}</span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {submission?.status ? <Badge variant="outline">{submission.status}</Badge> : null}
+          {submission?.rawStatus && submission.rawStatus !== submission.status ? (
+            <Badge variant="outline">{submission.rawStatus}</Badge>
+          ) : null}
+          {submission?.judgeBackend ? <Badge variant="outline">{submission.judgeBackend}</Badge> : null}
+        </div>
       </div>
 
-      <div className="mb-6 rounded-md border border-zinc-800 bg-zinc-950 p-6">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl font-bold mb-2">
-              <span className={getStatusColor(submission.status)}>
-                {getStatusLabel(submission.status)}
-              </span>
-            </h1>
-            <div className="text-sm text-zinc-400">
-              提交于{" "}
-              {new Date(submission.createdAt).toLocaleString("zh-CN", {
-                year: "numeric",
-                month: "2-digit",
-                day: "2-digit",
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              })}
-            </div>
-          </div>
-          <div className="flex gap-6 rounded-md border border-zinc-800 bg-zinc-900/50 p-4">
-            <div className="flex flex-col">
-              <span className="text-xs text-zinc-500">时间</span>
-              <span className="font-mono text-zinc-200">
-                {submission.timeUsed !== undefined && submission.timeUsed !== null
-                  ? `${submission.timeUsed} ms`
-                  : "-"}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-zinc-500">内存</span>
-              <span className="font-mono text-zinc-200">
-                {submission.memoryUsed !== undefined && submission.memoryUsed !== null
-                  ? `${submission.memoryUsed} MB`
-                  : "-"}
-              </span>
-            </div>
-            <div className="flex flex-col">
-              <span className="text-xs text-zinc-500">分数</span>
-              <span className="font-mono text-zinc-200">
-                {submission.score !== undefined && submission.score !== null
-                  ? submission.score
-                  : "-"}
-              </span>
-            </div>
-          </div>
+      {isLoading ? (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          正在获取提交详情...
         </div>
+      ) : null}
 
-        <div className="mt-8">
-          <h2 className="text-lg font-semibold mb-4">评测详情</h2>
-          <div className="rounded-md border border-zinc-800 bg-zinc-900 p-4">
-            <SubmissionResult
-              submission={submission}
-              isLoading={!isFinished}
-            />
-          </div>
-        </div>
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">语言</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{submission?.language ?? "-"}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">分数</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{submission?.score ?? 0}</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">耗时</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{submission?.timeUsed ?? 0} ms</CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm text-muted-foreground">内存</CardTitle>
+          </CardHeader>
+          <CardContent className="text-xl font-semibold">{submission?.memoryUsed ?? 0} KB</CardContent>
+        </Card>
+      </div>
+
+      <SubmissionResult submission={submission} isLoading={Boolean(isLoading && !submission)} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>编译与运行信息</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4 text-sm">
+            <div>
+              <div className="mb-1 font-medium">CompileInfo</div>
+              <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs">
+                {submission?.compileInfo
+                  ? JSON.stringify(submission.compileInfo, null, 2)
+                  : "暂无编译信息"}
+              </pre>
+            </div>
+            <div>
+              <div className="mb-1 font-medium">RuntimeInfo</div>
+              <pre className="max-h-48 overflow-auto rounded-md bg-muted p-3 text-xs">
+                {submission?.runtimeInfo
+                  ? JSON.stringify(submission.runtimeInfo, null, 2)
+                  : "暂无运行信息"}
+              </pre>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>源码</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+              <span>存储 {submission?.sourceCode?.storageType ?? "-"}</span>
+              {submission?.sourceCode?.sourceSize ? (
+                <span>大小 {submission.sourceCode.sourceSize} bytes</span>
+              ) : null}
+              {submission?.sourceCode?.objectKey ? (
+                <span>对象 {submission.sourceCode.objectKey}</span>
+              ) : null}
+            </div>
+            <pre className="max-h-[560px] overflow-auto rounded-md bg-zinc-950 p-4 text-xs text-zinc-100">
+              {submission?.sourceCode?.source ?? "当前提交未返回内联源码。"}
+            </pre>
+          </CardContent>
+        </Card>
       </div>
     </div>
-  );
+  )
 }

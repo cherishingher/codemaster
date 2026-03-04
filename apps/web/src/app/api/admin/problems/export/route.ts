@@ -65,7 +65,9 @@ export const GET = withAuth(async (req: NextRequest) => {
     versions: p.versions.map((v) => ({
       version: v.version,
       statement: v.statement,
+      statementMd: v.statementMd,
       constraints: v.constraints,
+      hints: v.hints,
       inputFormat: v.inputFormat,
       outputFormat: v.outputFormat,
       samples: v.samples,

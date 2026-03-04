@@ -27,6 +27,7 @@ model User {
   comments    Comment[]
   contestParticipants ContestParticipant[]
   moderationLogs ModerationLog[]
+  adminProblemBulkOperationLogs AdminProblemBulkOperationLog[]
   solutions   Solution[]
   problemSets ProblemSet[]
   problemProgress UserProblemProgress[]
@@ -76,14 +77,24 @@ model Session {
 
 model Problem {
   id          String   @id @default(cuid())
+  slug        String   @unique
   title       String
   difficulty  Int
+  status      Int      @default(0)
+  visible     Boolean  @default(true)
+  defunct     String   @default("N") @db.Char(1)
   visibility  String   @default("public")
   source      String?
+  publishedAt DateTime?
+  totalSubmissions Int @default(0)
+  acceptedSubmissions Int @default(0)
+  passRate    Float    @default(0)
+  currentVersionId String? @unique
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   tags        ProblemTag[]
-  versions    ProblemVersion[]
+  versions    ProblemVersion[] @relation("ProblemVersions")
+  currentVersion ProblemVersion? @relation("ProblemCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
   submissions Submission[]
   contestProblems ContestProblem[]
   solutions   Solution[]
@@ -93,6 +104,8 @@ model Problem {
   hustojMap   HustojProblemMap?
 
   @@index([difficulty])
+  @@index([status, visible, defunct, publishedAt])
+  @@index([createdAt])
 }
 
 model ProblemVersion {
@@ -100,7 +113,9 @@ model ProblemVersion {
   problemId     String
   version       Int
   statement     String
+  statementMd   String?
   constraints   String?
+  hints         String?
   inputFormat   String?
   outputFormat  String?
   samples       Json?
@@ -108,18 +123,26 @@ model ProblemVersion {
   notes         String?
   timeLimitMs   Int
   memoryLimitMb Int
-  problem       Problem @relation(fields: [problemId], references: [id])
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  problem       Problem @relation("ProblemVersions", fields: [problemId], references: [id])
+  currentFor    Problem[] @relation("ProblemCurrentVersion")
   testcases     Testcase[]
+  judgeConfigs  ProblemJudgeConfig[]
   submissions   Submission[]
   solutions     Solution[]
 
   @@unique([problemId, version])
   @@index([problemId])
+  @@index([problemId, createdAt])
 }
 
 model Testcase {
   id        String @id @default(cuid())
   versionId String
+  title     String?
+  caseType  Int    @default(1)
+  visible   Boolean @default(false)
   inputUri  String
   outputUri String
   score     Int
@@ -130,9 +153,14 @@ model Testcase {
   groupId   String?
   isSample  Boolean @default(false)
   orderIndex Int?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   version   ProblemVersion @relation(fields: [versionId], references: [id])
+  cases     SubmissionCase[]
 
   @@index([versionId])
+  @@index([versionId, caseType, orderIndex])
+  @@index([versionId, groupId])
 }
 
 model Tag {
@@ -157,21 +185,34 @@ model Submission {
   problemId String
   problemVersionId String
   lang      String
+  languageId Int?
   codeUri   String?
   code      String?  @db.Text
   status    String   @default("QUEUED")
+  judgeResult Int    @default(0)
   score     Int      @default(0)
   judgeBackend String @default("hustoj")
   hustojSolutionId Int?
+  timeUsedMs Int?
+  memoryUsedKb Int?
+  visible   Boolean  @default(true)
+  defunct   String   @default("N") @db.Char(1)
   createdAt DateTime @default(now())
+  finishedAt DateTime?
+  updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id])
   problem   Problem  @relation(fields: [problemId], references: [id])
   problemVersion ProblemVersion @relation(fields: [problemVersionId], references: [id])
   cases     SubmissionCase[]
+  sourceCode SourceCode?
+  compileInfo CompileInfo?
+  runtimeInfo RuntimeInfo?
 
   @@index([userId, createdAt])
   @@index([problemId, createdAt])
   @@index([status])
+  @@index([judgeResult, createdAt])
+  @@index([problemVersionId, createdAt])
 }
 
 model HustojProblemMap {
@@ -189,13 +230,86 @@ model SubmissionCase {
   id           String @id @default(cuid())
   submissionId String
   testcaseId   String?
+  ordinal      Int?
   status       String
+  judgeResult  Int    @default(0)
   timeMs       Int
   memoryMb     Int
   score        Int
+  inputPreview String? @db.Text
+  outputPreview String? @db.Text
+  expectedPreview String? @db.Text
+  checkerMessage String? @db.Text
+  createdAt    DateTime @default(now())
   submission   Submission @relation(fields: [submissionId], references: [id])
+  testcase     Testcase? @relation(fields: [testcaseId], references: [id])
 
   @@index([submissionId])
+  @@index([submissionId, ordinal])
+  @@unique([submissionId, testcaseId])
+}
+
+model ProblemJudgeConfig {
+  id             String   @id @default(cuid())
+  versionId      String
+  language       String
+  languageId     Int
+  judgeMode      String   @default("standard")
+  timeLimitMs    Int?
+  memoryLimitMb  Int?
+  templateCode   String?  @db.Text
+  templateCodeUri String?
+  entrypoint     String?
+  entrySignature String?
+  compileCommand String?
+  runCommand     String?
+  isEnabled      Boolean  @default(true)
+  isDefault      Boolean  @default(false)
+  sortOrder      Int      @default(0)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  version        ProblemVersion @relation(fields: [versionId], references: [id])
+
+  @@unique([versionId, language])
+  @@index([versionId, isEnabled, sortOrder])
+  @@index([languageId])
+}
+
+model SourceCode {
+  submissionId String   @id
+  source       String?  @db.Text
+  objectKey    String?
+  storageType  String   @default("inline")
+  sourceSize   Int?
+  sourceHash   String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  submission   Submission @relation(fields: [submissionId], references: [id])
+}
+
+model CompileInfo {
+  submissionId String   @id
+  compiler     String?
+  command      String?
+  exitCode     Int?
+  message      String?  @db.Text
+  objectKey    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  submission   Submission @relation(fields: [submissionId], references: [id])
+}
+
+model RuntimeInfo {
+  submissionId   String   @id
+  exitCode       Int?
+  signal         String?
+  stdoutPreview  String?  @db.Text
+  stderrPreview  String?  @db.Text
+  checkerMessage String?  @db.Text
+  objectKey      String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  submission     Submission @relation(fields: [submissionId], references: [id])
 }
 
 model Contest {
@@ -403,19 +517,39 @@ model ModerationLog {
   @@index([adminId, createdAt])
 }
 
+model AdminProblemBulkOperationLog {
+  id            String   @id @default(cuid())
+  adminId       String
+  action        String
+  selectionMode String
+  filters       Json?
+  payload       Json
+  matchedCount  Int      @default(0)
+  targets       Json
+  result        Json?
+  createdAt     DateTime @default(now())
+  admin         User     @relation(fields: [adminId], references: [id])
+
+  @@index([adminId, createdAt])
+  @@index([action, createdAt])
+}
+
 model UserProblemProgress {
   userId          String
   problemId       String
+  status          Int      @default(0)
   attempts        Int      @default(0)
   bestScore       Int      @default(0)
   lastStatus      String?
   solvedAt        DateTime?
   lastSubmissionId String?
+  createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   user            User     @relation(fields: [userId], references: [id])
   problem         Problem  @relation(fields: [problemId], references: [id])
 
   @@id([userId, problemId])
   @@index([userId, updatedAt])
+  @@index([userId, status, updatedAt])
   @@index([problemId])
 }

@@ -53,45 +53,41 @@ export async function client<T = unknown>(
     return data as T;
   }
 
-  if (response.status === 401 && typeof window !== "undefined") {
-    // 自动跳转到登录页，并带上当前页面路径以便登录后跳回
-    const currentPath = encodeURIComponent(window.location.pathname + window.location.search);
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.href = `/login?callbackUrl=${currentPath}`;
-    }
-  }
-
   throw new ApiError(response.status, getErrorMessage(data, response.statusText), data);
 }
 
 // Type-safe endpoints
 export const api = {
   auth: {
-    me: () => client('/auth/me'),
+    me: <T = unknown>() => client<T>('/auth/me'),
     login: (body: { email?: string; phone?: string; password: string }) =>
       client('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
     register: (body: { identifier: string; password: string; name?: string; code: string }) =>
       client('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
     requestCode: (body: { identifier: string; purpose?: string }) =>
       client('/auth/request-code', { method: 'POST', body: JSON.stringify(body) }),
-    logout: () => client('/auth/logout', { method: 'POST' }),
+    logout: <T = unknown>() => client<T>('/auth/logout', { method: 'POST' }),
   },
   problems: {
-    list: (params?: Record<string, string>) => client<{data: any[], meta: any}>('/problems', { params }),
-    get: (id: string) => client(`/problems/${id}`),
-    submit: (id: string, code: string, language: string) => 
-      client(`/problems/${id}/submit`, { 
+    list: <T = unknown>(params?: Record<string, string>) => client<T>('/problems', { params }),
+    get: <T = unknown>(id: string) => client<T>(`/problems/${id}`),
+    submit: <T = unknown>(id: string, code: string, language: string) =>
+      client<T>(`/problems/${id}/submit`, {
         method: 'POST', 
         body: JSON.stringify({ code, language }) 
       }),
-    run: (id: string, code: string, language: string, input: string) =>
-      client(`/problems/${id}/run`, {
+    run: <T = unknown>(id: string, code: string, language: string, input: string) =>
+      client<T>(`/problems/${id}/run`, {
         method: 'POST',
         body: JSON.stringify({ code, language, input })
       }),
   },
   submissions: {
-    list: (params?: Record<string, string>) => client<{data: any[], meta: any}>('/submissions', { params }),
-    get: (id: string) => client(`/submissions/${id}`),
+    list: <T = unknown>(params?: Record<string, string>) =>
+      client<T>('/submissions', { params }),
+    get: <T = unknown>(id: string) => client<T>(`/submissions/${id}`),
+  },
+  progress: {
+    list: <T = unknown>() => client<T>('/progress'),
   }
 };

@@ -72,9 +72,9 @@ ALIYUN_DM_TAG_NAME=可选标签
 ```
 
 说明：
-- 短信接口使用 `SendMessageWithTemplate`，`To` 是手机号（建议带国家码，如 `86`）。
+- 短信接口使用 `SendSms`，参数为 `PhoneNumbers / SignName / TemplateCode / TemplateParam`。
 - 邮件接口使用 `SingleSendMail`，`HtmlBody` 内置验证码内容。
-- 生产环境请把 `DEBUG_AUTH_CODES=false`。
+- 本地联调可设置 `DEBUG_AUTH_CODES=true` 返回 `debugCode`；生产环境请设置为 `false`。
 
 ---
 

@@ -4,22 +4,35 @@ import { useRouter } from 'next/navigation';
 
 export interface User {
   id: string;
-  email: string;
-  name?: string;
-  role: 'student' | 'admin';
-  avatar?: string;
+  email?: string | null;
+  phone?: string | null;
+  name?: string | null;
+  role?: 'student' | 'admin';
+  roles?: string[];
+  avatar?: string | null;
 }
 
 export function useAuth({
   redirectTo = '',
   redirectIfFound = false,
 } = {}) {
-  const { data: user, error, mutate } = useSWR<User>('/auth/me', api.auth.me, {
-    shouldRetryOnError: false,
-  });
+  const { data: rawUser, error, mutate } = useSWR<User | { user: User | null } | null>(
+    '/auth/me',
+    api.auth.me,
+    {
+      shouldRetryOnError: false,
+    }
+  );
+
+  const user =
+    rawUser &&
+    typeof rawUser === 'object' &&
+    'user' in rawUser
+      ? rawUser.user
+      : rawUser;
 
   const router = useRouter();
-  const loading = !user && !error;
+  const loading = rawUser === undefined && !error;
   const loggedIn = !!user && !error;
 
   // Handle redirects

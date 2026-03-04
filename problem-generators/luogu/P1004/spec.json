@@ -1,0 +1,78 @@
+{
+  "draft": true,
+  "source": "luogu:P1004",
+  "slug": "noip-2000",
+  "title": "[NOIP 2000 提高组] 方格取数",
+  "metadata": {
+    "provider": "luogu",
+    "pid": "P1004",
+    "difficulty": 2,
+    "tags": [
+      "动态规划",
+      "2000",
+      "递归",
+      "NOIP 提高组",
+      "记忆化搜索"
+    ]
+  },
+  "todo": [
+    "Implement std.mjs with a trusted solution.",
+    "Implement brute.mjs for small-data differential checks.",
+    "Implement gen.mjs with group-specific generators.",
+    "Review samples and constraints, then set draft=false when ready."
+  ],
+  "samples": [
+    {
+      "input": "8\n2 3 13\n2 6  6\n3 5  7\n4 4 14\n5 2 21\n5 6  4\n6 3 15\n7 2 14\n0 0  0\n",
+      "output": "67",
+      "title": "sample-1"
+    }
+  ],
+  "verify": {
+    "generated": [
+      {
+        "group": "small-random",
+        "count": 24
+      },
+      {
+        "group": "edge",
+        "count": 12
+      }
+    ]
+  },
+  "groups": [
+    {
+      "name": "sample",
+      "useSamples": true,
+      "score": 0,
+      "caseType": 0,
+      "visible": true,
+      "isSample": true,
+      "groupId": "sample"
+    },
+    {
+      "name": "small-random",
+      "count": 12,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-small"
+    },
+    {
+      "name": "edge",
+      "count": 10,
+      "score": 40,
+      "caseType": 1,
+      "visible": false,
+      "groupId": "hidden-edge"
+    },
+    {
+      "name": "stress",
+      "count": 5,
+      "score": 20,
+      "caseType": 2,
+      "visible": false,
+      "groupId": "stress"
+    }
+  ]
+}

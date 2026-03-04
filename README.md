@@ -38,11 +38,104 @@
 ## 阿里云验证码快速接入
 查看完整流程与最短执行清单：`docs/aliyun-auth-setup.md`
 
+## 洛谷题目抓取脚本
+- 脚本：`scripts/luogu-sync.mjs`
+- 文档：`docs/luogu-sync-script.md`
+- 公开样例转测试点：`scripts/luogu-sample-testcases.mjs`
+- 文档：`docs/luogu-sample-testcases.md`
+- 测评数据生成器框架：`docs/problem-generator-framework.md`
+- 默认标签映射：`config/luogu-tag-map.json`
+- 题目级手工标签规则：`config/luogu-problem-tag-overrides.json`
+
+常用示例：
+```bash
+npm run luogu:sync -- --pids P1001,P1008 --output ./tmp/luogu-import.json
+```
+
+给已导入的洛谷题回填标签：
+```bash
+npm run luogu:backfill-tags --
+```
+
+把历史洛谷标签名规范化：
+```bash
+npm run luogu:normalize-tags --
+```
+
+如果要直接导入本地站点：
+```bash
+npm run luogu:sync -- \
+  --pids P1001 \
+  --base-url http://127.0.0.1:3001 \
+  --cookie 'cm_session=你的管理员会话'
+```
+
+把公开样例批量转成测试点并导入本地站点：
+```bash
+npm run luogu:samples-to-testcases -- \
+  --from P1001 --to P1100 \
+  --base-url http://127.0.0.1:3001 \
+  --cookie 'cm_session=你的管理员会话'
+```
+
+验证题目生成器：
+```bash
+npm run generator:verify -- --all
+```
+
+批量生成洛谷题目的生成器模板：
+```bash
+npm run generator:scaffold -- --from P1002 --to P1010
+```
+
+生成 hidden/stress 数据并导入本地站点：
+```bash
+npm run generator:generate -- --all \
+  --base-url http://127.0.0.1:3001 \
+  --cookie 'cm_session=你的管理员会话'
+```
+
 ## 结构
 - `apps/web`：前后端一体（Next.js App Router）
 - `packages/db`：Prisma schema 与数据库包
 - `services/judge-agent`：自建判题服务
 - `infra`：部署与基础设施配置
+
+## 题库数据库升级（LeetCode 风格）
+- 设计文档：`docs/problem-bank-db-design.md`
+- Prisma Schema：`packages/db/prisma/schema.prisma`
+- 迁移目录：`packages/db/prisma/migrations/20260303233000_leetcode_style_problem_bank`
+
+### 迁移
+1. 执行 Prisma migration：
+   ```bash
+   npx prisma migrate deploy --schema packages/db/prisma/schema.prisma
+   ```
+2. 重新生成 Prisma Client：
+   ```bash
+   npx prisma generate --schema packages/db/prisma/schema.prisma
+   ```
+
+### Seed
+当前仓库保留了最小种子入口（管理员权限）：
+```bash
+curl -X POST http://127.0.0.1:3000/api/admin/dev/seed \
+  -H 'cookie: cm_session=<admin_session_token>'
+```
+
+该入口会插入 2 道演示题、标签、样例、测试点、官方题解以及默认 `ProblemJudgeConfig`。
+
+### 最小 API
+- `GET /api/problems`
+  - 支持：`keyword|q`、`difficulty`、`tag|tags`、`status`、`userStatus`、`page`、`limit`
+- `GET /api/problems/:idOrSlug`
+  - 返回：`currentVersion`、`tags`、`judgeConfigs`、样例
+- `POST /api/problems/:idOrSlug/submit`
+  - 创建 `Submission` + `SourceCode`
+- `GET /api/submissions`
+  - 当前用户提交分页列表
+- `GET /api/submissions/:id`
+  - 当前用户或管理员可见；包含 `compileInfo`、`runtimeInfo`、安全裁剪后的 `submission_cases`
 
 ## 判题链路
 提交 → 任务入 Redis Streams → Judge Agent 拉取 → 沙箱执行 → 结果回写 API。
@@ -69,14 +162,13 @@
   - 上传标准答案 `.sb3` 或 `project.json`
   - 可选填角色名、选择版本
   - 可选分值（支持追加/覆盖）
+  - 支持批量 ZIP 导入得分点（可选 `config.yml/.yaml/.json`，或按文件名识别分值）
 
 ### 当前状态（注意）
 - Scratch 评分已支持多规则累计 **分值**（总分为各得分点之和）。
-- Scratch 判题仍以 **AC/WA** 为最终状态（非满分视为 WA），但会记录实际分数。
+- Scratch 判题状态已支持 **AC / PARTIAL / WA**（部分通过会显示 PARTIAL）。
 
 ### 待办 / 计划
-- Scratch 评分状态扩展：按分值给出 `PARTIAL`（可选）。
-- Scratch 得分点批量导入（ZIP + config.yml 或文件名约定）。
 - 阿里云短信/邮件验证码注册流程落地与生产配置。
 
 ## Scratch 规则生成（简要）

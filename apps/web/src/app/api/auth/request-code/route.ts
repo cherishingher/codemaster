@@ -19,7 +19,35 @@ type AliyunSendResult = {
   message?: string
 }
 
-async function createAliyunClient(endpoint: string, apiVersion: string) {
+type AliyunApiResponse = Record<string, unknown>
+
+type AliyunClient = {
+  request: (
+    action: string,
+    params: Record<string, unknown>,
+    options: { method: "POST" }
+  ) => Promise<AliyunApiResponse>
+}
+
+function getResponseString(result: AliyunApiResponse, ...keys: string[]) {
+  for (const key of keys) {
+    const value = result[key]
+    if (typeof value === "string" && value.length > 0) {
+      return value
+    }
+  }
+  return undefined
+}
+
+function toSendError(result: AliyunApiResponse, fallback: string): AliyunSendResult {
+  return {
+    ok: false,
+    requestId: getResponseString(result, "RequestId"),
+    message: getResponseString(result, "Message", "ResponseDescription") ?? fallback,
+  }
+}
+
+async function createAliyunClient(endpoint: string, apiVersion: string): Promise<AliyunClient | null> {
   const accessKeyId = process.env.ALIYUN_ACCESS_KEY_ID
   const accessKeySecret = process.env.ALIYUN_ACCESS_KEY_SECRET
   if (!accessKeyId || !accessKeySecret) return null
@@ -38,24 +66,20 @@ async function sendAliyunSms(phone: string, code: string): Promise<AliyunSendRes
     return { ok: false, message: "aliyun_credentials_missing" }
   }
   const params: Record<string, unknown> = {
-    To: phone,
-    From: signName,
+    PhoneNumbers: phone.startsWith("+") ? phone.slice(1) : phone,
+    SignName: signName,
     TemplateCode: templateCode,
     TemplateParam: JSON.stringify({ code }),
   }
   if (process.env.ALIYUN_REGION_ID) {
     params.RegionId = process.env.ALIYUN_REGION_ID
   }
-  const result = await client.request("SendMessageWithTemplate", params, { method: "POST" })
-  const responseCode = result?.ResponseCode ?? result?.Code
+  const result = await client.request("SendSms", params, { method: "POST" })
+  const responseCode = getResponseString(result, "Code", "ResponseCode")
   if (responseCode && responseCode !== "OK") {
-    return {
-      ok: false,
-      message: result.ResponseDescription ?? result.Message ?? "SendMessageWithTemplate failed",
-      requestId: result.RequestId,
-    }
+    return toSendError(result, "SendSms failed")
   }
-  return { ok: true, requestId: result?.RequestId }
+  return { ok: true, requestId: getResponseString(result, "RequestId") }
 }
 
 async function sendAliyunEmail(email: string, code: string): Promise<AliyunSendResult> {
@@ -87,7 +111,11 @@ async function sendAliyunEmail(email: string, code: string): Promise<AliyunSendR
   params.HtmlBody = `<div style="font-size:14px">您的验证码是 <strong>${code}</strong>，10 分钟内有效。</div>`
 
   const result = await client.request("SingleSendMail", params, { method: "POST" })
-  return { ok: true, requestId: result?.RequestId }
+  const responseCode = getResponseString(result, "Code", "ResponseCode")
+  if (responseCode && responseCode !== "OK") {
+    return toSendError(result, "SingleSendMail failed")
+  }
+  return { ok: true, requestId: getResponseString(result, "RequestId") }
 }
 
 export async function POST(req: NextRequest) {
@@ -130,7 +158,7 @@ export async function POST(req: NextRequest) {
   const code = Math.floor(100000 + Math.random() * 900000).toString()
   const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
-  const debug = process.env.DEBUG_AUTH_CODES === "true" || process.env.NODE_ENV !== "production"
+  const debug = process.env.DEBUG_AUTH_CODES === "true"
 
   let delivery: AliyunSendResult | null = null
   try {
@@ -138,6 +166,14 @@ export async function POST(req: NextRequest) {
       delivery = await sendAliyunSms(target, code)
     } else {
       delivery = await sendAliyunEmail(target, code)
+    }
+    if (!delivery.ok) {
+      console.error("[auth] verification delivery failed", {
+        type,
+        target,
+        message: delivery.message,
+        requestId: delivery.requestId,
+      })
     }
     if (!delivery.ok && !debug) {
       return NextResponse.json(

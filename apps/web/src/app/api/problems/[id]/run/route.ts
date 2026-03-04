@@ -84,7 +84,14 @@ function runCommand(
   })
 }
 
-const handler = withAuth(async (req) => {
+const handler = async (req: Request) => {
+  if (process.env.ENABLE_LOCAL_RUNNER !== "true") {
+    return NextResponse.json(
+      { error: "local_runner_disabled", message: "本地运行功能已关闭" },
+      { status: 403 }
+    )
+  }
+
   const body = await req.json().catch(() => ({}))
   const code = typeof body.code === "string" ? body.code : ""
   const language = typeof body.language === "string" ? body.language : ""
@@ -192,6 +199,6 @@ const handler = withAuth(async (req) => {
   } finally {
     await rm(workDir, { recursive: true, force: true })
   }
-})
+}
 
-export const POST = handler
+export const POST = withAuth(handler, { roles: "admin" })
