@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { ApiError, api } from "@/lib/api-client"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/lib/hooks/use-auth"
 import Link from "next/link"
 import { Loader2 } from "lucide-react"
@@ -24,7 +24,6 @@ export function LoginForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [error, setError] = React.useState("")
   const router = useRouter()
-  const searchParams = useSearchParams()
   const { mutate } = useAuth()
 
   const {
@@ -40,18 +39,12 @@ export function LoginForm() {
     setError("")
 
     try {
-      const payload = data.identifier.includes("@")
-        ? { email: data.identifier, password: data.password }
-        : { phone: data.identifier, password: data.password };
-      await api.auth.login(payload)
+      await api.auth.login({
+        identifier: data.identifier.trim(),
+        password: data.password,
+      })
       await mutate() // Revalidate user session
-      
-      const callbackUrl = searchParams?.get("callbackUrl")
-      if (callbackUrl) {
-        router.push(decodeURIComponent(callbackUrl))
-      } else {
-        router.push("/problems")
-      }
+      router.push("/problems")
     } catch (err) {
       if (err instanceof ApiError) {
         const data = err.data as { message?: string };
@@ -83,6 +76,9 @@ export function LoginForm() {
             {errors.identifier && (
               <p className="text-sm text-destructive">{errors.identifier.message}</p>
             )}
+            <p className="text-xs text-muted-foreground">
+              支持邮箱或手机号登录，系统会自动识别并规范化格式。
+            </p>
           </div>
           <div className="grid gap-2">
             <div className="flex items-center justify-between">

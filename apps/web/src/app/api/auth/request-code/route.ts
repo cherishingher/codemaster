@@ -7,7 +7,7 @@ export const runtime = "nodejs"
 
 const RequestSchema = z.object({
   identifier: z.string().min(3),
-  purpose: z.string().optional(),
+  purpose: z.enum(["register", "reset_password"]).optional(),
 })
 
 const CODE_TTL_MINUTES = 10
@@ -137,8 +137,11 @@ export async function POST(req: NextRequest) {
     where: type === "email" ? { email: target } : { phone: target },
     select: { id: true },
   })
-  if (existing) {
-    return NextResponse.json({ error: "user_exists" }, { status: 409 })
+  if (purpose === "register" && existing) {
+    return NextResponse.json({ error: "user_exists", message: "账号已存在" }, { status: 409 })
+  }
+  if (purpose === "reset_password" && !existing) {
+    return NextResponse.json({ error: "user_not_found", message: "账号不存在" }, { status: 404 })
   }
 
   const latest = await db.verificationCode.findFirst({

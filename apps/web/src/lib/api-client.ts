@@ -60,12 +60,14 @@ export async function client<T = unknown>(
 export const api = {
   auth: {
     me: <T = unknown>() => client<T>('/auth/me'),
-    login: (body: { email?: string; phone?: string; password: string }) =>
+    login: (body: { identifier?: string; email?: string; phone?: string; password: string }) =>
       client('/auth/login', { method: 'POST', body: JSON.stringify(body) }),
     register: (body: { identifier: string; password: string; name?: string; code: string }) =>
       client('/auth/register', { method: 'POST', body: JSON.stringify(body) }),
     requestCode: (body: { identifier: string; purpose?: string }) =>
       client('/auth/request-code', { method: 'POST', body: JSON.stringify(body) }),
+    resetPassword: (body: { identifier: string; password: string; code: string }) =>
+      client('/auth/reset-password', { method: 'POST', body: JSON.stringify(body) }),
     logout: <T = unknown>() => client<T>('/auth/logout', { method: 'POST' }),
   },
   problems: {

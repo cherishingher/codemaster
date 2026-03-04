@@ -1,19 +1,19 @@
 "use client"
 
 import * as React from "react"
+import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
+import { Loader2 } from "lucide-react"
+import { ApiError, api } from "@/lib/api-client"
+import { useAuth } from "@/lib/hooks/use-auth"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { ApiError, api } from "@/lib/api-client"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/lib/hooks/use-auth"
-import Link from "next/link"
-import { Loader2 } from "lucide-react"
 
-const registerSchema = z.object({
+const forgotPasswordSchema = z.object({
   identifier: z.string().min(3, "请输入邮箱或手机号"),
   code: z.string().min(4, "请输入验证码"),
   password: z.string().min(8, "密码至少 8 位"),
@@ -23,9 +23,9 @@ const registerSchema = z.object({
   path: ["confirmPassword"],
 })
 
-type RegisterValues = z.infer<typeof registerSchema>
+type ForgotPasswordValues = z.infer<typeof forgotPasswordSchema>
 
-export function RegisterForm() {
+export function ForgotPasswordForm() {
   const [isLoading, setIsLoading] = React.useState(false)
   const [isSending, setIsSending] = React.useState(false)
   const [countdown, setCountdown] = React.useState(0)
@@ -40,8 +40,8 @@ export function RegisterForm() {
     handleSubmit,
     getValues,
     formState: { errors },
-  } = useForm<RegisterValues>({
-    resolver: zodResolver(registerSchema),
+  } = useForm<ForgotPasswordValues>({
+    resolver: zodResolver(forgotPasswordSchema),
   })
 
   React.useEffect(() => {
@@ -61,9 +61,13 @@ export function RegisterForm() {
       setError("请先输入邮箱或手机号")
       return
     }
+
     setIsSending(true)
     try {
-      const res = await api.auth.requestCode({ identifier, purpose: "register" }) as { debugCode?: string }
+      const res = await api.auth.requestCode({
+        identifier,
+        purpose: "reset_password",
+      }) as { debugCode?: string }
       setNotice("验证码已发送，请查收")
       if (res?.debugCode) {
         setDebugCode(res.debugCode)
@@ -81,13 +85,13 @@ export function RegisterForm() {
     }
   }
 
-  async function onSubmit(data: RegisterValues) {
+  async function onSubmit(data: ForgotPasswordValues) {
     setIsLoading(true)
     setError("")
     setNotice("")
 
     try {
-      await api.auth.register({
+      await api.auth.resetPassword({
         identifier: data.identifier.trim(),
         code: data.code,
         password: data.password,
@@ -96,10 +100,10 @@ export function RegisterForm() {
       router.push("/problems")
     } catch (err) {
       if (err instanceof ApiError) {
-        const data = err.data as { message?: string };
-        setError(data?.message || "注册失败，请稍后重试");
+        const data = err.data as { message?: string }
+        setError(data?.message || "重置密码失败，请稍后重试")
       } else {
-        setError("注册失败，请稍后重试");
+        setError("重置密码失败，请稍后重试")
       }
     } finally {
       setIsLoading(false)
@@ -125,9 +129,6 @@ export function RegisterForm() {
             {errors.identifier && (
               <p className="text-sm text-destructive">{errors.identifier.message}</p>
             )}
-            <p className="text-xs text-muted-foreground">
-              支持邮箱或手机号注册，验证码会根据输入类型分别通过邮件或短信发送。
-            </p>
           </div>
           <div className="grid gap-2">
             <Label htmlFor="code">验证码</Label>
@@ -145,22 +146,16 @@ export function RegisterForm() {
                 onClick={handleSendCode}
                 disabled={isSending || countdown > 0}
               >
-                {isSending ? (
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                ) : null}
+                {isSending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                 {countdown > 0 ? `${countdown}s` : "发送验证码"}
               </Button>
             </div>
-            {errors.code && (
-              <p className="text-sm text-destructive">{errors.code.message}</p>
-            )}
+            {errors.code && <p className="text-sm text-destructive">{errors.code.message}</p>}
             {notice ? <p className="text-sm text-muted-foreground">{notice}</p> : null}
-            {debugCode ? (
-              <p className="text-sm text-amber-500">测试验证码: {debugCode}</p>
-            ) : null}
+            {debugCode ? <p className="text-sm text-amber-500">测试验证码: {debugCode}</p> : null}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="password">密码</Label>
+            <Label htmlFor="password">新密码</Label>
             <Input
               id="password"
               type="password"
@@ -172,7 +167,7 @@ export function RegisterForm() {
             )}
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="confirmPassword">确认密码</Label>
+            <Label htmlFor="confirmPassword">确认新密码</Label>
             <Input
               id="confirmPassword"
               type="password"
@@ -180,15 +175,13 @@ export function RegisterForm() {
               {...register("confirmPassword")}
             />
             {errors.confirmPassword && (
-              <p className="text-sm text-destructive">
-                {errors.confirmPassword.message}
-              </p>
+              <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
             )}
           </div>
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
           <Button disabled={isLoading}>
-            {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            注册
+            {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            重置密码
           </Button>
         </div>
       </form>
@@ -198,12 +191,12 @@ export function RegisterForm() {
         </div>
         <div className="relative flex justify-center text-xs uppercase">
           <span className="bg-background px-2 text-muted-foreground">
-            已有账号?
+            已经想起密码?
           </span>
         </div>
       </div>
       <Button variant="outline" type="button" disabled={isLoading} asChild>
-        <Link href="/login">登录</Link>
+        <Link href="/login">返回登录</Link>
       </Button>
     </div>
   )
