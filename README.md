@@ -35,6 +35,17 @@
 4. **Judge Agent**：启动 `services/judge-agent`（确保能连 Redis 与 Web API）
 5. **图形化**：如需 Scratch，确保 `apps/web/public/graphical` 已同步构建产物
 
+## 生产部署脚本
+- 脚本：`scripts/deploy-prod.sh`
+- 手册：`docs/prod-deploy-and-recovery.md`
+
+当前阿里云服务器推荐直接执行：
+```bash
+cd /root/codemaster
+chmod +x scripts/deploy-prod.sh
+./scripts/deploy-prod.sh
+```
+
 ## 阿里云验证码快速接入
 查看完整流程与最短执行清单：`docs/aliyun-auth-setup.md`
 
