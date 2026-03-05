@@ -1,39 +1,25 @@
-import * as React from "react"
 import { LoginForm } from "@/components/auth/login-form"
-import { Code2 } from "lucide-react"
+import { AuthShell } from "@/components/patterns/auth-shell"
+import { Card, CardContent } from "@/components/ui/card"
 
 export default function LoginPage() {
   return (
-    <div className="container relative flex h-[800px] flex-col items-center justify-center md:grid lg:max-w-none lg:grid-cols-2 lg:px-0">
-      <div className="relative hidden h-full flex-col bg-muted p-10 text-white dark:border-r lg:flex">
-        <div className="absolute inset-0 bg-zinc-900" />
-        <div className="relative z-20 flex items-center text-lg font-medium">
-          <Code2 className="mr-2 h-6 w-6" />
-          CodeMaster
-        </div>
-        <div className="relative z-20 mt-auto">
-          <blockquote className="space-y-2">
-            <p className="text-lg">
-              &ldquo;Coding is not just about writing code, it&rsquo;s about solving problems.&rdquo;
-            </p>
-          </blockquote>
-        </div>
-      </div>
-      <div className="lg:p-8">
-        <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-          <div className="flex flex-col space-y-2 text-center">
-            <h1 className="text-2xl font-semibold tracking-tight">
-              登录账户
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              请输入您的邮箱或手机号进行登录
+    <AuthShell
+      eyebrow="Auth / Sign In"
+      title="登录账户"
+      description="使用邮箱或手机号进入你的题库工作区。业务逻辑保持原样，这一批只更新界面和交互层。"
+    >
+      <Card className="mx-auto max-w-xl">
+        <CardContent className="space-y-6 px-6 py-7 md:px-8 md:py-9">
+          <div className="space-y-2">
+            <h2 className="text-2xl font-semibold tracking-tight text-foreground">登录账户</h2>
+            <p className="text-sm leading-6 text-muted-foreground">
+              请输入你的邮箱或手机号以及密码，系统会自动识别账号类型。
             </p>
           </div>
-          <React.Suspense fallback={<div className="text-sm text-muted-foreground text-center">加载中...</div>}>
-            <LoginForm />
-          </React.Suspense>
-        </div>
-      </div>
-    </div>
+          <LoginForm />
+        </CardContent>
+      </Card>
+    </AuthShell>
   )
 }

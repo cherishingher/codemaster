@@ -178,8 +178,12 @@ export function ForgotPasswordForm() {
               <p className="text-sm text-destructive">{errors.confirmPassword.message}</p>
             )}
           </div>
-          {error ? <p className="text-sm text-destructive">{error}</p> : null}
-          <Button disabled={isLoading}>
+          {error ? (
+            <div className="rounded-2xl border border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          ) : null}
+          <Button className="w-full" disabled={isLoading}>
             {isLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             重置密码
           </Button>
@@ -195,7 +199,7 @@ export function ForgotPasswordForm() {
           </span>
         </div>
       </div>
-      <Button variant="outline" type="button" disabled={isLoading} asChild>
+      <Button className="w-full" variant="outline" type="button" disabled={isLoading} asChild>
         <Link href="/login">返回登录</Link>
       </Button>
     </div>

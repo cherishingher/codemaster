@@ -112,6 +112,38 @@ npm run generator:generate -- --all \
 - `services/judge-agent`：自建判题服务
 - `infra`：部署与基础设施配置
 
+## 前端 UI 体系（迁移中）
+当前前端重构限定在 `apps/web` 的 UI 层，业务逻辑、API 路由、Prisma、Judge Agent 与部署配置保持不变。
+
+### 目录
+- `apps/web/src/app`：页面与布局，保留原有路由和数据调用，只调整展示层
+- `apps/web/src/components/ui`：基础 UI primitives（Button、Input、Card、Badge、Tabs、Dropdown、Skeleton 等）
+- `apps/web/src/components/patterns`：通用展示模式（AuthShell、SectionHeading、StatePanel 等）
+- `apps/web/src/components/layout`：导航、页头页脚、应用壳层
+- `apps/web/src/components/auth`：认证相关纯展示组件
+- `apps/web/src/components/problems`：题库/做题区纯展示组件
+- `apps/web/src/app/globals.css`：全局 tokens、基础排版、主题辅助样式
+
+### 迁移批次
+- `Batch 1`：完成 design tokens、基础 primitives、全局 shell、首页、认证页、loading/empty 基础状态
+- `Batch 2`：题库列表页、提交列表页、筛选栏、分页与通用列表模式
+- `Batch 3`：题目详情工作区、代码区/题面区、提交结果面板、题内历史提交
+- `Batch 4`：管理员壳层、题库管理列表、题单列表、导入导出页、后台通用表格/筛选模式
+- `Batch 5`：管理员详情页、个人中心、图形化入口包装层、错误/未授权状态补齐
+- `Batch 6`：无障碍与键盘交互收口、视觉一致性检查、回归验收
+
+### 当前完成度
+- `Batch 1`：已完成并通过 `build`
+- `Batch 2`：题库列表页、提交列表页已完成并通过 `build`
+- `Batch 3-6`：待迁移
+
+### 人工确认点
+- 首页、登录、注册、找回密码页的视觉改动是否已经足够贴近“教育平台 + claymorphism”方向
+- 做题页暂时保留原界面；后续如果要重做，需要单独定义不同于 landing/list 的工作区风格
+- 顶部导航、页脚、全局按钮/输入框/卡片样式是否需要再收紧间距
+- 全局背景与阴影层级在桌面端和移动端是否都可接受
+- `apps/web/public/graphical` 下历史产物在 `lint` 时仍有旧式 `eslint-env` warning；当前不影响 `build`，但不属于本轮 UI 改造范围
+
 ## 题库数据库升级（LeetCode 风格）
 - 设计文档：`docs/problem-bank-db-design.md`
 - Prisma Schema：`packages/db/prisma/schema.prisma`

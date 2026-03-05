@@ -19,19 +19,19 @@ export function Breadcrumbs({ items, className, ...props }: BreadcrumbsProps) {
       className={cn("flex items-center text-sm text-muted-foreground", className)}
       {...props}
     >
-      <ol className="flex items-center gap-2">
+      <ol className="flex flex-wrap items-center gap-2">
         <li>
-          <Link href="/" className="hover:text-foreground transition-colors">
+          <Link href="/" className="rounded-full px-2 py-1 transition-colors hover:bg-secondary hover:text-foreground">
             首页
           </Link>
         </li>
         {items.map((item, index) => (
           <li key={index} className="flex items-center gap-2">
-            <ChevronRight className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4 text-border" />
             {item.href ? (
               <Link
                 href={item.href}
-                className="hover:text-foreground transition-colors"
+                className="rounded-full px-2 py-1 transition-colors hover:bg-secondary hover:text-foreground"
               >
                 {item.label}
               </Link>

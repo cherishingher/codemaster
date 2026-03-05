@@ -10,10 +10,9 @@ interface CodeEditorProps {
 }
 
 export function CodeEditor({ value, onChange, language = "typescript" }: CodeEditorProps) {
-  // Simple dark mode detection or fixed dark mode since the app is dark themed
   const editorOptions = {
     minimap: { enabled: false },
-    fontSize: 14,
+    fontSize: 15,
     lineNumbers: "on" as const,
     scrollBeyondLastLine: false,
     automaticLayout: true,
@@ -23,12 +22,12 @@ export function CodeEditor({ value, onChange, language = "typescript" }: CodeEdi
   };
 
   return (
-    <div className="h-full w-full overflow-hidden rounded-md border bg-zinc-950">
+    <div className="h-full w-full overflow-hidden rounded-[1.2rem] border-[3px] border-border bg-background shadow-[8px_8px_0_hsl(var(--border))]">
       <Editor
         height="100%"
         defaultLanguage={language}
         language={language}
-        theme="vs-dark"
+        theme="vs"
         value={value}
         onChange={onChange}
         options={editorOptions}

@@ -122,7 +122,7 @@ function createHeadingRenderer(
       <a
         href={`#${id}`}
         aria-label={`跳转到 ${text}`}
-        className="ml-2 text-zinc-500 no-underline opacity-0 transition-opacity hover:text-sky-300 group-hover:opacity-100"
+        className="ml-2 text-muted-foreground no-underline opacity-0 transition-opacity hover:text-sky-700 group-hover:opacity-100"
       >
         #
       </a>
@@ -136,7 +136,7 @@ export function ProblemMarkdown({ markdown, className }: ProblemMarkdownProps) {
   return (
     <div
       className={cn(
-        "prose prose-invert max-w-none prose-headings:scroll-mt-20 prose-headings:text-zinc-100 prose-p:text-zinc-300 prose-strong:text-zinc-100 prose-a:text-sky-300 prose-code:text-emerald-300 prose-pre:border prose-pre:border-zinc-800 prose-pre:bg-zinc-950 prose-blockquote:border-zinc-700 prose-blockquote:text-zinc-400 prose-hr:border-zinc-800 prose-li:text-zinc-300 prose-th:text-zinc-100 prose-td:text-zinc-300",
+        "prose max-w-none prose-headings:scroll-mt-20 prose-headings:text-foreground prose-p:text-foreground prose-strong:text-foreground prose-a:text-sky-700 prose-code:text-emerald-700 prose-pre:border prose-pre:border-border prose-pre:bg-muted prose-blockquote:border-border prose-blockquote:text-muted-foreground prose-hr:border-border prose-li:text-foreground prose-th:text-foreground prose-td:text-foreground",
         className
       )}
     >
@@ -173,7 +173,7 @@ export function ProblemMarkdown({ markdown, className }: ProblemMarkdownProps) {
             }
             return (
               <code
-                className="rounded bg-zinc-800/80 px-1.5 py-0.5 text-[0.9em] text-emerald-300"
+                className="rounded bg-muted px-1.5 py-0.5 text-[0.9em] text-emerald-700"
                 {...props}
               >
                 {children}

@@ -222,16 +222,16 @@ function getSubmissionStatusLabel(status: string) {
 function getSubmissionStatusClass(status: string) {
   switch (status) {
     case "ACCEPTED":
-      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700"
     case "PARTIAL":
-      return "border-amber-500/40 bg-amber-500/10 text-amber-300"
+      return "border-amber-500/40 bg-amber-500/10 text-amber-700"
     case "PENDING":
     case "JUDGING":
-      return "border-blue-500/40 bg-blue-500/10 text-blue-300"
+      return "border-blue-500/40 bg-blue-500/10 text-blue-700"
     case "COMPILE_ERROR":
-      return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300"
+      return "border-yellow-600/40 bg-yellow-500/10 text-yellow-800"
     default:
-      return "border-red-500/40 bg-red-500/10 text-red-300"
+      return "border-red-500/40 bg-red-500/10 text-red-700"
   }
 }
 
@@ -280,6 +280,7 @@ export default function ProblemDetailPage() {
   } | null>(null)
   const [isRunning, setIsRunning] = React.useState(false)
   const [scratchFileName, setScratchFileName] = React.useState("")
+  const [showScratchRecentModal, setShowScratchRecentModal] = React.useState(false)
   const [toastPos, setToastPos] = React.useState({ x: 0, y: 0 })
   const [isDraggingToast, setIsDraggingToast] = React.useState(false)
   const dragOffsetRef = React.useRef({ x: 0, y: 0 })
@@ -388,7 +389,10 @@ export default function ProblemDetailPage() {
   }
 
   const samples = Array.isArray(problem?.samples) ? problem?.samples : []
-  const statementMarkdown = problem?.statementMd?.trim() || ""
+  const isScratchMode =
+    language.judgeMode === "scratch" || language.value.startsWith("scratch")
+  const statementMarkdown =
+    problem?.statementMd?.trim() || (isScratchMode ? problem?.statement?.trim() || "" : "")
   const statementHeadings = React.useMemo(
     () => (statementMarkdown ? extractMarkdownHeadings(statementMarkdown) : []),
     [statementMarkdown]
@@ -481,40 +485,40 @@ export default function ProblemDetailPage() {
 
   const statusPillClass = React.useMemo(() => {
     if (!submissionId) {
-      return "border-zinc-700/80 bg-zinc-800/60 text-zinc-300"
+      return "border-border/60 bg-muted text-muted-foreground"
     }
     const status = submission?.status ?? (submissionLoading ? "JUDGING" : "PENDING")
     switch (status) {
       case "ACCEPTED":
-        return "border-emerald-500/40 bg-emerald-500/10 text-emerald-300"
+        return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700"
       case "PARTIAL":
-        return "border-amber-500/40 bg-amber-500/10 text-amber-300"
+        return "border-amber-500/40 bg-amber-500/10 text-amber-700"
       case "WRONG_ANSWER":
       case "RUNTIME_ERROR":
-        return "border-red-500/40 bg-red-500/10 text-red-300"
+        return "border-red-500/40 bg-red-500/10 text-red-700"
       case "COMPILE_ERROR":
-        return "border-yellow-500/40 bg-yellow-500/10 text-yellow-300"
+        return "border-yellow-600/40 bg-yellow-500/10 text-yellow-800"
       case "TIME_LIMIT_EXCEEDED":
       case "MEMORY_LIMIT_EXCEEDED":
-        return "border-orange-500/40 bg-orange-500/10 text-orange-300"
+        return "border-orange-500/40 bg-orange-500/10 text-orange-700"
       case "SYSTEM_ERROR":
-        return "border-zinc-600/60 bg-zinc-700/40 text-zinc-200"
+        return "border-muted-foreground/30 bg-muted text-muted-foreground"
       case "PENDING":
       case "JUDGING":
       default:
-        return "border-blue-500/40 bg-blue-500/10 text-blue-300"
+        return "border-blue-500/40 bg-blue-500/10 text-blue-700"
     }
   }, [submissionId, submission?.status, submissionLoading])
 
   const getTagClass = React.useCallback((tag: string) => {
     const normalized = tag.toLowerCase()
     if (normalized.includes("scratch") && (normalized.includes("必") || normalized.includes("must"))) {
-      return "bg-red-500/10 text-red-300 border-red-500/30"
+      return "border-red-500/30 bg-red-500/10 text-red-700"
     }
     if (normalized.includes("scratch")) {
-      return "bg-emerald-500/10 text-emerald-300 border-emerald-500/30"
+      return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700"
     }
-    return "bg-zinc-800/70 text-zinc-200 border-zinc-700/60"
+    return "border-border/60 bg-secondary/40 text-foreground"
   }, [])
 
   const statusMeta = React.useMemo(() => {
@@ -527,8 +531,7 @@ export default function ProblemDetailPage() {
   }, [submission])
 
   const sampleInput = samples[0]?.input ?? ""
-  const isScratch =
-    language.judgeMode === "scratch" || language.value.startsWith("scratch")
+  const isScratch = isScratchMode
 
   React.useEffect(() => {
     if (!isScratch) return
@@ -539,6 +542,23 @@ export default function ProblemDetailPage() {
     setRunMeta(null)
     setScratchFileName("")
   }, [isScratch])
+
+  React.useEffect(() => {
+    if (!isScratch) {
+      setShowScratchRecentModal(false)
+    }
+  }, [isScratch])
+
+  React.useEffect(() => {
+    if (!showScratchRecentModal) return
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setShowScratchRecentModal(false)
+      }
+    }
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [showScratchRecentModal])
 
   React.useEffect(() => {
     if (!submissionId) return
@@ -683,11 +703,88 @@ export default function ProblemDetailPage() {
     }
   }
 
+  const recentSubmissionsContent = authLoading ? (
+    <div className="text-sm text-muted-foreground">正在检查登录状态...</div>
+  ) : !user ? (
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border-2 border-border/60 bg-muted/40 p-3">
+      <div className="text-sm text-muted-foreground">登录后可查看自己在这道题上的提交历史。</div>
+      <Button asChild size="sm" variant="secondary">
+        <Link href="/login">去登录</Link>
+      </Button>
+    </div>
+  ) : recentSubmissionsLoading ? (
+    <div className="text-sm text-muted-foreground">加载最近提交中...</div>
+  ) : recentSubmissions.length === 0 ? (
+    <div className="text-sm text-muted-foreground">你还没有在这道题上提交过代码。</div>
+  ) : (
+    <div className={cn("space-y-2", isScratch && "max-h-[56vh] overflow-y-auto pr-1")}>
+      {recentSubmissions.map((item) => (
+        <div
+          key={item.id}
+          className={`flex flex-col gap-2 rounded-lg border p-3 md:flex-row md:items-center md:justify-between ${
+            submissionId === item.id
+              ? "border-emerald-500/40 bg-emerald-500/5"
+              : "border-border/60 bg-muted/30"
+          }`}
+        >
+          <div className="min-w-0 space-y-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              <Link
+                href={`/submissions/${item.id}`}
+                className="max-w-full truncate text-sm font-medium text-foreground hover:underline"
+              >
+                #{item.id}
+              </Link>
+              <Badge variant="outline" className={getSubmissionStatusClass(item.status)}>
+                {getSubmissionStatusLabel(item.status)}
+              </Badge>
+              {item.rawStatus && item.rawStatus !== item.status ? (
+                <Badge variant="outline" className="border-border/60 text-muted-foreground">
+                  {item.rawStatus}
+                </Badge>
+              ) : null}
+            </div>
+            <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
+              <span>语言 {item.language ?? "-"}</span>
+              <span>分数 {item.score ?? 0}</span>
+              {!isScratch ? <span>时间 {item.timeUsedMs ?? 0} ms</span> : null}
+              {!isScratch ? <span>内存 {item.memoryUsedKb ?? 0} KB</span> : null}
+            </div>
+          </div>
+          <div
+            className={cn(
+              "flex items-center gap-3 text-xs text-muted-foreground",
+              isScratch && "justify-between"
+            )}
+          >
+            <span>{new Date(item.createdAt).toLocaleString()}</span>
+            {!isScratch ? (
+              <button
+                type="button"
+                onClick={() => handleSelectSubmission(item.id)}
+                className={`rounded-md px-2 py-1 text-xs ${
+                  submissionId === item.id
+                    ? "bg-emerald-500/10 text-emerald-700"
+                    : "bg-secondary text-foreground hover:bg-secondary/80"
+                }`}
+              >
+                {submissionId === item.id ? "当前查看" : "在当前页查看"}
+              </button>
+            ) : null}
+            <Link href={`/submissions/${item.id}`} className="text-sky-700 hover:text-sky-800">
+              详情
+            </Link>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
+
   const errorStatus = error instanceof ApiError ? error.status : null
   if (!id) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center px-6">
-        <div className="max-w-md rounded-lg border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-200">
+      <div className="page-wrap py-12">
+        <div className="mx-auto max-w-md rounded-[1.6rem] border-[3px] border-border bg-card p-6 text-sm text-muted-foreground shadow-[10px_10px_0_hsl(var(--border))]">
           无效的题目地址，请从题库列表进入。
           <div className="mt-4 flex gap-2">
             <Button asChild variant="secondary" size="sm">
@@ -701,8 +798,8 @@ export default function ProblemDetailPage() {
 
   if (errorStatus === 404) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center px-6">
-        <div className="max-w-md rounded-lg border border-zinc-800 bg-zinc-900/60 p-6 text-sm text-zinc-200">
+      <div className="page-wrap py-12">
+        <div className="mx-auto max-w-md rounded-[1.6rem] border-[3px] border-border bg-card p-6 text-sm text-muted-foreground shadow-[10px_10px_0_hsl(var(--border))]">
           题目不存在或未公开。如果你是管理员，请登录后再查看。
           <div className="mt-4 flex gap-2">
             <Button asChild variant="secondary" size="sm">
@@ -719,8 +816,8 @@ export default function ProblemDetailPage() {
 
   if (error && !problem) {
     return (
-      <div className="flex h-[calc(100vh-3.5rem)] items-center justify-center px-6">
-        <div className="max-w-md rounded-lg border border-red-500/30 bg-red-500/10 p-6 text-sm text-red-200">
+      <div className="page-wrap py-12">
+        <div className="mx-auto max-w-md rounded-[1.6rem] border-[3px] border-red-400/60 bg-red-500/10 p-6 text-sm text-red-700 shadow-[10px_10px_0_hsl(var(--border))]">
           题目加载失败，请稍后重试。
           <div className="mt-4 flex gap-2">
             <Button asChild variant="secondary" size="sm">
@@ -734,15 +831,16 @@ export default function ProblemDetailPage() {
 
   return (
     <>
-    <div className="flex min-h-[calc(100vh-3.5rem)] flex-col md:h-[calc(100vh-3.5rem)] md:min-h-0 md:flex-row md:overflow-hidden">
+    <div className="page-wrap py-4 md:py-6">
+    <div className="flex min-h-[calc(100vh-8.4rem)] flex-col gap-3 md:h-[calc(100vh-8.4rem)] md:min-h-0 md:flex-row md:overflow-hidden">
       {/* Problem Description Side */}
       <div
         ref={problemPaneRef}
-        className={`flex-1 border-r bg-zinc-900/50 p-6 md:min-h-0 md:overflow-y-auto md:overscroll-contain ${
-          isScratch ? "md:w-[15%]" : "md:w-1/2"
+        className={`flex-1 rounded-[1.8rem] border-[3px] border-border bg-card p-4 shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-y-auto md:overscroll-contain md:p-5 ${
+          isScratch ? "md:w-[17rem] md:max-w-[22%]" : "md:w-1/2"
         }`}
       >
-        <div className="mb-4">
+        <div className="mb-3">
            <Breadcrumbs items={[
              { label: "题库", href: "/problems" },
              { label: problem?.title || "题目详情" }
@@ -751,7 +849,7 @@ export default function ProblemDetailPage() {
         <div className="mb-2 flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{problem?.title ?? "加载中..."}</h1>
           {problem?.visibility && problem.visibility !== "public" ? (
-            <span className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-xs text-orange-300">
+            <span className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-xs text-orange-700">
               未公开
             </span>
           ) : null}
@@ -765,11 +863,9 @@ export default function ProblemDetailPage() {
             ))}
           </div>
         ) : null}
-        {limitText ? (
-          <div className="mb-4 text-xs text-muted-foreground">{limitText}</div>
-        ) : null}
+        {limitText ? <div className="mb-3 text-xs text-muted-foreground">{limitText}</div> : null}
         {error ? (
-          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+          <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700">
             题目不存在、未公开，或加载失败。
           </div>
         ) : null}
@@ -777,8 +873,8 @@ export default function ProblemDetailPage() {
           <div className="text-sm text-muted-foreground">加载中...</div>
         ) : null}
         {statementHeadings.length > 0 ? (
-          <div className="mb-6 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-            <div className="mb-3 text-sm font-semibold text-zinc-100">目录</div>
+          <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
+            <div className="mb-3 text-sm font-semibold text-foreground">目录</div>
             <div className="space-y-1">
               {statementHeadings.map((heading) => (
                 <a
@@ -788,8 +884,8 @@ export default function ProblemDetailPage() {
                   className={cn(
                     "block rounded px-2 py-1 text-sm transition-colors",
                     activeHeadingId === heading.id
-                      ? "bg-emerald-500/10 text-emerald-200"
-                      : "text-zinc-400 hover:bg-zinc-900 hover:text-zinc-100"
+                      ? "bg-primary/20 text-foreground"
+                      : "text-muted-foreground hover:bg-secondary/50 hover:text-foreground"
                   )}
                   style={{ paddingLeft: `${(heading.level - 1) * 12 + 8}px` }}
                 >
@@ -805,37 +901,49 @@ export default function ProblemDetailPage() {
           <ProblemRichText content={problem?.statement} />
         )}
         {problem?.inputFormat ? (
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-zinc-200">输入格式</div>
-            <ProblemRichText content={problem.inputFormat} />
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold text-foreground">输入格式</div>
+            {isScratch ? (
+              <ProblemMarkdown markdown={problem.inputFormat} />
+            ) : (
+              <ProblemRichText content={problem.inputFormat} />
+            )}
           </div>
         ) : null}
         {problem?.outputFormat ? (
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-zinc-200">输出格式</div>
-            <ProblemRichText content={problem.outputFormat} />
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold text-foreground">输出格式</div>
+            {isScratch ? (
+              <ProblemMarkdown markdown={problem.outputFormat} />
+            ) : (
+              <ProblemRichText content={problem.outputFormat} />
+            )}
           </div>
         ) : null}
         {problem?.constraints ? (
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-zinc-200">约束</div>
-            <ProblemRichText content={problem.constraints} />
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold text-foreground">约束</div>
+            {isScratch ? (
+              <ProblemMarkdown markdown={problem.constraints} />
+            ) : (
+              <ProblemRichText content={problem.constraints} />
+            )}
           </div>
         ) : null}
         {samples.length ? (
-          <div className="mt-6 space-y-4">
-            <div className="text-sm font-semibold text-zinc-200">样例</div>
+          <div className="mt-5 space-y-3">
+            <div className="text-sm font-semibold text-foreground">样例</div>
             {samples.map((s, idx) => (
-              <div key={`${idx}-${s.input ?? ""}`} className="rounded-md border border-zinc-800 bg-zinc-950/60 p-3">
-                <div className="mb-2 text-xs text-zinc-400">样例 {idx + 1}</div>
+              <div key={`${idx}-${s.input ?? ""}`} className="rounded-xl border-2 border-border/60 bg-background p-3">
+                <div className="mb-2 text-xs text-muted-foreground">样例 {idx + 1}</div>
                 <div className="grid gap-3 md:grid-cols-2">
                   <div>
-                    <div className="mb-1 text-xs text-zinc-500">输入</div>
-                    <pre className="whitespace-pre-wrap text-xs text-zinc-200">{s.input ?? ""}</pre>
+                    <div className="mb-1 text-xs text-muted-foreground">输入</div>
+                    <pre className="whitespace-pre-wrap text-xs text-foreground">{s.input ?? ""}</pre>
                   </div>
                   <div>
-                    <div className="mb-1 text-xs text-zinc-500">输出</div>
-                    <pre className="whitespace-pre-wrap text-xs text-zinc-200">{s.output ?? ""}</pre>
+                    <div className="mb-1 text-xs text-muted-foreground">输出</div>
+                    <pre className="whitespace-pre-wrap text-xs text-foreground">{s.output ?? ""}</pre>
                   </div>
                 </div>
               </div>
@@ -843,120 +951,80 @@ export default function ProblemDetailPage() {
           </div>
         ) : null}
         {problem?.notes ? (
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-zinc-200">备注</div>
-            <ProblemRichText content={problem.notes} />
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold text-foreground">备注</div>
+            {isScratch ? (
+              <ProblemMarkdown markdown={problem.notes} />
+            ) : (
+              <ProblemRichText content={problem.notes} />
+            )}
           </div>
         ) : null}
         {problem?.hints ? (
-          <div className="mt-6">
-            <div className="mb-2 text-sm font-semibold text-zinc-200">提示</div>
-            <ProblemRichText content={problem.hints} />
+          <div className="mt-5">
+            <div className="mb-2 text-sm font-semibold text-foreground">提示</div>
+            {isScratch ? (
+              <ProblemMarkdown markdown={problem.hints} />
+            ) : (
+              <ProblemRichText content={problem.hints} />
+            )}
           </div>
         ) : null}
-        <div className="mt-8 rounded-xl border border-zinc-800 bg-zinc-950/50 p-4">
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-semibold text-zinc-100">该题最近提交</div>
-              <div className="text-xs text-zinc-500">
-                直接读取当前用户在该题上的最新 5 条提交记录。
+        {!isScratch ? (
+          <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-semibold text-foreground">该题最近提交</div>
+                <div className="text-xs text-muted-foreground">
+                  直接读取当前用户在该题上的最新 5 条提交记录。
+                </div>
               </div>
+              {problem?.slug ? (
+                <Link
+                  href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
+                  className="text-xs font-medium text-sky-700 hover:text-sky-800"
+                >
+                  查看全部
+                </Link>
+              ) : null}
             </div>
-            {problem?.slug ? (
-              <Link
-                href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
-                className="text-xs font-medium text-sky-300 hover:text-sky-200"
-              >
-                查看全部
-              </Link>
-            ) : null}
+            {recentSubmissionsContent}
           </div>
-          {authLoading ? (
-            <div className="text-sm text-zinc-500">正在检查登录状态...</div>
-          ) : !user ? (
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-zinc-800 bg-zinc-900/60 p-3">
-              <div className="text-sm text-zinc-400">登录后可查看自己在这道题上的提交历史。</div>
-              <Button asChild size="sm" variant="secondary">
-                <Link href="/login">去登录</Link>
+        ) : (
+          <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-foreground">最近提交</div>
+                <div className="text-xs text-muted-foreground">
+                  不占用 Scratch 工作区，点击按钮弹出查看。
+                </div>
+              </div>
+              <Button size="sm" variant="secondary" onClick={() => setShowScratchRecentModal(true)}>
+                查看
               </Button>
             </div>
-          ) : recentSubmissionsLoading ? (
-            <div className="text-sm text-zinc-500">加载最近提交中...</div>
-          ) : recentSubmissions.length === 0 ? (
-            <div className="text-sm text-zinc-500">你还没有在这道题上提交过代码。</div>
-          ) : (
-            <div className="space-y-2">
-              {recentSubmissions.map((item) => (
-                <div
-                  key={item.id}
-                  className={`flex flex-col gap-2 rounded-lg border p-3 md:flex-row md:items-center md:justify-between ${
-                    submissionId === item.id
-                      ? "border-emerald-500/40 bg-emerald-500/5"
-                      : "border-zinc-800 bg-zinc-900/60"
-                  }`}
-                >
-                  <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/submissions/${item.id}`}
-                        className="text-sm font-medium text-zinc-100 hover:underline"
-                      >
-                        #{item.id}
-                      </Link>
-                      <Badge variant="outline" className={getSubmissionStatusClass(item.status)}>
-                        {getSubmissionStatusLabel(item.status)}
-                      </Badge>
-                      {item.rawStatus && item.rawStatus !== item.status ? (
-                        <Badge variant="outline" className="border-zinc-700 text-zinc-300">
-                          {item.rawStatus}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-3 text-xs text-zinc-500">
-                      <span>语言 {item.language ?? "-"}</span>
-                      <span>分数 {item.score ?? 0}</span>
-                      <span>时间 {item.timeUsedMs ?? 0} ms</span>
-                      <span>内存 {item.memoryUsedKb ?? 0} KB</span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 text-xs text-zinc-500">
-                    <span>{new Date(item.createdAt).toLocaleString()}</span>
-                    {!isScratch ? (
-                      <button
-                        type="button"
-                        onClick={() => handleSelectSubmission(item.id)}
-                        className={`rounded-md px-2 py-1 text-xs ${
-                          submissionId === item.id
-                            ? "bg-emerald-500/10 text-emerald-200"
-                            : "bg-zinc-800 text-zinc-200 hover:bg-zinc-700"
-                        }`}
-                      >
-                        {submissionId === item.id ? "当前查看" : "在当前页查看"}
-                      </button>
-                    ) : null}
-                    <Link href={`/submissions/${item.id}`} className="text-sky-300 hover:text-sky-200">
-                      详情
-                    </Link>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+            {user && !recentSubmissionsLoading && recentSubmissions.length > 0 ? (
+              <div className="mt-2 text-xs text-muted-foreground">
+                最新：{getSubmissionStatusLabel(recentSubmissions[0].status)} ·{" "}
+                {new Date(recentSubmissions[0].createdAt).toLocaleString()}
+              </div>
+            ) : null}
+          </div>
+        )}
       </div>
 
       {/* Code Editor Side */}
       <div
-        className={`flex min-w-0 flex-col border-l border-zinc-800 bg-zinc-950 md:min-h-0 md:overflow-hidden ${
-          isScratch ? "md:w-[85%]" : "md:w-1/2"
+        className={`flex min-w-0 flex-col rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-hidden ${
+          isScratch ? "md:flex-1" : "md:w-1/2"
         }`}
       >
-        <div className="flex items-center justify-between border-b border-zinc-800 bg-zinc-900 px-4 py-2">
+        <div className="flex items-center justify-between border-b-[3px] border-border bg-background px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-zinc-400">语言</div>
+              <div className="text-sm font-medium text-muted-foreground">语言</div>
               <select
-                className="h-7 rounded-md border border-zinc-700 bg-zinc-900 px-2 text-xs text-zinc-200"
+                className="h-10 rounded-xl border-2 border-border bg-card px-3 text-sm text-foreground"
                 value={language.value}
                     onChange={(e) => {
                   const next =
@@ -980,19 +1048,19 @@ export default function ProblemDetailPage() {
                 ))}
               </select>
             </div>
-            <div className="flex items-center gap-2 rounded-md border border-zinc-800 bg-zinc-950/70 px-2 py-1 text-[11px] text-zinc-400">
+            <div className="flex items-center gap-2 rounded-xl border-2 border-border/50 bg-muted/45 px-2 py-1 text-[11px] text-muted-foreground">
               <span>评测</span>
               <span className={`rounded-md border px-2 py-0.5 text-xs ${statusPillClass}`}>
                 {statusText}
               </span>
               {statusMeta ? (
-                <span className="hidden text-zinc-400 sm:inline">{statusMeta}</span>
+                <span className="hidden text-muted-foreground sm:inline">{statusMeta}</span>
               ) : null}
               {submissionId ? (
                 <button
                   type="button"
                   onClick={handleScrollToResult}
-                  className="rounded-md px-2 py-0.5 text-[11px] text-emerald-300 hover:text-emerald-200"
+                  className="rounded-md px-2 py-0.5 text-[11px] text-emerald-700 hover:text-emerald-800"
                 >
                   查看结果
                 </button>
@@ -1000,7 +1068,7 @@ export default function ProblemDetailPage() {
               {problem?.slug ? (
                 <Link
                   href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
-                  className="rounded-md px-2 py-0.5 text-[11px] text-sky-300 hover:text-sky-200"
+                  className="rounded-md px-2 py-0.5 text-[11px] text-sky-700 hover:text-sky-800"
                 >
                   该题提交
                 </Link>
@@ -1011,7 +1079,7 @@ export default function ProblemDetailPage() {
             <Button
               size="sm"
               variant="ghost"
-              className="h-8 gap-2 text-zinc-400 hover:text-zinc-100"
+              className="h-10 gap-2 text-muted-foreground hover:text-foreground"
               onClick={handleRun}
               disabled={isRunning || isScratch}
             >
@@ -1019,8 +1087,8 @@ export default function ProblemDetailPage() {
               {isRunning ? "运行中..." : "运行"}
             </Button>
             <Button 
-              size="sm" 
-              className="h-8 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground" 
+              size="sm"
+              className="h-10 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
               onClick={handleSubmit} 
               disabled={isSubmitting || Boolean(submissionId && !isFinished && !submission)}
             >
@@ -1034,17 +1102,22 @@ export default function ProblemDetailPage() {
           </div>
         </div>
 
-        <div className="flex flex-col gap-4 p-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain">
+        <div
+          className={cn(
+            "flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain",
+            isScratch ? "p-2 md:p-3" : "p-4"
+          )}
+        >
           {isScratch ? (
-            <div className="flex h-[95vh] min-h-[700px] flex-col gap-3">
-              <div className="flex-1 overflow-hidden rounded-md border border-zinc-800 bg-black">
+            <div className="flex h-[calc(100vh-15.5rem)] min-h-[620px] flex-col gap-2">
+              <div className="flex-1 overflow-hidden rounded-xl border-2 border-border bg-background">
                 <iframe
                   title="Scratch"
                   src={graphicalUrl}
                   className="h-full w-full"
                 />
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-zinc-400">
+              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                 <input
                   type="file"
                   accept=".sb3,application/json"
@@ -1052,11 +1125,11 @@ export default function ProblemDetailPage() {
                   className="text-xs"
                 />
                 {scratchFileName ? (
-                  <span className="truncate text-zinc-300">
+                  <span className="truncate text-foreground">
                     已选择：{scratchFileName}
                   </span>
                 ) : (
-                  <span className="text-zinc-500">请选择 .sb3 或 project.json</span>
+                  <span className="text-muted-foreground">请选择 .sb3 或 project.json</span>
                 )}
                 {scratchFileName ? (
                   <Button
@@ -1072,12 +1145,12 @@ export default function ProblemDetailPage() {
                   </Button>
                 ) : null}
               </div>
-              <div className="text-[11px] text-zinc-500">
+              <div className="text-[11px] text-muted-foreground">
                 提交时会使用你上传的 Scratch 文件作为评测内容。
               </div>
             </div>
           ) : (
-            <div className="h-[60vh] min-h-[420px]">
+            <div className="h-[56vh] min-h-[360px]">
               <CodeEditor
                 value={code}
                 onChange={(val) => {
@@ -1090,10 +1163,10 @@ export default function ProblemDetailPage() {
           )}
 
           {(showRunPanel || runOutput || runError) && (
-            <div className="border-t border-zinc-800 bg-zinc-950/70 p-4">
+            <div className="rounded-xl border-2 border-border/60 bg-background p-3">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="text-sm font-medium text-zinc-200">运行测试</div>
-                <div className="text-xs text-zinc-400">
+                <div className="text-sm font-medium text-foreground">运行测试</div>
+                <div className="text-xs text-muted-foreground">
                   {isRunning
                     ? "运行中..."
                     : runMeta?.timedOut
@@ -1110,28 +1183,28 @@ export default function ProblemDetailPage() {
               </div>
               <div className="mt-3 grid gap-3 md:grid-cols-2">
                 <div>
-                  <div className="mb-1 text-xs text-zinc-500">输入</div>
+                  <div className="mb-1 text-xs text-muted-foreground">输入</div>
                   <textarea
-                    className="h-28 w-full rounded-md border border-zinc-800 bg-zinc-900/70 p-2 text-xs text-zinc-100"
+                    className="h-28 w-full rounded-md border-2 border-border/60 bg-card p-2 text-xs text-foreground"
                     placeholder="在这里输入测试数据"
                     value={runInput}
                     onChange={(e) => setRunInput(e.target.value)}
                   />
                 </div>
                 <div>
-                  <div className="mb-1 text-xs text-zinc-500">输出</div>
-                  <div className="h-28 w-full overflow-auto rounded-md border border-zinc-800 bg-zinc-900/70 p-2 text-xs text-zinc-100">
+                  <div className="mb-1 text-xs text-muted-foreground">输出</div>
+                  <div className="h-28 w-full overflow-auto rounded-md border-2 border-border/60 bg-card p-2 text-xs text-foreground">
                     <pre className="whitespace-pre-wrap">{runOutput || "（暂无输出）"}</pre>
                   </div>
                 </div>
               </div>
               {runError ? (
-                <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200">
+                <pre className="mt-3 max-h-40 overflow-auto rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-700">
                   {runError}
                 </pre>
               ) : null}
               {runWarning ? (
-                <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-200">
+                <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-2 text-xs text-amber-700">
                   {runWarning}
                 </div>
               ) : null}
@@ -1166,26 +1239,26 @@ export default function ProblemDetailPage() {
 
           {/* Submission Console */}
           {!isScratch && (submissionId || submission || isSubmitting) && (
-            <div ref={resultRef} className="border-t border-zinc-800 bg-zinc-900 p-4">
-              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400">
+            <div ref={resultRef} className="rounded-xl border-2 border-border/60 bg-background p-3">
+              <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                 <span>Submission ID: {submissionId || "等待生成..."}</span>
                 {submissionId ? (
-                  <Link href={`/submissions/${submissionId}`} className="text-emerald-400 hover:underline">
+                  <Link href={`/submissions/${submissionId}`} className="text-emerald-700 hover:underline">
                     查看完整提交详情
                   </Link>
                 ) : null}
               </div>
               {isError ? (
-                <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-200">
+                <div className="mb-3 rounded-md border border-red-500/30 bg-red-500/10 p-2 text-xs text-red-700">
                   获取评测结果失败，请刷新重试或稍后再看。
                 </div>
               ) : null}
               <SubmissionResult submission={submission} isLoading={submissionLoading || !isFinished} />
               {!submission && !submissionLoading && !isError ? (
-                <div className="mt-2 text-xs text-zinc-400">正在等待评测结果...</div>
+                <div className="mt-2 text-xs text-muted-foreground">正在等待评测结果...</div>
               ) : null}
-              <details className="mt-3 rounded-md border border-zinc-800 bg-zinc-950/60 px-3 py-2 text-xs text-zinc-300">
-                <summary className="cursor-pointer select-none text-zinc-400">
+              <details className="mt-3 rounded-md border-2 border-border/50 bg-muted/30 px-3 py-2 text-xs text-foreground">
+                <summary className="cursor-pointer select-none text-muted-foreground">
                   调试信息
                 </summary>
                 <div className="mt-2 space-y-1 text-[11px]">
@@ -1194,7 +1267,7 @@ export default function ProblemDetailPage() {
                   <div>是否完成: {isFinished ? "是" : "否"}</div>
                   <div>最近更新时间: {lastUpdateAt ? lastUpdateAt.toLocaleTimeString() : "无"}</div>
                 </div>
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-zinc-400">
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
                   {submission ? JSON.stringify(submission, null, 2) : "暂无数据"}
                 </pre>
               </details>
@@ -1203,6 +1276,42 @@ export default function ProblemDetailPage() {
         </div>
       </div>
     </div>
+    </div>
+    {isScratch && showScratchRecentModal ? (
+      <div
+        className="fixed inset-0 z-[70] bg-black/35 p-3 md:p-8"
+        onClick={() => setShowScratchRecentModal(false)}
+      >
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-label="该题最近提交"
+          className="mx-auto flex h-full w-full max-w-3xl flex-col rounded-[1.6rem] border-[3px] border-border bg-card shadow-[12px_12px_0_hsl(var(--border))]"
+          onClick={(event) => event.stopPropagation()}
+        >
+          <div className="flex items-center justify-between border-b-[3px] border-border px-4 py-3">
+            <div>
+              <div className="text-base font-semibold text-foreground">该题最近提交</div>
+              <div className="text-xs text-muted-foreground">当前用户在本题的最新 5 条提交记录</div>
+            </div>
+            <div className="flex items-center gap-2">
+              {problem?.slug ? (
+                <Link
+                  href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
+                  className="text-xs font-medium text-sky-700 hover:text-sky-800"
+                >
+                  查看全部
+                </Link>
+              ) : null}
+              <Button size="sm" variant="ghost" onClick={() => setShowScratchRecentModal(false)}>
+                关闭
+              </Button>
+            </div>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto p-4">{recentSubmissionsContent}</div>
+        </div>
+      </div>
+    ) : null}
     {submissionId ? (
       <div
         className="fixed bottom-4 right-4 z-50 max-w-[90vw]"
@@ -1219,17 +1328,17 @@ export default function ProblemDetailPage() {
           }
         }}
       >
-        <div className="flex items-center gap-2 rounded-full border border-zinc-800 bg-zinc-950/90 px-3 py-2 text-xs text-zinc-200 shadow-lg backdrop-blur">
+        <div className="flex items-center gap-2 rounded-full border-2 border-border bg-card px-3 py-2 text-xs text-foreground shadow-[8px_8px_0_hsl(var(--border))]">
           <span className={`rounded-md border px-2 py-0.5 text-[11px] ${statusPillClass}`}>
             {statusText}
           </span>
           {statusMeta ? (
-            <span className="hidden text-[11px] text-zinc-400 sm:inline">{statusMeta}</span>
+            <span className="hidden text-[11px] text-muted-foreground sm:inline">{statusMeta}</span>
           ) : null}
           <button
             type="button"
             onClick={handleScrollToResult}
-            className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-200 hover:bg-emerald-500/20"
+            className="rounded-full border border-emerald-500/40 bg-emerald-500/10 px-2 py-0.5 text-[11px] text-emerald-700 hover:bg-emerald-500/20"
           >
             查看结果
           </button>

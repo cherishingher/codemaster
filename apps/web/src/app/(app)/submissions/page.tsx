@@ -4,13 +4,28 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import useSWR from "swr"
-import { ChevronLeft, ChevronRight, Loader2, Search, RotateCcw } from "lucide-react"
+import {
+  Activity,
+  Clock3,
+  FileCode2,
+  Search,
+  RotateCcw,
+  Send,
+} from "lucide-react"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { FilterBar } from "@/components/patterns/filter-bar"
+import { PaginationBar } from "@/components/patterns/pagination-bar"
+import {
+  EmptyState,
+  LoadingState,
+  UnauthorizedState,
+} from "@/components/patterns/state-panel"
+import { SectionHeading } from "@/components/patterns/section-heading"
 import { useCopyFeedback } from "@/lib/hooks/use-copy-feedback"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
 
@@ -54,16 +69,16 @@ const LANGUAGE_PRESETS = [
 function getStatusClass(status: string) {
   switch (status) {
     case "ACCEPTED":
-      return "bg-green-500/10 text-green-400 border-green-500/20"
+      return "border-emerald-200 bg-emerald-50 text-emerald-700"
     case "PARTIAL":
-      return "bg-amber-500/10 text-amber-300 border-amber-500/20"
+      return "border-amber-200 bg-amber-50 text-amber-700"
     case "PENDING":
     case "JUDGING":
-      return "bg-blue-500/10 text-blue-300 border-blue-500/20"
+      return "border-blue-200 bg-blue-50 text-blue-700"
     case "COMPILE_ERROR":
-      return "bg-yellow-500/10 text-yellow-300 border-yellow-500/20"
+      return "border-yellow-200 bg-yellow-50 text-yellow-700"
     default:
-      return "bg-red-500/10 text-red-400 border-red-500/20"
+      return "border-rose-200 bg-rose-50 text-rose-700"
   }
 }
 
@@ -252,12 +267,35 @@ export default function SubmissionsPage() {
     Boolean(dateFrom) ||
     Boolean(dateTo)
 
+  const activeSummary = (
+    <>
+      <span>共 {meta?.total ?? 0} 条</span>
+      {deferredProblemSlug.trim() ? (
+        <>
+          <span>·</span>
+          <span>题目 {deferredProblemSlug.trim()}</span>
+        </>
+      ) : null}
+      {language !== "all" ? (
+        <>
+          <span>·</span>
+          <span>语言 {language}</span>
+        </>
+      ) : null}
+      {dateFrom || dateTo ? (
+        <>
+          <span>·</span>
+          <span>日期 {dateFrom || "起"} ~ {dateTo || "今"}</span>
+        </>
+      ) : null}
+    </>
+  )
+
   if (loading || !user) {
-    return (
-      <div className="flex h-[50vh] items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
+    if (loading) {
+      return <LoadingState title="正在加载提交记录" description="正在恢复你的筛选条件和最近提交数据。" className="mt-12" />
+    }
+    return <UnauthorizedState title="需要登录后查看提交记录" description="提交历史属于个人数据，保持原有鉴权逻辑不变，未登录时仅展示未授权状态。" className="mt-12" />
   }
 
   const resetFilters = () => {
@@ -270,236 +308,260 @@ export default function SubmissionsPage() {
   }
 
   return (
-    <div className="container px-4 py-8 md:px-6">
-      <div className="mb-8 flex flex-col gap-4">
-        <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">提交记录</h1>
-            <p className="mt-2 text-muted-foreground">
-              查看自己的提交历史、原始判题状态和资源消耗。
-            </p>
-          </div>
-        </div>
-
-        <div className="grid gap-3 lg:grid-cols-[minmax(220px,260px)_160px_160px_160px_160px_auto_auto]">
-          <div className="relative">
-            <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
-            <Input
-              value={problemSlug}
-              onChange={(event) => {
-                setProblemSlug(event.target.value)
-                setPage(1)
-              }}
-              placeholder="按题目 slug 过滤"
-              className="pl-9"
-            />
-          </div>
-          <select
-            value={status}
-            onChange={(event) => {
-              setStatus(event.target.value)
-              setPage(1)
-            }}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            <option value="all">全部结果</option>
-            <option value="AC">AC</option>
-            <option value="WA">WA</option>
-            <option value="TLE">TLE</option>
-            <option value="RE">RE</option>
-            <option value="CE">CE</option>
-            <option value="RUNNING">RUNNING</option>
-            <option value="QUEUED">QUEUED</option>
-          </select>
-          <select
-            value={language}
-            onChange={(event) => {
-              setLanguage(event.target.value)
-              setPage(1)
-            }}
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-          >
-            {languageOptions.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
-              </option>
-            ))}
-          </select>
-          <Input
-            type="date"
-            value={dateFrom}
-            onChange={(event) => {
-              setDateFrom(event.target.value)
-              setPage(1)
-            }}
-          />
-          <Input
-            type="date"
-            value={dateTo}
-            onChange={(event) => {
-              setDateTo(event.target.value)
-              setPage(1)
-            }}
-          />
-          <Button type="button" variant="ghost" onClick={resetFilters} disabled={!hasActiveFilters}>
-            <RotateCcw className="mr-2 h-4 w-4" />
-            重置
-          </Button>
-          <Button
-            type="button"
-            variant={copied ? "default" : "secondary"}
-            onClick={copyCurrentViewLink}
-          >
-            {copied ? "已复制" : "复制当前筛选链接"}
-          </Button>
-        </div>
-      </div>
-
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0">
-          <CardTitle>最近提交</CardTitle>
-          <div className="text-sm text-muted-foreground">
-            共 {meta?.total ?? 0} 条
-            {deferredProblemSlug.trim() ? ` · 题目 ${deferredProblemSlug.trim()}` : ""}
-            {language !== "all" ? ` · 语言 ${language}` : ""}
-            {dateFrom || dateTo ? ` · 日期 ${dateFrom || "起"} ~ ${dateTo || "今"}` : ""}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {isLoading ? <div className="text-sm text-muted-foreground">加载中...</div> : null}
-          {!isLoading && submissions.length === 0 ? (
-            <div className="text-sm text-muted-foreground">暂无提交记录。</div>
-          ) : null}
-          {submissions.map((submission) => (
-            <div
-              key={submission.id}
-              className="flex flex-col gap-3 rounded-lg border border-border p-4 md:flex-row md:items-center md:justify-between"
-            >
-              <div className="space-y-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Link
-                    href={`/submissions/${submission.id}`}
-                    className="font-medium hover:underline"
-                  >
-                    #{submission.id}
-                  </Link>
-                  <Badge variant="outline" className={getStatusClass(submission.status)}>
-                    {getStatusLabel(submission.status)}
-                  </Badge>
-                  {submission.rawStatus && submission.rawStatus !== submission.status ? (
-                    <Badge variant="outline">{submission.rawStatus}</Badge>
-                  ) : null}
-                </div>
-                <div className="text-sm">
-                  <Link
-                    href={`/problems/${submission.problem.slug}`}
-                    className="font-medium text-primary hover:underline"
-                  >
-                    {submission.problem.title}
-                  </Link>
-                </div>
-                <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                  <span>语言 {submission.language ?? "-"}</span>
-                  <span>分数 {submission.score ?? 0}</span>
-                  <span>时间 {submission.timeUsedMs ?? 0} ms</span>
-                  <span>内存 {submission.memoryUsedKb ?? 0} KB</span>
-                  <span>{new Date(submission.createdAt).toLocaleString()}</span>
-                </div>
-              </div>
-              <div className="flex shrink-0 items-center gap-2">
-                <Button asChild variant="outline">
-                  <Link href={`/problems/${submission.problem.slug}`}>题目</Link>
-                </Button>
-                <Button asChild>
-                  <Link href={`/submissions/${submission.id}`}>详情</Link>
-                </Button>
+    <div className="page-wrap py-8 md:py-10">
+      <div className="space-y-8">
+        <SectionHeading
+          eyebrow="Submissions"
+          title="把每次提交收拢成一个可扫描的执行日志。"
+          description="保留原有筛选、分页和个人鉴权逻辑，只重构状态标签、资源消耗和时间信息的视觉层级。"
+          action={
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
+                <Send className="h-4 w-4 text-foreground" />
+                <span>{meta?.total ?? 0} 条提交</span>
               </div>
             </div>
-          ))}
-        </CardContent>
-      </Card>
+          }
+        />
 
-      <div className="mt-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="text-sm text-muted-foreground">
-          当前显示第 {paginationRange.from}-{paginationRange.to} 条，共 {paginationRange.total} 条提交 · 第 {currentPage} / {totalPages} 页
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card className="surface-panel rounded-[1.8rem]">
+            <CardContent className="flex items-start justify-between gap-4 p-5">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Status
+                </p>
+                <p className="text-2xl font-semibold text-foreground">{status === "all" ? "全部" : status}</p>
+                <p className="text-sm text-muted-foreground">当前结果筛选</p>
+              </div>
+              <div className="rounded-[1.2rem] border-[3px] border-border bg-primary/30 p-3 text-foreground">
+                <Activity className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="surface-panel rounded-[1.8rem]">
+            <CardContent className="flex items-start justify-between gap-4 p-5">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Language
+                </p>
+                <p className="text-2xl font-semibold text-foreground">{language === "all" ? "混合" : language}</p>
+                <p className="text-sm text-muted-foreground">语言过滤器</p>
+              </div>
+              <div className="rounded-[1.2rem] border-[3px] border-border bg-secondary p-3 text-foreground">
+                <FileCode2 className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="surface-panel rounded-[1.8rem]">
+            <CardContent className="flex items-start justify-between gap-4 p-5">
+              <div className="space-y-1.5">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                  Range
+                </p>
+                <p className="text-2xl font-semibold text-foreground">
+                  {dateFrom || dateTo ? "已限定" : "全部"}
+                </p>
+                <p className="text-sm text-muted-foreground">时间窗口 {dateFrom || "起"} - {dateTo || "今"}</p>
+              </div>
+              <div className="rounded-[1.2rem] border-[3px] border-border bg-accent p-3 text-foreground">
+                <Clock3 className="h-5 w-5" />
+              </div>
+            </CardContent>
+          </Card>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPage(1)}
-            disabled={currentPage <= 1 || isLoading}
-          >
-            首页
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPage((value) => Math.max(value - 1, 1))}
-            disabled={currentPage <= 1 || isLoading}
-          >
-            <ChevronLeft className="mr-2 h-4 w-4" />
-            上一页
-          </Button>
-          <div className="flex flex-wrap items-center gap-1">
-            {paginationItems.map((item) =>
-              item.type === "ellipsis" ? (
-                <span key={item.key} className="px-2 text-sm text-muted-foreground">
-                  ...
-                </span>
-              ) : (
-                <Button
-                  key={item.page}
-                  type="button"
-                  size="sm"
-                  variant={item.page === currentPage ? "default" : "outline"}
-                  className={item.page === currentPage ? "min-w-9 font-semibold ring-2 ring-primary/35 shadow-sm" : "min-w-9"}
-                  onClick={() => setPage(item.page)}
-                >
-                  {item.page}
-                </Button>
-              )
-            )}
-          </div>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPage((value) => value + 1)}
-            disabled={currentPage >= totalPages || isLoading || !meta?.totalPages}
-          >
-            下一页
-            <ChevronRight className="ml-2 h-4 w-4" />
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => setPage(totalPages)}
-            disabled={currentPage >= totalPages || isLoading || !meta?.totalPages}
-          >
-            末页
-          </Button>
-          <div className="ml-0 flex items-center gap-2 md:ml-2">
-            <span className="text-sm text-muted-foreground">跳转到</span>
-            <Input
-              inputMode="numeric"
-              pattern="[0-9]*"
-              value={pageInput}
-              onChange={(event) => setPageInput(event.target.value.replace(/[^\d]/g, ""))}
-              onKeyDown={(event) => {
-                if (event.key === "Enter") {
-                  event.preventDefault()
-                  submitPageJump()
-                }
+
+        <FilterBar
+          title="筛选工作台"
+          description="保留 URL 同步和参数语义，只整理筛选项的阅读顺序和操作反馈。"
+          summary={activeSummary}
+          actions={
+            <>
+              <Button type="button" variant="ghost" onClick={resetFilters} disabled={!hasActiveFilters}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                重置
+              </Button>
+              <Button
+                type="button"
+                variant={copied ? "default" : "secondary"}
+                onClick={copyCurrentViewLink}
+              >
+                {copied ? "已复制" : "复制当前筛选链接"}
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-3 xl:grid-cols-[minmax(240px,1.3fr)_170px_180px_170px_170px]">
+            <div className="relative">
+              <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+              <Input
+                value={problemSlug}
+                onChange={(event) => {
+                  setProblemSlug(event.target.value)
+                  setPage(1)
+                }}
+                placeholder="按题目 slug 过滤"
+                className="pl-9"
+              />
+            </div>
+            <select
+              value={status}
+              onChange={(event) => {
+                setStatus(event.target.value)
+                setPage(1)
               }}
-              onBlur={submitPageJump}
-              className="h-10 w-20"
-              aria-label="输入提交页码跳转"
+              className="focus-ring h-11 rounded-[1.2rem] border-[3px] border-border bg-white px-3.5 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
+            >
+              <option value="all">全部结果</option>
+              <option value="AC">AC</option>
+              <option value="WA">WA</option>
+              <option value="TLE">TLE</option>
+              <option value="RE">RE</option>
+              <option value="CE">CE</option>
+              <option value="RUNNING">RUNNING</option>
+              <option value="QUEUED">QUEUED</option>
+            </select>
+            <select
+              value={language}
+              onChange={(event) => {
+                setLanguage(event.target.value)
+                setPage(1)
+              }}
+              className="focus-ring h-11 rounded-[1.2rem] border-[3px] border-border bg-white px-3.5 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
+            >
+              {languageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+            <Input
+              type="date"
+              value={dateFrom}
+              onChange={(event) => {
+                setDateFrom(event.target.value)
+                setPage(1)
+              }}
+              className="h-11"
             />
-            <Button type="button" variant="outline" onClick={submitPageJump} disabled={!canJumpToPage}>
-              跳转
-            </Button>
+            <Input
+              type="date"
+              value={dateTo}
+              onChange={(event) => {
+                setDateTo(event.target.value)
+                setPage(1)
+              }}
+              className="h-11"
+            />
           </div>
-        </div>
+        </FilterBar>
+
+        <Card className="surface-panel overflow-hidden rounded-[1.95rem]">
+          <CardHeader className="border-b-[3px] border-border bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(245,184,167,0.14))]">
+            <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <CardTitle className="text-lg font-semibold tracking-tight">最近提交</CardTitle>
+                <p className="mt-1 text-sm leading-6 text-muted-foreground">
+                  按状态、题目和语言收束视图；状态映射和数据返回保持原样。
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
+                {activeSummary}
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-4 bg-card p-5 md:p-6">
+            {isLoading ? (
+              <LoadingState
+                title="正在加载提交记录"
+                description="数据已经开始请求，筛选参数和分页状态会保留。"
+                className="max-w-none border-none bg-transparent shadow-none"
+              />
+            ) : null}
+            {!isLoading && submissions.length === 0 ? (
+              <EmptyState
+                title="暂无提交记录"
+                description="当前筛选条件下没有匹配提交；你可以放宽语言、日期或题目范围。"
+              />
+            ) : null}
+            {!isLoading ? submissions.map((submission) => (
+              <div
+                key={submission.id}
+                className="rounded-[1.6rem] border-[3px] border-border bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(227,239,248,0.88))] p-4 shadow-[8px_8px_0_hsl(var(--border))] transition hover:-translate-y-1 hover:shadow-[10px_10px_0_hsl(var(--border))]"
+              >
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                  <div className="min-w-0 space-y-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Link
+                        href={`/submissions/${submission.id}`}
+                        className="rounded-full border-[2px] border-border bg-white px-3 py-1 font-mono text-xs text-muted-foreground shadow-[4px_4px_0_hsl(var(--border))] hover:text-primary"
+                      >
+                        #{submission.id}
+                      </Link>
+                      <Badge variant="outline" className={getStatusClass(submission.status)}>
+                        {getStatusLabel(submission.status)}
+                      </Badge>
+                      {submission.rawStatus && submission.rawStatus !== submission.status ? (
+                        <Badge variant="outline" className="border-border bg-white text-foreground">
+                          {submission.rawStatus}
+                        </Badge>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1">
+                      <Link
+                        href={`/problems/${submission.problem.slug}`}
+                        className="block truncate text-lg font-semibold tracking-tight text-foreground transition hover:text-primary"
+                      >
+                        {submission.problem.title}
+                      </Link>
+                      <p className="text-sm text-muted-foreground">{new Date(submission.createdAt).toLocaleString()}</p>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">语言</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">{submission.language ?? "-"}</p>
+                      </div>
+                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">分数</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">{submission.score ?? 0}</p>
+                      </div>
+                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">时间</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">{submission.timeUsedMs ?? 0} ms</p>
+                      </div>
+                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
+                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">内存</p>
+                        <p className="mt-1 text-sm font-medium text-foreground">{submission.memoryUsedKb ?? 0} KB</p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <Button asChild variant="outline">
+                      <Link href={`/problems/${submission.problem.slug}`}>题目</Link>
+                    </Button>
+                    <Button asChild>
+                      <Link href={`/submissions/${submission.id}`}>详情</Link>
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )) : null}
+          </CardContent>
+        </Card>
+
+        <PaginationBar
+          range={paginationRange}
+          currentPage={currentPage}
+          totalPages={totalPages}
+          items={paginationItems}
+          loading={isLoading}
+          pageNoun="条"
+          pageInput={pageInput}
+          canJumpToPage={canJumpToPage}
+          onPageInputChange={(value) => setPageInput(value.replace(/[^\d]/g, ""))}
+          onPageInputSubmit={submitPageJump}
+          onPageChange={setPage}
+        />
       </div>
     </div>
   )
