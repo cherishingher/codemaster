@@ -1,10 +1,12 @@
 import Link from "next/link";
-import { ArrowRight, BookOpen, Check, Clock3, MonitorPlay, Star, Users } from "lucide-react";
+import { ArrowRight, BookOpen, Check, Clock3, Lock, MonitorPlay, PlayCircle, Star, Users } from "lucide-react";
 import { SectionHeading } from "@/components/patterns/section-heading";
+import { UpgradePlanButton } from "@/components/learn/upgrade-plan-button";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { HOME_TRACKS } from "@/lib/home-tracks";
 import { HOME_FEATURES } from "@/lib/home-features";
+import { getFeaturedLearnCourses, getLearnViewerFromCookies, getVideoMembershipProduct } from "@/lib/learn";
 
 const stats = [
   { value: "1000+", label: "已入库题目" },
@@ -39,7 +41,21 @@ const testimonials = [
   },
 ];
 
-export default function Home() {
+function formatPrice(priceCents: number) {
+  return new Intl.NumberFormat("zh-CN", {
+    style: "currency",
+    currency: "CNY",
+    minimumFractionDigits: 0,
+  }).format(priceCents / 100);
+}
+
+export default async function Home() {
+  const [featuredLearnCourses, viewer, product] = await Promise.all([
+    getFeaturedLearnCourses(3),
+    getLearnViewerFromCookies(),
+    getVideoMembershipProduct(),
+  ]);
+
   return (
     <div className="pb-20">
       <section className="page-wrap py-10 md:py-14 lg:py-16">
@@ -124,6 +140,142 @@ export default function Home() {
             <div className="absolute -right-8 bottom-20 flex size-18 items-center justify-center rounded-full bg-primary/70 text-3xl shadow-[8px_8px_0_hsl(var(--border))]">
               ⭐
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="page-wrap py-14 md:py-18">
+        <SectionHeading
+          eyebrow="视频学习"
+          title="把课程视频直接放进主站"
+          description="同一套账号里区分免费版和付费版。免费版能看试听课，付费版解锁完整课程，不需要跳出网站。"
+          action={
+            <Button asChild variant="secondary">
+              <Link href="/learn">
+                进入学习中心
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          }
+        />
+
+        <div className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <Card className="overflow-hidden bg-background">
+            <div className="border-b-[3px] border-border bg-[linear-gradient(135deg,rgba(141,194,245,0.18),rgba(103,197,89,0.14))] px-6 py-6 md:px-8">
+              <div className="flex flex-wrap items-start justify-between gap-4">
+                <div className="space-y-3">
+                  <div className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
+                    <MonitorPlay className="size-4" />
+                    学习中心
+                  </div>
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground">课程、试看与会员权限</h2>
+                  <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
+                    当前主页已经接入视频学习模块。后面只要继续在数据库里上传分类课程和视频地址，网页端就能直接展示。
+                  </p>
+                </div>
+                <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">付费版</p>
+                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
+                </div>
+              </div>
+            </div>
+
+            <CardContent className="space-y-5 p-6 md:p-8">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5">
+                  <p className="text-sm font-semibold text-foreground">免费版</p>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <p className="inline-flex items-start gap-2">
+                      <PlayCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+                      浏览课程分类和章节结构
+                    </p>
+                    <p className="inline-flex items-start gap-2">
+                      <PlayCircle className="mt-0.5 size-4 shrink-0 text-primary" />
+                      观看标记为试听的公开课
+                    </p>
+                  </div>
+                </div>
+                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5">
+                  <p className="text-sm font-semibold text-foreground">付费版</p>
+                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
+                    <p className="inline-flex items-start gap-2">
+                      <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
+                      解锁全部课程视频
+                    </p>
+                    <p className="inline-flex items-start gap-2">
+                      <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
+                      为后续专栏和体系课预留扩展位
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <Button asChild>
+                  <Link href="/learn">
+                    查看课程库
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <UpgradePlanButton plan={viewer.plan} />
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-5">
+            {featuredLearnCourses.length > 0 ? (
+              featuredLearnCourses.map((course, index) => (
+                <Card key={course.id} className="bg-background">
+                  <CardContent className="space-y-4 p-6">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
+                          {course.category || `课程 ${index + 1}`}
+                        </p>
+                        <h3 className="text-2xl font-semibold tracking-tight text-foreground">{course.title}</h3>
+                        <p className="text-sm leading-7 text-muted-foreground">
+                          {course.summary || course.description || "课程简介待补充"}
+                        </p>
+                      </div>
+                      <div className="rounded-[1.4rem] border-[3px] border-border bg-card px-4 py-3">
+                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">试看</p>
+                        <p className="mt-2 text-2xl font-semibold text-foreground">{course.previewCount}</p>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                      <span className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-card px-4 py-2">
+                        <BookOpen className="size-4 text-primary" />
+                        {course.lessonCount} 节课
+                      </span>
+                      <span className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-card px-4 py-2">
+                        <Lock className="size-4 text-primary" />
+                        会员 {course.paidLessonCount} 节
+                      </span>
+                    </div>
+
+                    <Button asChild variant="secondary">
+                      <Link href={`/learn/${course.slug}`}>
+                        进入课程
+                        <ArrowRight className="size-4" />
+                      </Link>
+                    </Button>
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card className="bg-background">
+                <CardContent className="space-y-3 p-6">
+                  <h3 className="text-2xl font-semibold tracking-tight text-foreground">课程库待填充</h3>
+                  <p className="text-sm leading-7 text-muted-foreground">
+                    视频学习页面已经接入完成，但当前数据库还没有发布课程。后续上传后这里会自动出现最新课程。
+                  </p>
+                  <Button asChild variant="secondary">
+                    <Link href="/learn">先看学习中心结构</Link>
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
       </section>

@@ -31,6 +31,7 @@ model User {
   solutions   Solution[]
   problemSets ProblemSet[]
   problemProgress UserProblemProgress[]
+  entitlements Entitlement[]
 }
 
 model VerificationCode {
@@ -348,32 +349,50 @@ model ContestParticipant {
 
 model Course {
   id          String @id @default(cuid())
+  slug        String @unique
   title       String
+  summary     String?
+  description String?
+  category    String?
+  coverImage  String?
   status      String @default("draft")
+  sortOrder   Int    @default(0)
   sections    Section[]
   enrollments Enrollment[]
+
+  @@index([status, sortOrder])
+  @@index([category, sortOrder])
 }
 
 model Section {
-  id       String @id @default(cuid())
-  courseId String
-  title    String
-  lessons  Lesson[]
-  course   Course @relation(fields: [courseId], references: [id])
+  id          String @id @default(cuid())
+  slug        String @unique
+  courseId    String
+  title       String
+  description String?
+  sortOrder   Int    @default(0)
+  lessons     Lesson[]
+  course      Course @relation(fields: [courseId], references: [id])
 
-  @@index([courseId])
+  @@index([courseId, sortOrder])
 }
 
 model Lesson {
-  id          String @id @default(cuid())
-  sectionId   String
-  title       String
-  type        String
-  assetUri    String?
-  durationSec Int?
-  section     Section @relation(fields: [sectionId], references: [id])
+  id           String @id @default(cuid())
+  slug         String @unique
+  sectionId    String
+  title        String
+  type         String
+  summary      String?
+  content      String?
+  thumbnailUrl String?
+  assetUri     String?
+  durationSec  Int?
+  isPreview    Boolean @default(false)
+  sortOrder    Int     @default(0)
+  section      Section @relation(fields: [sectionId], references: [id])
 
-  @@index([sectionId])
+  @@index([sectionId, sortOrder])
 }
 
 model Enrollment {
@@ -389,21 +408,30 @@ model Enrollment {
 }
 
 model Product {
-  id         String @id @default(cuid())
-  name       String
-  priceCents Int
-  type       String
+  id           String @id @default(cuid())
+  name         String
+  priceCents   Int
+  type         String
+  validDays    Int?
+  orders       Order[]
+  entitlements Entitlement[]
+
+  @@index([type])
 }
 
 model Order {
   id          String @id @default(cuid())
   userId      String
+  productId   String?
   amountCents Int
   status      String @default("created")
   createdAt   DateTime @default(now())
   user        User     @relation(fields: [userId], references: [id])
+  product     Product? @relation(fields: [productId], references: [id])
+  payments    Payment[]
 
   @@index([userId, createdAt])
+  @@index([productId, createdAt])
 }
 
 model Payment {
@@ -412,17 +440,22 @@ model Payment {
   channel String
   status  String
   paidAt  DateTime?
+  order   Order    @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
 }
 
 model Entitlement {
-  id        String @id @default(cuid())
+  id        String   @id @default(cuid())
   userId    String
   productId String
+  grantedAt DateTime @default(now())
   expiresAt DateTime?
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
 
-  @@index([userId, productId])
+  @@unique([userId, productId])
+  @@index([userId, expiresAt])
 }
 
 model Post {

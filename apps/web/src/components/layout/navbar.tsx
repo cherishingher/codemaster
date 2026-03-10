@@ -19,6 +19,7 @@ import { cn } from "@/lib/utils"
 import { Code2, Grid2X2, LogOut, User } from "lucide-react"
 
 const navItems = [
+  { href: "/learn", label: "视频学习" },
   { href: "/problems", label: "题库" },
   { href: "/submissions", label: "提交" },
   { href: "/contests", label: "竞赛" },
