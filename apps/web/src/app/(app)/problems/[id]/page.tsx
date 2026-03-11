@@ -19,6 +19,9 @@ import { Loader2, Play, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Breadcrumbs } from "@/components/ui/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
+import { AiTutorPanel } from "@/components/ai/ai-tutor-panel"
+import { ProductPromoPanel } from "@/components/products/product-promo-panel"
+import { ProblemSolutionsPanel } from "@/components/solutions/problem-solutions-panel"
 import { cn } from "@/lib/utils"
 
 type ProblemDetail = {
@@ -864,6 +867,22 @@ export default function ProblemDetailPage() {
           </div>
         ) : null}
         {limitText ? <div className="mb-3 text-xs text-muted-foreground">{limitText}</div> : null}
+        <div className="mb-4 grid gap-3 lg:grid-cols-2">
+          <ProductPromoPanel
+            badge="会员商品"
+            title="解锁高级题解与视频解析"
+            description="题目详情页先承接最小商业化导流，用户可跳转商品中心查看会员商品。"
+            href="/products?type=membership"
+            ctaLabel="查看会员商品"
+          />
+          <ProductPromoPanel
+            badge="内容包"
+            title="按内容包补齐专题讲解"
+            description="针对当前刷题需求查看内容包商品，后续订单模块会直接复用商品与 SKU 数据。"
+            href="/content-packs"
+            ctaLabel="查看内容包专区"
+          />
+        </div>
         {error ? (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700">
             题目不存在、未公开，或加载失败。
@@ -970,6 +989,12 @@ export default function ProblemDetailPage() {
             )}
           </div>
         ) : null}
+        <div className="mt-6">
+          <ProblemSolutionsPanel problemId={id} />
+        </div>
+        <div className="mt-6">
+          <AiTutorPanel problemId={id} problemTitle={problem?.title ?? null} compact />
+        </div>
         {!isScratch ? (
           <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
             <div className="mb-3 flex items-center justify-between gap-2">

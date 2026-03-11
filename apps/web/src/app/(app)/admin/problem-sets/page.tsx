@@ -208,7 +208,7 @@ export default function AdminProblemSetsPage() {
             onChange={(e) => setDescription(e.target.value)}
           />
           <Input
-            placeholder="可见性 public/private/hidden"
+            placeholder="可见性 public/vip/purchase/private/hidden"
             value={visibility}
             onChange={(e) => setVisibility(e.target.value)}
           />

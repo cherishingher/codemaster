@@ -36,7 +36,7 @@ function getPlanMeta(plan: "guest" | "free" | "paid") {
   switch (plan) {
     case "paid":
       return {
-        label: "付费版",
+        label: "VIP 会员",
         description: "可观看全部会员课程、完整章节和进阶训练视频。",
         badgeClass: "bg-primary/20",
       };
@@ -49,7 +49,7 @@ function getPlanMeta(plan: "guest" | "free" | "paid") {
     default:
       return {
         label: "访客模式",
-        description: "可查看课程结构，登录后可保存学习状态并开通付费版。",
+        description: "可查看课程结构，登录后可保存学习状态并开通 VIP。",
         badgeClass: "bg-accent/70",
       };
   }
@@ -57,7 +57,7 @@ function getPlanMeta(plan: "guest" | "free" | "paid") {
 
 const planFeatures = {
   free: ["浏览全部课程目录", "试看公开视频", "查看课程分类与简介"],
-  paid: ["观看全部教学视频", "解锁会员章节", "后续可扩展成体系化付费专栏"],
+  paid: ["观看全部教学视频", "解锁会员章节", "查看更多 VIP 专属内容"],
 };
 
 export default async function LearnPage() {
@@ -81,7 +81,7 @@ export default async function LearnPage() {
                 <span className="text-primary"> 分类课程、视频学习与会员权限</span>
               </h1>
               <p className="max-w-3xl text-base leading-8 text-muted-foreground md:text-lg">
-                课程按分类展示，免费版可以试看公开视频，付费版解锁全部章节。后续只需要继续往数据库写课程、
+                课程按分类展示，免费版可以试看公开视频，VIP 会员解锁全部章节。后续只需要继续往数据库写课程、
                 分节和视频地址，就能直接在这里展示。
               </p>
             </div>
@@ -130,7 +130,7 @@ export default async function LearnPage() {
                 </div>
               </div>
               <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm font-semibold text-foreground">付费版</p>
+                <p className="text-sm font-semibold text-foreground">VIP 会员</p>
                 <div className="mt-3 space-y-2">
                   {planFeatures.paid.map((item) => (
                     <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
@@ -162,7 +162,7 @@ export default async function LearnPage() {
         <SectionHeading
           eyebrow="Learning Library"
           title="按分类查看学习视频"
-          description="所有课程都来自数据库。免费版能看试听内容，付费版可以打开完整课程。"
+          description="所有课程都来自数据库。免费版能看试听内容，VIP 会员可以打开完整课程。"
         />
 
         {groups.length === 0 ? (
@@ -197,7 +197,7 @@ export default async function LearnPage() {
                           <div className="space-y-2">
                             <div className="inline-flex items-center gap-2 rounded-full border-2 border-border bg-white/70 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
                               <GraduationCap className="size-3.5" />
-                              {course.previewCount > 0 ? "含试听" : "仅付费"}
+                              {course.previewCount > 0 ? "含试听" : "仅会员"}
                             </div>
                             <h3 className="text-2xl font-semibold tracking-tight text-foreground">{course.title}</h3>
                             <p className="max-w-2xl text-sm leading-7 text-muted-foreground">

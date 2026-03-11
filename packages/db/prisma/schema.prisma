@@ -16,6 +16,7 @@ model User {
   password    String
   name        String?
   status      String   @default("active")
+  pointsBalance Int    @default(0)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   roles       UserRole[]
@@ -26,12 +27,37 @@ model User {
   posts       Post[]
   comments    Comment[]
   contestParticipants ContestParticipant[]
+  contestRegistrations ContestRegistration[]
+  contestReports ContestReport[]
+  guardianRelationsAsGuardian GuardianRelation[] @relation("GuardianUser")
+  guardianRelationsAsStudent GuardianRelation[] @relation("StudentUser")
+  parentReportSnapshotsAsGuardian ParentReportSnapshot[] @relation("ParentReportGuardian")
+  parentReportSnapshotsAsStudent ParentReportSnapshot[] @relation("ParentReportStudent")
+  teacherProfile TeacherProfile?
+  organizationMemberships OrganizationMember[]
+  teachingGroupsOwned TeachingGroup[] @relation("TeachingGroupOwner")
+  teachingGroupMemberships TeachingGroupMember[]
+  teachingGroupAssignments TeachingGroupProblemSetAssignment[] @relation("TeachingGroupAssignmentOperator")
+  teachingGroupAssignmentGrades TeachingGroupAssignmentGrade[]
+  gradedTeachingGroupAssignmentGrades TeachingGroupAssignmentGrade[] @relation("TeachingGroupAssignmentGradeGrader")
+  organizationApiKeys OrganizationApiKey[]
+  contentAssets ContentAsset[] @relation("ContentAssetUploader")
+  contentWorkflowLogs ContentWorkflowLog[] @relation("ContentWorkflowOperator")
   moderationLogs ModerationLog[]
   adminProblemBulkOperationLogs AdminProblemBulkOperationLog[]
   solutions   Solution[]
   problemSets ProblemSet[]
   problemProgress UserProblemProgress[]
   entitlements Entitlement[]
+  membershipSubscriptions MembershipSubscription[]
+  refundRequests RefundRequest[]
+  campEnrollments CampEnrollment[]
+  campCheckins CampCheckin[]
+  campRankSnapshots CampRankSnapshot[]
+  studyGroupsOwned StudyGroup[] @relation("StudyGroupOwner")
+  studyGroupMemberships StudyGroupMember[]
+  pointTransactions PointTransaction[]
+  pointRedemptions PointRedemption[]
 }
 
 model VerificationCode {
@@ -103,6 +129,7 @@ model Problem {
   stats       ProblemStat?
   progress    UserProblemProgress[]
   hustojMap   HustojProblemMap?
+  campTasks   CampTask[]
 
   @@index([difficulty])
   @@index([status, visible, defunct, publishedAt])
@@ -314,14 +341,33 @@ model RuntimeInfo {
 }
 
 model Contest {
-  id           String @id @default(cuid())
-  name         String
-  startAt      DateTime
-  endAt        DateTime
-  rule         String @default("ACM")
-  problems     ContestProblem[]
-  participants ContestParticipant[]
+  id               String @id @default(cuid())
+  slug             String @unique
+  name             String
+  summary          String?
+  description      String?
+  coverImage       String?
+  status           String   @default("draft")
+  visibility       String   @default("public")
+  accessLevel      String?
+  registrationLimit Int?
+  registrationStartAt DateTime?
+  registrationEndAt DateTime?
+  startAt          DateTime
+  endAt            DateTime
+  rule             String @default("ACM")
+  sortOrder        Int      @default(0)
+  publishedAt      DateTime?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  problems         ContestProblem[]
+  participants     ContestParticipant[]
+  registrations    ContestRegistration[]
+  reports          ContestReport[]
+  unlockRules      ContestUnlockRule[]
 
+  @@index([status, sortOrder])
+  @@index([visibility, status, sortOrder])
   @@index([startAt, endAt])
 }
 
@@ -337,14 +383,340 @@ model ContestProblem {
 }
 
 model ContestParticipant {
-  contestId String
-  userId    String
-  status    String @default("joined")
-  contest   Contest @relation(fields: [contestId], references: [id])
-  user      User    @relation(fields: [userId], references: [id])
+  contestId  String
+  userId     String
+  orderId    String? @unique
+  status     String  @default("PENDING_PAYMENT")
+  sourceType String  @default("PURCHASE")
+  sourceId   String?
+  joinedAt   DateTime @default(now())
+  paidAt     DateTime?
+  updatedAt  DateTime @updatedAt
+  contest    Contest @relation(fields: [contestId], references: [id])
+  user       User    @relation(fields: [userId], references: [id])
+  order      Order?  @relation(fields: [orderId], references: [id])
 
   @@id([contestId, userId])
   @@index([contestId])
+  @@index([contestId, status, joinedAt])
+  @@index([userId, status, joinedAt])
+}
+
+model ContestRegistration {
+  id         String   @id @default(cuid())
+  contestId   String
+  userId      String
+  orderId     String?  @unique
+  status      String   @default("PENDING_PAYMENT")
+  sourceType  String   @default("PURCHASE")
+  sourceId    String?
+  groupKey    String   @default("public")
+  groupLabel  String   @default("公开组")
+  joinedAt    DateTime @default(now())
+  paidAt      DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  contest     Contest  @relation(fields: [contestId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+  order       Order?   @relation(fields: [orderId], references: [id])
+
+  @@unique([contestId, userId])
+  @@index([contestId, status, joinedAt])
+  @@index([contestId, groupKey, status, joinedAt])
+  @@index([userId, status, joinedAt])
+}
+
+model ContestReport {
+  id              String   @id @default(cuid())
+  contestId       String
+  userId          String
+  reportType      String   @default("personal")
+  groupKey        String?
+  solvedCount     Int      @default(0)
+  submissionCount Int      @default(0)
+  penaltyMinutes  Int      @default(0)
+  score           Int      @default(0)
+  rank            Int?
+  groupRank       Int?
+  summary         String?
+  payload         Json?
+  generatedAt     DateTime @default(now())
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  contest         Contest  @relation(fields: [contestId], references: [id])
+  user            User     @relation(fields: [userId], references: [id])
+
+  @@unique([contestId, userId, reportType])
+  @@index([contestId, reportType, generatedAt])
+  @@index([contestId, groupKey, reportType, generatedAt])
+  @@index([userId, reportType, generatedAt])
+}
+
+model ContestUnlockRule {
+  id             String   @id @default(cuid())
+  contestId      String
+  resourceType   String
+  requiredSource String   @default("PURCHASE")
+  startsAt       DateTime?
+  endsAt         DateTime?
+  isEnabled      Boolean  @default(true)
+  summary        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  contest        Contest  @relation(fields: [contestId], references: [id])
+
+  @@unique([contestId, resourceType])
+  @@index([contestId, isEnabled])
+}
+
+model GuardianRelation {
+  id             String   @id @default(cuid())
+  guardianUserId String
+  studentUserId  String
+  relation       String   @default("parent")
+  status         String   @default("active")
+  note           String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  guardian       User     @relation("GuardianUser", fields: [guardianUserId], references: [id])
+  student        User     @relation("StudentUser", fields: [studentUserId], references: [id])
+
+  @@unique([guardianUserId, studentUserId])
+  @@index([guardianUserId, status, createdAt])
+  @@index([studentUserId, status, createdAt])
+}
+
+model ParentReportSnapshot {
+  id             String   @id @default(cuid())
+  guardianUserId String
+  studentUserId  String
+  periodType     String   @default("weekly")
+  periodStartAt  DateTime
+  periodEndAt    DateTime
+  summary        String?
+  payload        Json?
+  generatedAt    DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  guardian       User     @relation("ParentReportGuardian", fields: [guardianUserId], references: [id])
+  student        User     @relation("ParentReportStudent", fields: [studentUserId], references: [id])
+
+  @@unique([guardianUserId, studentUserId, periodType, periodStartAt, periodEndAt])
+  @@index([guardianUserId, periodType, generatedAt])
+  @@index([studentUserId, periodType, generatedAt])
+}
+
+model Organization {
+  id            String   @id @default(cuid())
+  slug          String   @unique
+  name          String
+  shortName     String?
+  externalCode  String?  @unique
+  type          String   @default("institution")
+  status        String   @default("draft")
+  description   String?
+  contactName   String?
+  contactEmail  String?
+  contactPhone  String?
+  settings      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  members       OrganizationMember[]
+  teacherProfiles TeacherProfile[]
+  teachingGroups TeachingGroup[]
+  apiKeys       OrganizationApiKey[]
+
+  @@index([type, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model OrganizationMember {
+  organizationId String
+  userId         String
+  role           String   @default("member")
+  status         String   @default("active")
+  joinedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
+  @@id([organizationId, userId])
+  @@index([userId, status, createdAt])
+  @@index([organizationId, role, status])
+}
+
+model TeacherProfile {
+  userId         String   @id
+  organizationId String?
+  displayName    String?
+  title          String?
+  bio            String?
+  specialties    Json?
+  status         String   @default("draft")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User         @relation(fields: [userId], references: [id])
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, status, createdAt])
+}
+
+model TeachingGroup {
+  id             String   @id @default(cuid())
+  organizationId String?
+  ownerId        String
+  slug           String   @unique
+  name           String
+  code           String?
+  externalCode   String?
+  groupType      String   @default("class")
+  status         String   @default("draft")
+  summary        String?
+  startAt        DateTime?
+  endAt          DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+  owner          User          @relation("TeachingGroupOwner", fields: [ownerId], references: [id])
+  members        TeachingGroupMember[]
+  campClasses    CampClass[]
+  assignments    TeachingGroupProblemSetAssignment[]
+
+  @@index([organizationId, status, createdAt])
+  @@index([ownerId, status, createdAt])
+  @@unique([organizationId, externalCode])
+}
+
+model TeachingGroupMember {
+  groupId        String
+  userId         String
+  memberRole     String   @default("student")
+  status         String   @default("active")
+  joinedAt       DateTime @default(now())
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  group          TeachingGroup @relation(fields: [groupId], references: [id])
+  user           User          @relation(fields: [userId], references: [id])
+
+  @@id([groupId, userId])
+  @@index([userId, memberRole, status, createdAt])
+  @@index([groupId, memberRole, status])
+}
+
+model TeachingGroupProblemSetAssignment {
+  id          String   @id @default(cuid())
+  groupId      String
+  problemSetId String
+  assignedById String
+  status       String   @default("active")
+  title        String?
+  note         String?
+  dueAt        DateTime?
+  maxScore     Int      @default(100)
+  gradingMode  String   @default("auto")
+  publishedAt  DateTime?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  group        TeachingGroup @relation(fields: [groupId], references: [id])
+  problemSet   ProblemSet    @relation(fields: [problemSetId], references: [id])
+  assignedBy   User          @relation("TeachingGroupAssignmentOperator", fields: [assignedById], references: [id])
+  grades       TeachingGroupAssignmentGrade[]
+
+  @@unique([groupId, problemSetId])
+  @@index([groupId, status, createdAt])
+  @@index([problemSetId, status, createdAt])
+  @@index([assignedById, createdAt])
+}
+
+model TeachingGroupAssignmentGrade {
+  id                   String   @id @default(cuid())
+  assignmentId         String
+  userId               String
+  status               String   @default("pending")
+  autoScore            Int      @default(0)
+  manualScore          Int?
+  finalScore           Int      @default(0)
+  maxScore             Int      @default(100)
+  completionRate       Float    @default(0)
+  solvedProblemCount   Int      @default(0)
+  attemptedProblemCount Int     @default(0)
+  submissionCount      Int      @default(0)
+  lastSubmissionAt     DateTime?
+  gradedAt             DateTime?
+  gradedById           String?
+  feedback             String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+  assignment           TeachingGroupProblemSetAssignment @relation(fields: [assignmentId], references: [id])
+  user                 User     @relation(fields: [userId], references: [id])
+  gradedBy             User?    @relation("TeachingGroupAssignmentGradeGrader", fields: [gradedById], references: [id])
+
+  @@unique([assignmentId, userId])
+  @@index([assignmentId, status, finalScore])
+  @@index([userId, updatedAt])
+  @@index([gradedById, gradedAt])
+}
+
+model OrganizationApiKey {
+  id             String   @id @default(cuid())
+  organizationId String
+  createdById    String
+  name           String
+  tokenHash      String   @unique
+  status         String   @default("active")
+  lastUsedAt     DateTime?
+  expiresAt      DateTime?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdBy      User         @relation(fields: [createdById], references: [id])
+
+  @@index([organizationId, status, createdAt])
+  @@index([createdById, createdAt])
+  @@index([expiresAt])
+}
+
+model ContentAsset {
+  id           String   @id @default(cuid())
+  assetType    String
+  title        String
+  description  String?
+  status       String   @default("draft")
+  sourceUrl    String
+  storageKey   String?
+  mimeType     String?
+  durationSec  Int?
+  thumbnailUrl String?
+  resourceType String?
+  resourceId   String?
+  metadata     Json?
+  uploaderId   String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  uploader     User     @relation("ContentAssetUploader", fields: [uploaderId], references: [id])
+
+  @@index([assetType, status, createdAt])
+  @@index([resourceType, resourceId])
+  @@index([uploaderId, createdAt])
+}
+
+model ContentWorkflowLog {
+  id           String   @id @default(cuid())
+  resourceType String
+  resourceId   String
+  fromStatus   String?
+  toStatus     String
+  action       String
+  note         String?
+  payload      Json?
+  operatorId   String
+  createdAt    DateTime @default(now())
+  operator     User     @relation("ContentWorkflowOperator", fields: [operatorId], references: [id])
+
+  @@index([resourceType, resourceId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([toStatus, createdAt])
 }
 
 model Course {
@@ -389,9 +761,12 @@ model Lesson {
   assetUri     String?
   durationSec  Int?
   isPreview    Boolean @default(false)
+  status       String @default("published")
   sortOrder    Int     @default(0)
+  updatedAt    DateTime @updatedAt
   section      Section @relation(fields: [sectionId], references: [id])
 
+  @@index([status, sortOrder])
   @@index([sectionId, sortOrder])
 }
 
@@ -408,47 +783,182 @@ model Enrollment {
 }
 
 model Product {
-  id           String @id @default(cuid())
+  id           String   @id @default(cuid())
+  slug         String?  @unique
   name         String
+  summary      String?
+  description  String?
+  coverImage   String?
   priceCents   Int
   type         String
   validDays    Int?
+  currency     String   @default("CNY")
+  status       String   @default("active")
+  sortOrder    Int      @default(0)
+  tags         Json?
+  targetType   String?
+  targetId     String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   orders       Order[]
   entitlements Entitlement[]
+  skus         ProductSku[]
+  benefits     ProductBenefit[]
+  membershipSubscriptions MembershipSubscription[]
+  campSkus     CampSku[]
+  pointRedemptions PointRedemption[]
 
   @@index([type])
+  @@index([status, sortOrder])
+  @@index([type, status, sortOrder])
+  @@index([targetType, targetId])
+}
+
+model ProductSku {
+  id                 String   @id @default(cuid())
+  productId          String
+  skuCode            String
+  name               String
+  description        String?
+  priceCents         Int
+  originalPriceCents Int?
+  currency           String   @default("CNY")
+  validDays          Int?
+  status             String   @default("active")
+  isDefault          Boolean  @default(false)
+  sortOrder          Int      @default(0)
+  metadata           Json?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  product            Product  @relation(fields: [productId], references: [id])
+  orders             Order[]
+  membershipSubscriptions MembershipSubscription[]
+  campSkus           CampSku[]
+
+  @@unique([productId, skuCode])
+  @@index([productId, status, sortOrder])
+}
+
+model ProductBenefit {
+  id          String   @id @default(cuid())
+  productId   String
+  title       String
+  description String?
+  benefitType String   @default("text")
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([productId, sortOrder])
 }
 
 model Order {
-  id          String @id @default(cuid())
-  userId      String
-  productId   String?
-  amountCents Int
-  status      String @default("created")
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
-  product     Product? @relation(fields: [productId], references: [id])
-  payments    Payment[]
+  id                  String     @id @default(cuid())
+  orderNo             String     @unique
+  userId              String
+  productId           String?
+  skuId               String?
+  amountCents         Int
+  currency            String     @default("CNY")
+  productNameSnapshot String?
+  skuNameSnapshot     String?
+  validDaysSnapshot   Int?
+  status              String     @default("CREATED")
+  createdAt           DateTime   @default(now())
+  paidAt              DateTime?
+  closedAt            DateTime?
+  closedReason        String?
+  refundRequestedAt   DateTime?
+  refundProcessedAt   DateTime?
+  updatedAt           DateTime   @updatedAt
+  user                User       @relation(fields: [userId], references: [id])
+  product             Product?   @relation(fields: [productId], references: [id])
+  sku                 ProductSku? @relation(fields: [skuId], references: [id])
+  payments            Payment[]
+  membershipSubscription MembershipSubscription?
+  refundRequest       RefundRequest?
+  campEnrollment      CampEnrollment?
+  contestParticipant  ContestParticipant?
+  contestRegistration ContestRegistration?
 
   @@index([userId, createdAt])
+  @@index([userId, status, createdAt])
   @@index([productId, createdAt])
+  @@index([skuId, createdAt])
+}
+
+model MembershipSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  productId String
+  skuId     String?
+  tier      String   @default("VIP")
+  status    String   @default("ACTIVE")
+  startedAt DateTime
+  expiresAt DateTime
+  lastOrderId String? @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  user      User     @relation(fields: [userId], references: [id])
+  product   Product  @relation(fields: [productId], references: [id])
+  sku       ProductSku? @relation(fields: [skuId], references: [id])
+  lastOrder Order?   @relation(fields: [lastOrderId], references: [id])
+
+  @@unique([userId, tier])
+  @@index([userId, status, expiresAt])
+  @@index([status, expiresAt])
+  @@index([productId, status])
+  @@index([skuId])
 }
 
 model Payment {
-  id      String @id @default(cuid())
-  orderId String
-  channel String
-  status  String
-  paidAt  DateTime?
-  order   Order    @relation(fields: [orderId], references: [id])
+  id          String   @id @default(cuid())
+  paymentNo   String   @unique
+  orderId     String
+  channel     String   @default("MOCK")
+  status      String   @default("PENDING")
+  amountCents Int?
+  tradeNo     String?
+  payload     Json?
+  callbackPayload Json?
+  callbackAt  DateTime?
+  failureReason String?
+  entitlementGrantedAt DateTime?
+  createdAt   DateTime @default(now())
+  paidAt      DateTime?
+  updatedAt   DateTime @updatedAt
+  order       Order    @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
+  @@index([orderId, status, createdAt])
+  @@index([status, createdAt])
+}
+
+model RefundRequest {
+  id             String   @id @default(cuid())
+  refundNo       String   @unique
+  orderId        String   @unique
+  userId         String
+  status         String   @default("CREATED")
+  reason         String?
+  note           String?
+  createdAt      DateTime @default(now())
+  processedAt    DateTime?
+  updatedAt      DateTime @updatedAt
+  order          Order    @relation(fields: [orderId], references: [id])
+  user           User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, status, createdAt])
 }
 
 model Entitlement {
   id        String   @id @default(cuid())
   userId    String
   productId String
+  sourceType String  @default("PURCHASE")
+  sourceId  String?
   grantedAt DateTime @default(now())
   expiresAt DateTime?
   user      User     @relation(fields: [userId], references: [id])
@@ -456,19 +966,300 @@ model Entitlement {
 
   @@unique([userId, productId])
   @@index([userId, expiresAt])
+  @@index([userId, sourceType, expiresAt])
+  @@index([sourceType, sourceId])
+}
+
+model Camp {
+  id           String   @id @default(cuid())
+  slug         String   @unique
+  title        String
+  summary      String?
+  description  String?
+  coverImage   String?
+  suitableFor  String?
+  difficulty   String?
+  status       String   @default("draft")
+  visibility   String   @default("public")
+  accessLevel  String   @default("purchase")
+  sortOrder    Int      @default(0)
+  highlights   Json?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  skus         CampSku[]
+  classes      CampClass[]
+  enrollments  CampEnrollment[]
+  tasks        CampTask[]
+  rankSnapshots CampRankSnapshot[]
+  checkins     CampCheckin[]
+
+  @@index([status, sortOrder])
+  @@index([visibility, status, sortOrder])
+}
+
+model CampClass {
+  id            String   @id @default(cuid())
+  campId        String
+  teachingGroupId String?
+  slug          String   @unique
+  title         String
+  summary       String?
+  coachName     String?
+  status        String   @default("draft")
+  visibility    String   @default("public")
+  accessLevel   String   @default("purchase")
+  enrollStartAt DateTime?
+  enrollEndAt   DateTime?
+  startAt       DateTime
+  endAt         DateTime
+  capacity      Int?
+  sortOrder     Int      @default(0)
+  metadata      Json?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  camp          Camp     @relation(fields: [campId], references: [id])
+  teachingGroup TeachingGroup? @relation(fields: [teachingGroupId], references: [id])
+  skus          CampSku[]
+  enrollments   CampEnrollment[]
+  tasks         CampTask[]
+  rankSnapshots CampRankSnapshot[]
+  checkins      CampCheckin[]
+
+  @@index([campId, status, sortOrder])
+  @@index([teachingGroupId])
+  @@index([startAt, endAt])
+}
+
+model CampSku {
+  id           String   @id @default(cuid())
+  campId       String
+  classId      String
+  productId    String
+  productSkuId String   @unique
+  label        String?
+  status       String   @default("active")
+  isDefault    Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  camp         Camp     @relation(fields: [campId], references: [id])
+  campClass    CampClass @relation(fields: [classId], references: [id])
+  product      Product  @relation(fields: [productId], references: [id])
+  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  enrollments  CampEnrollment[]
+
+  @@index([campId, status, sortOrder])
+  @@index([classId, status, sortOrder])
+  @@index([productId])
+}
+
+model CampEnrollment {
+  id          String   @id @default(cuid())
+  campId      String
+  classId     String
+  campSkuId   String?
+  userId      String
+  orderId     String?  @unique
+  status      String   @default("PENDING_PAYMENT")
+  sourceType  String   @default("PURCHASE")
+  sourceId    String?
+  enrolledAt  DateTime @default(now())
+  activatedAt DateTime?
+  completedAt DateTime?
+  lastActiveAt DateTime?
+  note        String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  camp        Camp     @relation(fields: [campId], references: [id])
+  campClass   CampClass @relation(fields: [classId], references: [id])
+  campSku     CampSku? @relation(fields: [campSkuId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+  order       Order?   @relation(fields: [orderId], references: [id])
+  checkins    CampCheckin[]
+
+  @@unique([classId, userId])
+  @@index([campId, status, createdAt])
+  @@index([classId, status, createdAt])
+  @@index([userId, status, updatedAt])
+}
+
+model CampTask {
+  id          String   @id @default(cuid())
+  campId      String
+  classId     String
+  title       String
+  summary     String?
+  description String?
+  taskDate    DateTime
+  dayIndex    Int      @default(1)
+  status      String   @default("published")
+  resourceType String?
+  resourceId  String?
+  problemId   String?
+  points      Int      @default(100)
+  isRequired  Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  camp        Camp     @relation(fields: [campId], references: [id])
+  campClass   CampClass @relation(fields: [classId], references: [id])
+  problem     Problem? @relation(fields: [problemId], references: [id])
+  checkins    CampCheckin[]
+
+  @@index([campId, taskDate, sortOrder])
+  @@index([classId, taskDate, sortOrder])
+  @@index([resourceType, resourceId])
+  @@index([problemId])
+}
+
+model CampCheckin {
+  id           String   @id @default(cuid())
+  campId       String
+  classId      String
+  taskId       String
+  enrollmentId String
+  userId       String
+  status       String   @default("checked_in")
+  note         String?
+  payload      Json?
+  checkinAt    DateTime @default(now())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  camp         Camp     @relation(fields: [campId], references: [id])
+  campClass    CampClass @relation(fields: [classId], references: [id])
+  task         CampTask @relation(fields: [taskId], references: [id])
+  enrollment   CampEnrollment @relation(fields: [enrollmentId], references: [id])
+  user         User     @relation(fields: [userId], references: [id])
+
+  @@unique([taskId, userId])
+  @@index([classId, userId, checkinAt])
+  @@index([enrollmentId, checkinAt])
+}
+
+model CampRankSnapshot {
+  id                 String   @id @default(cuid())
+  campId             String
+  classId            String
+  userId             String
+  scope              String   @default("overall")
+  scopeKey           String   @default("overall")
+  rank               Int
+  score              Int      @default(0)
+  completedTaskCount Int      @default(0)
+  checkinCount       Int      @default(0)
+  solvedProblemCount Int      @default(0)
+  activeDays         Int      @default(0)
+  userNameSnapshot   String?
+  payload            Json?
+  snapshotAt         DateTime @default(now())
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  camp               Camp     @relation(fields: [campId], references: [id])
+  campClass          CampClass @relation(fields: [classId], references: [id])
+  user               User     @relation(fields: [userId], references: [id])
+
+  @@unique([classId, scope, scopeKey, userId])
+  @@index([classId, scope, scopeKey, rank])
+  @@index([campId, scope, scopeKey])
+  @@index([userId, scope, snapshotAt])
+}
+
+model StudyGroup {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  ownerId     String
+  name        String
+  summary     String?
+  description String?
+  topic       String?
+  level       String   @default("mixed")
+  visibility  String   @default("public")
+  status      String   @default("active")
+  memberLimit Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  owner       User     @relation("StudyGroupOwner", fields: [ownerId], references: [id])
+  members     StudyGroupMember[]
+  posts       Post[]
+
+  @@index([status, visibility, createdAt])
+  @@index([ownerId, createdAt])
+}
+
+model StudyGroupMember {
+  id        String   @id @default(cuid())
+  groupId    String
+  userId     String
+  role       String   @default("member")
+  status     String   @default("active")
+  joinedAt   DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  group      StudyGroup @relation(fields: [groupId], references: [id])
+  user       User       @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+  @@index([userId, status, createdAt])
+  @@index([groupId, role, status, joinedAt])
+}
+
+model PointTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  actionType  String
+  actionKey   String?  @unique
+  pointsDelta Int
+  balanceAfter Int
+  relatedType String?
+  relatedId   String?
+  note        String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([actionType, createdAt])
+}
+
+model PointRedemption {
+  id          String   @id @default(cuid())
+  userId      String
+  productId   String
+  pointsCost  Int
+  status      String   @default("completed")
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id])
+  product     Product  @relation(fields: [productId], references: [id])
+
+  @@index([userId, createdAt])
+  @@index([productId, status, createdAt])
 }
 
 model Post {
   id        String   @id @default(cuid())
   userId    String
+  groupId   String?
+  kind      String   @default("discussion")
+  visibility String  @default("public")
   title     String
   content   String
   status    String   @default("pending")
+  metadata  Json?
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   user      User     @relation(fields: [userId], references: [id])
+  group     StudyGroup? @relation(fields: [groupId], references: [id])
   comments  Comment[]
 
   @@index([status, createdAt])
+  @@index([kind, status, createdAt])
+  @@index([groupId, status, createdAt])
 }
 
 model Comment {
@@ -490,28 +1281,45 @@ model Solution {
   versionId  String?
   type       String   @default("official") // official/ugc
   title      String
+  summary    String?
   content    String
+  accessLevel String?
+  isPremium  Boolean  @default(false)
   videoUrl   String?
+  templateType String?
+  status     String   @default("published")
   authorId   String
   visibility String   @default("public")
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
   problem    Problem  @relation(fields: [problemId], references: [id])
   author     User     @relation(fields: [authorId], references: [id])
   version    ProblemVersion? @relation(fields: [versionId], references: [id])
 
   @@index([problemId, createdAt])
+  @@index([problemId, accessLevel, createdAt])
+  @@index([status, createdAt])
   @@index([authorId, createdAt])
 }
 
 model ProblemSet {
   id          String   @id @default(cuid())
+  slug        String?  @unique
   title       String
+  summary     String?
   description String?
+  kind        String   @default("training_path")
+  status      String   @default("published")
   visibility  String   @default("public")
   ownerId     String
   createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
   owner       User     @relation(fields: [ownerId], references: [id])
   items       ProblemSetItem[]
+  classAssignments TeachingGroupProblemSetAssignment[]
+
+  @@index([kind, status, createdAt])
+  @@index([visibility, status, createdAt])
 }
 
 model ProblemSetItem {

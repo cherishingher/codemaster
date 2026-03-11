@@ -8,8 +8,9 @@ import {
   Lock,
   PlayCircle,
 } from "lucide-react";
-import { EmptyState } from "@/components/patterns/state-panel";
+import { AccessLockCard } from "@/components/content-access/access-lock-card";
 import { UpgradePlanButton } from "@/components/learn/upgrade-plan-button";
+import { EmptyState } from "@/components/patterns/state-panel";
 import { Badge } from "@/components/ui/badge";
 import { Breadcrumbs } from "@/components/ui/breadcrumbs";
 import { Button } from "@/components/ui/button";
@@ -29,7 +30,7 @@ function formatDuration(durationSec: number | null) {
 }
 
 function getPlanBadge(plan: "guest" | "free" | "paid") {
-  if (plan === "paid") return { label: "付费版", className: "bg-primary/20" };
+  if (plan === "paid") return { label: "VIP 会员", className: "bg-primary/20" };
   if (plan === "free") return { label: "免费版", className: "bg-secondary/70" };
   return { label: "访客", className: "bg-accent/70" };
 }
@@ -44,7 +45,7 @@ export default async function LearnCourseDetailPage({
   ]);
 
   const lessonSlug = typeof resolvedSearchParams.lesson === "string" ? resolvedSearchParams.lesson : null;
-  const { viewer, product, course } = await getLearnCourseDetail(slug, lessonSlug);
+  const { viewer, course } = await getLearnCourseDetail(slug, lessonSlug);
 
   if (!course) {
     notFound();
@@ -191,33 +192,18 @@ export default async function LearnCourseDetailPage({
                     </div>
                   </div>
                 ) : lesson ? (
-                  <div className="rounded-[1.9rem] border-[3px] border-border bg-[linear-gradient(135deg,rgba(245,184,167,0.18),rgba(255,241,161,0.18))] px-6 py-8">
-                    <div className="space-y-5">
-                      <div className="inline-flex size-14 items-center justify-center rounded-[1.2rem] border-[3px] border-border bg-card">
-                        <Lock className="size-6 text-primary" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-semibold tracking-tight text-foreground">这节课属于付费版内容</h3>
-                        <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
-                          免费版只能查看章节结构和简介，视频播放与完整内容需要升级。当前商品为 {product.name}，
-                          {product.validDays ? `有效期 ${product.validDays} 天。` : "购买后长期有效。"}
-                        </p>
-                      </div>
-                      <div className="flex flex-wrap gap-3">
-                        <UpgradePlanButton plan={viewer.plan} size="lg" />
-                        {lesson.summary ? (
-                          <div className="inline-flex items-center rounded-full border-[2px] border-border bg-card px-4 py-2 text-sm text-muted-foreground">
-                            可先查看本节简介
-                          </div>
-                        ) : null}
-                      </div>
-                      {lesson.summary ? (
-                        <div className="rounded-[1.4rem] border-[2px] border-border bg-card px-4 py-4">
-                          <p className="text-sm leading-7 text-muted-foreground">{lesson.summary}</p>
-                        </div>
-                      ) : null}
-                    </div>
-                  </div>
+                  <AccessLockCard
+                    access={lesson.access}
+                    title="这节视频还没有解锁"
+                    description="视频播放与完整讲解已经被后端权限中心拦截，当前只展示章节信息和最小摘要。"
+                    preview={
+                      lesson.summary ? (
+                        <p className="text-sm leading-7 text-muted-foreground">{lesson.summary}</p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">当前章节没有可公开展示的摘要内容。</p>
+                      )
+                    }
+                  />
                 ) : null}
               </CardContent>
             </Card>
@@ -311,7 +297,7 @@ export default async function LearnCourseDetailPage({
                 <h2 className="text-2xl font-semibold tracking-tight text-foreground">权限说明</h2>
                 <div className="space-y-3 text-sm leading-7 text-muted-foreground">
                   <p>免费版：可浏览课程目录、进入详情页、观看标记为“试看”的视频。</p>
-                  <p>付费版：可观看全部视频课程，后续也可以扩展更多会员专属专栏。</p>
+                  <p>VIP 会员：可观看全部视频课程，后续也可以扩展更多会员专属专栏。</p>
                 </div>
                 <UpgradePlanButton plan={viewer.plan} className="w-full" />
               </CardContent>

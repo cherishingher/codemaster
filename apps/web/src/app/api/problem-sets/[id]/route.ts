@@ -1,13 +1,21 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { getAuthUser } from "@/lib/authz";
+import { createContentAccessEvaluator } from "@/server/modules/content-access/service";
 
 export async function GET(
-  _: Request,
+  req: NextRequest,
   ctx: { params: { id: string } | Promise<{ id: string }> }
 ) {
   const { id } = await Promise.resolve(ctx.params);
+  const user = await getAuthUser(req);
+  const evaluator = await createContentAccessEvaluator(user ?? undefined);
+
   const set = await db.problemSet.findFirst({
-    where: { id, visibility: "public" },
+    where: {
+      id,
+      status: "published",
+    },
     include: {
       owner: { select: { id: true, name: true } },
       items: {
@@ -32,10 +40,28 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const access = await evaluator.canAccessProblemSet({
+    id: set.id,
+    visibility: set.visibility,
+  })
+
+  if (!access.allowed) {
+    return NextResponse.json(
+      {
+        error: "forbidden",
+        message: access.message,
+        access,
+      },
+      { status: 403 },
+    )
+  }
+
   return NextResponse.json({
     id: set.id,
     title: set.title,
     description: set.description,
+    visibility: set.visibility,
+    access,
     createdAt: set.createdAt,
     owner: set.owner,
     items: set.items.map((item) => ({

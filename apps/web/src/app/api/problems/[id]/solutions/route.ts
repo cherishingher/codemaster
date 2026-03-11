@@ -1,32 +1,13 @@
-import { NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server"
+import { getAuthUser } from "@/lib/authz"
+import { listProblemSolutions } from "@/server/modules/solution-center/service"
 
 export async function GET(
-  _: Request,
-  ctx: { params: { id: string } | Promise<{ id: string }> }
+  req: NextRequest,
+  ctx: { params: { id: string } | Promise<{ id: string }> },
 ) {
-  const { id } = await Promise.resolve(ctx.params);
-  const solutions = await db.solution.findMany({
-    where: {
-      problemId: id,
-      visibility: "public",
-    },
-    orderBy: { createdAt: "desc" },
-    select: {
-      id: true,
-      title: true,
-      type: true,
-      content: true,
-      videoUrl: true,
-      createdAt: true,
-      author: {
-        select: { id: true, name: true },
-      },
-      version: {
-        select: { id: true, version: true },
-      },
-    },
-  });
-
-  return NextResponse.json(solutions);
+  const { id } = await Promise.resolve(ctx.params)
+  const user = await getAuthUser(req)
+  const data = await listProblemSolutions(id, user ?? undefined)
+  return NextResponse.json({ data })
 }

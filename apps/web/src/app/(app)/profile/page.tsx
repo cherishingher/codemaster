@@ -5,10 +5,12 @@ import Link from "next/link"
 import useSWR from "swr"
 import { useAuth } from "@/lib/hooks/use-auth"
 import { api } from "@/lib/api-client"
+import { AccessLockCard } from "@/components/content-access/access-lock-card"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Trophy, Clock, Target, Calendar, CheckCircle2 } from "lucide-react"
+import type { LearningReportResponse } from "@/lib/learning-reports"
+import { Loader2, Trophy, Clock, Target, Calendar, CheckCircle2, ArrowRight } from "lucide-react"
 
 type ProgressRow = {
   problem: {
@@ -98,6 +100,10 @@ export default function ProfilePage() {
   const { data: submissions } = useSWR<SubmissionListResponse>(
     user ? "/submissions?limit=10" : null,
     () => api.submissions.list<SubmissionListResponse>({ limit: "10" })
+  )
+  const { data: learningReport } = useSWR<LearningReportResponse>(
+    user ? "/learning-reports/enhanced" : null,
+    () => api.learningReports.get<LearningReportResponse>("enhanced")
   )
 
   const stats = React.useMemo(() => {
@@ -213,6 +219,79 @@ export default function ProfilePage() {
               </CardContent>
             </Card>
           </div>
+
+          {learningReport?.data ? (
+            learningReport.data.locked ? (
+              <AccessLockCard
+                access={learningReport.data.access}
+                title="增强版学习报告尚未解锁"
+                description="基础统计继续可见，活跃趋势、难度拆解和更完整的训练反馈需要统一权限中心放行后才能查看。"
+                preview={
+                  <div className="grid gap-3 md:grid-cols-3">
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">尝试题目</p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {learningReport.data.preview.overview.attemptedProblems}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">已通过</p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {learningReport.data.preview.overview.solvedProblems}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">提交总数</p>
+                      <p className="mt-2 text-2xl font-semibold text-foreground">
+                        {learningReport.data.preview.overview.totalSubmissions}
+                      </p>
+                    </div>
+                  </div>
+                }
+              />
+            ) : learningReport.data.report ? (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-base">
+                    <Target className="h-4 w-4 text-primary" />
+                    增强版学习报告
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="grid gap-4 md:grid-cols-4">
+                  <div className="rounded-2xl border px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">总尝试次数</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">
+                      {learningReport.data.report.overview.totalAttempts}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">通过率</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">
+                      {(learningReport.data.report.overview.acceptedRate * 100).toFixed(1)}%
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">难题通过</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">
+                      {learningReport.data.report.solvedBreakdown.hard}
+                    </p>
+                  </div>
+                  <div className="rounded-2xl border px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">路径进度</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">
+                      {learningReport.data.report.trainingPaths.length}
+                    </p>
+                  </div>
+                  <div className="md:col-span-4">
+                    <Link href="/reports/learning" className="inline-flex items-center text-sm font-medium text-primary hover:underline">
+                      查看完整学习报告
+                      <ArrowRight className="ml-1 h-4 w-4" />
+                    </Link>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : null
+          ) : null}
 
           <Card>
             <CardHeader>

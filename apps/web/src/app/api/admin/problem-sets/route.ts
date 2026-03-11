@@ -6,7 +6,7 @@ import { withAuth } from "@/lib/authz";
 const CreateSetSchema = z.object({
   title: z.string().min(1),
   description: z.string().min(1).optional(),
-  visibility: z.enum(["public", "private", "hidden"]).default("public"),
+  visibility: z.enum(["public", "vip", "purchase", "private", "hidden"]).default("public"),
 });
 
 export const GET = withAuth(async (req) => {

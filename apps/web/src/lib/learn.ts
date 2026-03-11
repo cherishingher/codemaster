@@ -1,15 +1,9 @@
 import { cookies } from "next/headers";
 import type { Prisma } from "@prisma/client";
+import type { ContentAccessResult } from "@/lib/content-access";
 import { db } from "@/lib/db";
-
-export const VIDEO_MEMBERSHIP_TYPE = "video_membership";
-
-export const DEFAULT_VIDEO_MEMBERSHIP = {
-  name: "视频学习付费版",
-  priceCents: 29900,
-  validDays: 365,
-  type: VIDEO_MEMBERSHIP_TYPE,
-} as const;
+import { createContentAccessEvaluator } from "@/server/modules/content-access/service";
+import { ensureVipMembershipProduct, hasActiveVipMembership } from "@/server/modules/membership/service";
 
 export type LearnPlan = "guest" | "free" | "paid";
 
@@ -51,6 +45,7 @@ export type LearnLessonItem = {
   isPreview: boolean;
   canWatch: boolean;
   isLocked: boolean;
+  access: ContentAccessResult;
   sortOrder: number;
 };
 
@@ -90,10 +85,6 @@ function normalizeViewerPlan({
   return isPaid ? "paid" : "free";
 }
 
-function canWatchLesson(plan: LearnPlan, isPreview: boolean) {
-  return plan === "paid" || isPreview;
-}
-
 export async function getLearnViewerByToken(token?: string | null): Promise<LearnViewer> {
   if (!token) {
     return emptyViewer();
@@ -117,19 +108,7 @@ export async function getLearnViewerByToken(token?: string | null): Promise<Lear
   }
 
   const roles = session.user.roles.map((entry) => entry.role.name);
-  const isAdmin = roles.includes("admin");
-
-  const activeEntitlement = isAdmin
-    ? true
-    : Boolean(
-        await db.entitlement.findFirst({
-          where: {
-            userId: session.userId,
-            product: { type: VIDEO_MEMBERSHIP_TYPE },
-            OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
-          },
-        }),
-      );
+  const activeEntitlement = await hasActiveVipMembership(session.userId, roles);
 
   return {
     userId: session.userId,
@@ -150,19 +129,19 @@ export async function getLearnViewerFromCookies() {
   return getLearnViewerByToken(token);
 }
 
-export async function getVideoMembershipProduct() {
-  const product = await db.product.findFirst({
-    where: { type: VIDEO_MEMBERSHIP_TYPE },
-    orderBy: { priceCents: "asc" },
-  });
+export async function getVipMembershipProduct() {
+  const product = await db.$transaction(async (tx) => ensureVipMembershipProduct(tx));
 
-  return (
-    product ?? {
-      id: "video-membership-default",
-      ...DEFAULT_VIDEO_MEMBERSHIP,
-    }
-  );
+  return {
+    id: product.id,
+    name: product.name,
+    priceCents: product.priceCents,
+    validDays: product.validDays,
+    type: product.type,
+  };
 }
+
+export const getVideoMembershipProduct = getVipMembershipProduct;
 
 function mapCourseCard(
   course: Prisma.CourseGetPayload<{
@@ -205,6 +184,9 @@ async function getPublishedCourses() {
         orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
         include: {
           lessons: {
+            where: {
+              status: "published",
+            },
             orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
           },
         },
@@ -244,6 +226,9 @@ export async function getLearnCourseDetail(slug: string, selectedLessonSlug?: st
           orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
           include: {
             lessons: {
+              where: {
+                status: "published",
+              },
               orderBy: [{ sortOrder: "asc" }, { title: "asc" }],
             },
           },
@@ -256,31 +241,52 @@ export async function getLearnCourseDetail(slug: string, selectedLessonSlug?: st
     return { viewer, product, course: null as LearnCourseDetail | null };
   }
 
+  const evaluator = await createContentAccessEvaluator({
+    id: viewer.userId,
+    roles: viewer.roles,
+  })
+
   const sections: LearnSectionItem[] = course.sections.map((section) => ({
     id: section.id,
     slug: section.slug,
     title: section.title,
     description: section.description,
     sortOrder: section.sortOrder,
-    lessons: section.lessons.map((lesson) => {
-      const allowed = canWatchLesson(viewer.plan, lesson.isPreview);
-      return {
+    lessons: [],
+  }));
+
+  for (let sectionIndex = 0; sectionIndex < course.sections.length; sectionIndex += 1) {
+    const section = course.sections[sectionIndex]
+    const mappedLessons: LearnLessonItem[] = []
+
+    for (const lesson of section.lessons) {
+      const access = await evaluator.canAccessLesson({
+        id: lesson.id,
+        courseId: course.id,
+        isPreview: lesson.isPreview,
+      })
+
+      const allowed = access.allowed
+      mappedLessons.push({
         id: lesson.id,
         slug: lesson.slug,
         title: lesson.title,
         type: lesson.type,
         summary: lesson.summary,
-        content: lesson.content,
-        assetUri: lesson.assetUri,
+        content: allowed ? lesson.content : null,
+        assetUri: allowed ? lesson.assetUri : null,
         thumbnailUrl: lesson.thumbnailUrl,
         durationSec: lesson.durationSec,
         isPreview: lesson.isPreview,
         canWatch: allowed,
         isLocked: !allowed,
+        access,
         sortOrder: lesson.sortOrder,
-      };
-    }),
-  }));
+      })
+    }
+
+    sections[sectionIndex].lessons = mappedLessons
+  }
 
   const allLessons = sections.flatMap((section) => section.lessons);
   const selectedLesson =

@@ -11,7 +11,7 @@ const ItemSchema = z.object({
 const SetSchema = z.object({
   title: z.string().min(1),
   description: z.string().optional(),
-  visibility: z.enum(["public", "private", "hidden"]).optional(),
+  visibility: z.enum(["public", "vip", "purchase", "private", "hidden"]).optional(),
   items: z.array(ItemSchema).optional(),
 });
 

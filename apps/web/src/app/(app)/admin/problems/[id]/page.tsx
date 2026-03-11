@@ -57,8 +57,12 @@ type Version = {
 type Solution = {
   id: string
   title: string
+  summary?: string | null
   type: string
   visibility: string
+  accessLevel?: string | null
+  isPremium?: boolean
+  videoUrl?: string | null
   createdAt: string
 }
 
@@ -324,7 +328,14 @@ export default function AdminProblemDetailPage() {
   const [tcIsSample, setTcIsSample] = React.useState(false)
   const [tcOrder, setTcOrder] = React.useState("1")
   const [solutionTitle, setSolutionTitle] = React.useState("")
+  const [solutionSummary, setSolutionSummary] = React.useState("")
   const [solutionContent, setSolutionContent] = React.useState("")
+  const [solutionVideoUrl, setSolutionVideoUrl] = React.useState("")
+  const [solutionVisibility, setSolutionVisibility] = React.useState<"public" | "vip" | "purchase" | "private">("public")
+  const [solutionAccessLevel, setSolutionAccessLevel] = React.useState<
+    "FREE" | "MEMBERSHIP" | "PURCHASE" | "MEMBERSHIP_OR_PURCHASE"
+  >("FREE")
+  const [solutionIsPremium, setSolutionIsPremium] = React.useState(false)
   const [syncResult, setSyncResult] = React.useState("")
   const [zipFile, setZipFile] = React.useState<File | null>(null)
   const [zipResult, setZipResult] = React.useState<ZipResult | null>(null)
@@ -878,14 +889,23 @@ export default function AdminProblemDetailPage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         title: solutionTitle,
+        summary: solutionSummary || undefined,
         content: solutionContent,
         type: "official",
-        visibility: "public",
+        visibility: solutionVisibility,
+        accessLevel: solutionAccessLevel,
+        isPremium: solutionIsPremium,
         versionId: selectedVersionId || undefined,
+        videoUrl: solutionVideoUrl || undefined,
       }),
     })
     setSolutionTitle("")
+    setSolutionSummary("")
     setSolutionContent("")
+    setSolutionVideoUrl("")
+    setSolutionVisibility("public")
+    setSolutionAccessLevel("FREE")
+    setSolutionIsPremium(false)
     await load()
   }
 
@@ -1605,12 +1625,56 @@ export default function AdminProblemDetailPage() {
             value={solutionTitle}
             onChange={(e) => setSolutionTitle(e.target.value)}
           />
+          <Input
+            placeholder="题解摘要（免费可见）"
+            value={solutionSummary}
+            onChange={(e) => setSolutionSummary(e.target.value)}
+          />
           <textarea
             className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
             placeholder="题解内容"
             value={solutionContent}
             onChange={(e) => setSolutionContent(e.target.value)}
           />
+          <Input
+            placeholder="视频解析地址（可选）"
+            value={solutionVideoUrl}
+            onChange={(e) => setSolutionVideoUrl(e.target.value)}
+          />
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={solutionVisibility}
+            onChange={(e) =>
+              setSolutionVisibility(e.target.value as "public" | "vip" | "purchase" | "private")
+            }
+          >
+            <option value="public">public</option>
+            <option value="vip">vip</option>
+            <option value="purchase">purchase</option>
+            <option value="private">private</option>
+          </select>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={solutionAccessLevel}
+            onChange={(e) =>
+              setSolutionAccessLevel(
+                e.target.value as "FREE" | "MEMBERSHIP" | "PURCHASE" | "MEMBERSHIP_OR_PURCHASE",
+              )
+            }
+          >
+            <option value="FREE">FREE</option>
+            <option value="MEMBERSHIP">MEMBERSHIP</option>
+            <option value="PURCHASE">PURCHASE</option>
+            <option value="MEMBERSHIP_OR_PURCHASE">MEMBERSHIP_OR_PURCHASE</option>
+          </select>
+          <label className="flex items-center gap-2 text-sm text-muted-foreground">
+            <input
+              type="checkbox"
+              checked={solutionIsPremium}
+              onChange={(e) => setSolutionIsPremium(e.target.checked)}
+            />
+            标记为高级题解
+          </label>
           <Button onClick={addSolution}>新增题解</Button>
           <div className="text-sm text-muted-foreground">
             现有题解：{solutions.length} 条
