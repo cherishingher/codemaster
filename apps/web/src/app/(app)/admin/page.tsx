@@ -81,10 +81,28 @@ export default function AdminToolsPage() {
               <Link href="/admin/problem-sets">题单管理</Link>
             </Button>
             <Button asChild variant="secondary">
+              <Link href="/admin/store-products">商品管理</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/content">内容后台</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/organizations">机构后台</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/teachers">教师后台</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/classes">班级后台</Link>
+            </Button>
+            <Button asChild variant="secondary">
               <Link href="/admin/import-export">导入导出</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href="/admin/stats">运营统计</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/analytics">学习分析</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href="/admin/submit-test">提交测试</Link>
