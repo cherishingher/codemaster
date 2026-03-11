@@ -12,6 +12,7 @@ const RequestSchema = z.object({
 
 const CODE_TTL_MINUTES = 10
 const RATE_LIMIT_SECONDS = 60
+const IP_RATE_LIMIT_MAX_REQUESTS = 5
 
 type AliyunSendResult = {
   ok: boolean
@@ -144,10 +145,23 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "user_not_found", message: "账号不存在" }, { status: 404 })
   }
 
-  const latest = await db.verificationCode.findFirst({
-    where: { target, type, purpose },
-    orderBy: { createdAt: "desc" },
-  })
+  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  const ipWindowStart = new Date(Date.now() - RATE_LIMIT_SECONDS * 1000)
+  const [latest, recentIpRequestCount] = await Promise.all([
+    db.verificationCode.findFirst({
+      where: { target, type, purpose },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    }),
+    ip
+      ? db.verificationCode.count({
+          where: {
+            ip,
+            createdAt: { gte: ipWindowStart },
+          },
+        })
+      : Promise.resolve(0),
+  ])
   if (latest) {
     const secondsSince = (Date.now() - latest.createdAt.getTime()) / 1000
     if (secondsSince < RATE_LIMIT_SECONDS) {
@@ -158,9 +172,15 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  if (recentIpRequestCount >= IP_RATE_LIMIT_MAX_REQUESTS) {
+    return NextResponse.json(
+      { error: "too_many_requests", message: "请求过于频繁，请稍后再试" },
+      { status: 429 }
+    )
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString()
   const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
   const debug = process.env.DEBUG_AUTH_CODES === "true"
 
   let delivery: AliyunSendResult | null = null

@@ -46,7 +46,7 @@ const SolutionSchema = z.object({
   title: z.string(),
   content: z.string(),
   type: z.enum(["official", "ugc"]).optional(),
-  visibility: z.enum(["public", "private"]).optional(),
+  visibility: z.enum(["public", "vip", "purchase", "private"]).optional(),
   versionId: z.string().optional(),
   videoUrl: z.string().optional(),
 });

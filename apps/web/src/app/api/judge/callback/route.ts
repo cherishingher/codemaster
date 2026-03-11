@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { applyJudgeResult } from "@/lib/judge-stats";
@@ -21,7 +22,17 @@ const CallbackSchema = z.object({
 
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-judge-secret");
-  if (!secret || secret !== process.env.JUDGE_CALLBACK_SECRET) {
+  const configured = process.env.JUDGE_CALLBACK_SECRET;
+  const expectedBuffer = configured ? Buffer.from(configured) : null;
+  const providedBuffer = secret ? Buffer.from(secret) : null;
+
+  const authorized =
+    expectedBuffer &&
+    providedBuffer &&
+    expectedBuffer.length === providedBuffer.length &&
+    timingSafeEqual(expectedBuffer, providedBuffer);
+
+  if (!authorized) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

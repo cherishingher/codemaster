@@ -87,6 +87,62 @@ codemaster/
 └── package.json                # Monorepo 根脚本与 workspace 定义
 ```
 
+## 使用文档
+
+- 平台使用文档：[`docs/user-guide/README.md`](./docs/user-guide/README.md)
+- 适合产品、测试、运营、教研、实施、机构对接同学快速了解前台、后台和租户工作台能力
+- 分阶段发布说明：
+  - [`docs/releases/phase-1/README.md`](./docs/releases/phase-1/README.md)
+  - [`docs/releases/phase-2/README.md`](./docs/releases/phase-2/README.md)
+  - [`docs/releases/phase-3/README.md`](./docs/releases/phase-3/README.md)
+
+## 当前业务架构
+
+当前平台在基础 OJ 架构上，已经扩展为“学习平台 + 商业化 + 教学运营 + 机构预备层”的统一单仓系统。
+
+### 一期业务模块
+
+- 商品中心
+- 订单与支付
+- 会员体系
+- 内容权限中心
+- 高级题解 / 视频解析
+- 专题训练路径
+- 学习报告
+
+### 二期业务模块
+
+- 训练营系统
+- 模拟赛收费体系
+- 家长端增强
+- 内容生产后台
+- 教师 / 机构预备能力
+
+### 三期预埋与扩展方向
+
+- 学校 / 机构版 SaaS 打底
+- AI 智能辅导与学习规划
+- 社区互动与积分体系
+- 平台级学习分析与趋势洞察
+- 性能优化与安全加固
+
+### 分层说明
+
+- `apps/web`
+  - 前台页面、后台页面、机构工作台、开放 API 统一在同一套 Next.js 应用内
+- `packages/db`
+  - Prisma schema 与 migration，统一管理用户、题库、交易、内容、训练营、机构等核心模型
+- `services/judge-agent`
+  - 判题消费者，处理评测执行与结果回写
+
+### 核心模型复用原则
+
+- 用户与权限：统一复用 `User / Session / Role`
+- 题库与评测：统一复用 `Problem / Submission / UserProblemProgress`
+- 内容：统一复用 `Solution / Lesson / ProblemSet`
+- 商业化：统一复用 `Product / ProductSku / Order / Payment / Entitlement`
+- 机构预备层：基于 `Organization / TeachingGroup` 扩展，不重做底层账号体系
+
 ## 安装方法
 
 ### 1) 准备环境

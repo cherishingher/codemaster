@@ -4,6 +4,8 @@ import * as React from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { useAuth } from "@/lib/hooks/use-auth"
+import { useMembership } from "@/lib/hooks/use-membership"
+import { MembershipBadge } from "@/components/membership/membership-badge"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -16,9 +18,11 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Code2, Grid2X2, LogOut, User } from "lucide-react"
+import { Baby, BarChart3, BrainCircuit, Code2, Crown, Grid2X2, LogOut, User } from "lucide-react"
 
 const navItems = [
+  { href: "/camps", label: "训练营" },
+  { href: "/membership", label: "会员" },
   { href: "/learn", label: "视频学习" },
   { href: "/problems", label: "题库" },
   { href: "/submissions", label: "提交" },
@@ -29,6 +33,7 @@ const navItems = [
 
 export function Navbar() {
   const { user, loggedIn, logout } = useAuth()
+  const { membership } = useMembership(loggedIn)
   const pathname = usePathname()
   const isProblemWorkspace =
     pathname?.startsWith("/problems/") &&
@@ -107,66 +112,104 @@ export function Navbar() {
 
         <div className="ml-auto flex items-center gap-3">
           {loggedIn ? (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button
-                  variant="outline"
-                  className={cn(
-                    "relative gap-3 rounded-full pl-2 pr-4",
-                    isProblemWorkspace ? "h-12" : "h-14"
-                  )}
-                >
-                  <Avatar className={cn(isProblemWorkspace ? "h-7 w-7" : "h-8 w-8")}>
-                    <AvatarImage src={user?.avatar ?? undefined} alt={user?.name || "User"} />
-                    <AvatarFallback>{user?.name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
-                  </Avatar>
-                  <div className="hidden text-left md:block">
-                    <p className="max-w-32 truncate text-sm font-semibold text-foreground">
-                      {user?.name || "User"}
-                    </p>
-                    <p className="max-w-32 truncate text-xs text-muted-foreground">
-                      {user?.email ?? user?.phone ?? "已登录"}
-                    </p>
-                  </div>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none">{user?.name || "User"}</p>
-                    <p className="text-xs leading-none text-muted-foreground">
-                      {user?.email ?? user?.phone}
-                    </p>
-                  </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                {user?.role === "admin" || user?.roles?.includes("admin") ? (
+            <>
+              {membership ? (
+                <Link href="/membership" className="hidden lg:block">
+                  <MembershipBadge status={membership.status} compact />
+                </Link>
+              ) : null}
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "relative gap-3 rounded-full pl-2 pr-4",
+                      isProblemWorkspace ? "h-12" : "h-14"
+                    )}
+                  >
+                    <Avatar className={cn(isProblemWorkspace ? "h-7 w-7" : "h-8 w-8")}>
+                      <AvatarImage src={user?.avatar ?? undefined} alt={user?.name || "User"} />
+                      <AvatarFallback>{user?.name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
+                    </Avatar>
+                    <div className="hidden text-left md:block">
+                      <p className="max-w-32 truncate text-sm font-semibold text-foreground">
+                        {user?.name || "User"}
+                      </p>
+                      <p className="max-w-32 truncate text-xs text-muted-foreground">
+                        {user?.email ?? user?.phone ?? "已登录"}
+                      </p>
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-2">
+                      <p className="text-sm font-medium leading-none">{user?.name || "User"}</p>
+                      <p className="text-xs leading-none text-muted-foreground">
+                        {user?.email ?? user?.phone}
+                      </p>
+                      {membership ? <MembershipBadge status={membership.status} compact className="w-fit" /> : null}
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {user?.role === "admin" || user?.roles?.includes("admin") ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/admin">
+                        <Grid2X2 className="mr-2 h-4 w-4" />
+                        <span>管理后台</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : null}
                   <DropdownMenuItem asChild>
-                    <Link href="/admin">
-                      <Grid2X2 className="mr-2 h-4 w-4" />
-                      <span>管理后台</span>
+                    <Link href="/membership">
+                      <Crown className="mr-2 h-4 w-4" />
+                      <span>会员中心</span>
                     </Link>
                   </DropdownMenuItem>
-                ) : null}
-                <DropdownMenuItem asChild>
-                  <Link href="/profile">
-                    <User className="mr-2 h-4 w-4" />
-                    <span>个人中心</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuItem asChild>
-                  <Link href="/submissions">
-                    <Code2 className="mr-2 h-4 w-4" />
-                    <span>我的提交</span>
-                  </Link>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>退出登录</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+                  <DropdownMenuItem asChild>
+                    <Link href="/profile">
+                      <User className="mr-2 h-4 w-4" />
+                      <span>个人中心</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/reports/learning">
+                      <BarChart3 className="mr-2 h-4 w-4" />
+                      <span>学习报告</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/ai">
+                      <BrainCircuit className="mr-2 h-4 w-4" />
+                      <span>AI 辅导</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/tenant">
+                      <Grid2X2 className="mr-2 h-4 w-4" />
+                      <span>机构工作台</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/parent">
+                      <Baby className="mr-2 h-4 w-4" />
+                      <span>家长报告</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/submissions">
+                      <Code2 className="mr-2 h-4 w-4" />
+                      <span>我的提交</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>退出登录</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : (
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="hidden md:inline-flex border-2 border-border bg-white px-3 py-1">

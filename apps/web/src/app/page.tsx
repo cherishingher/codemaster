@@ -148,7 +148,7 @@ export default async function Home() {
         <SectionHeading
           eyebrow="视频学习"
           title="把课程视频直接放进主站"
-          description="同一套账号里区分免费版和付费版。免费版能看试听课，付费版解锁完整课程，不需要跳出网站。"
+          description="同一套账号里区分免费版和 VIP 会员。免费版能看试听课，VIP 会员解锁完整课程，不需要跳出网站。"
           action={
             <Button asChild variant="secondary">
               <Link href="/learn">
@@ -174,7 +174,7 @@ export default async function Home() {
                   </p>
                 </div>
                 <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">付费版</p>
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">VIP 会员</p>
                   <p className="mt-2 text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
                 </div>
               </div>
@@ -196,7 +196,7 @@ export default async function Home() {
                   </div>
                 </div>
                 <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5">
-                  <p className="text-sm font-semibold text-foreground">付费版</p>
+                  <p className="text-sm font-semibold text-foreground">VIP 会员</p>
                   <div className="mt-3 space-y-2 text-sm text-muted-foreground">
                     <p className="inline-flex items-start gap-2">
                       <Lock className="mt-0.5 size-4 shrink-0 text-primary" />

@@ -58,6 +58,23 @@ function createUniqueHeadingId(baseId: string, counts: Map<string, number>) {
   return current === 0 ? baseId : `${baseId}-${current + 1}`
 }
 
+function sanitizeMarkdownHref(href: string) {
+  const trimmed = href.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith("#")) return trimmed
+  if (/^(\/(?!\/)|\.{1,2}\/)/.test(trimmed)) return trimmed
+
+  try {
+    const parsed = new URL(trimmed)
+    if (["http:", "https:", "mailto:", "tel:"].includes(parsed.protocol)) {
+      return trimmed
+    }
+    return null
+  } catch {
+    return null
+  }
+}
+
 function flattenMarkdownChildren(node: React.ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node)
   if (Array.isArray(node)) return node.map(flattenMarkdownChildren).join("")
@@ -148,16 +165,20 @@ export function ProblemMarkdown({ markdown, className }: ProblemMarkdownProps) {
             if (!href) {
               return <span {...props}>{children}</span>
             }
-            const isExternal = /^https?:\/\//i.test(href)
+            const safeHref = sanitizeMarkdownHref(href)
+            if (!safeHref) {
+              return <span {...props}>{children}</span>
+            }
+            const isExternal = /^(https?:|mailto:|tel:)/i.test(safeHref)
             if (isExternal) {
               return (
-                <a href={href} target="_blank" rel="noreferrer" {...props}>
+                <a href={safeHref} target="_blank" rel="noopener noreferrer" {...props}>
                   {children}
                 </a>
               )
             }
             return (
-              <Link href={href} {...props}>
+              <Link href={safeHref} {...props}>
                 {children}
               </Link>
             )

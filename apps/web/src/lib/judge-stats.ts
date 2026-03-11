@@ -4,6 +4,7 @@ import {
   isFinalJudgeStatus,
   toSubmissionJudgeResult,
 } from "@/lib/oj";
+import { awardPointsInTx } from "@/server/modules/community-center/points.service";
 
 export function mapJudgeStatus(code: number) {
   switch (code) {
@@ -197,11 +198,13 @@ export async function applyJudgeResult(args: {
       },
     });
 
+    const solvedAt = existingProgress?.solvedAt ?? (accepted ? new Date() : null);
     const nextStatus = deriveUserProblemStatus({
       attempts: (existingProgress?.attempts ?? 0) + 1,
-      solvedAt: existingProgress?.solvedAt ?? (accepted ? new Date() : null),
+      solvedAt,
       lastStatus: args.status,
     });
+    const isFirstAccepted = accepted && !existingProgress?.solvedAt;
 
     if (existingProgress) {
       await tx.userProblemProgress.update({
@@ -217,7 +220,7 @@ export async function applyJudgeResult(args: {
           bestScore: Math.max(existingProgress.bestScore, args.score),
           lastStatus: args.status,
           lastSubmissionId: submission.id,
-          solvedAt: existingProgress.solvedAt ?? (accepted ? new Date() : null),
+          solvedAt,
         },
       });
     } else {
@@ -230,7 +233,22 @@ export async function applyJudgeResult(args: {
           bestScore: args.score,
           lastStatus: args.status,
           lastSubmissionId: submission.id,
-          solvedAt: accepted ? new Date() : null,
+          solvedAt,
+        },
+      });
+    }
+
+    if (isFirstAccepted) {
+      await awardPointsInTx(tx, submission.userId, {
+        actionType: "problem_first_accept",
+        actionKey: `problem_first_accept:${submission.userId}:${submission.problemId}`,
+        pointsDelta: 8,
+        relatedType: "problem",
+        relatedId: submission.problemId,
+        note: "首次通过题目",
+        metadata: {
+          submissionId: submission.id,
+          source: "judge_result",
         },
       });
     }
