@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client"
 import { NextResponse } from "next/server"
+import { isAdminDevRouteEnabled } from "@/lib/admin-dev"
 import { withAuth } from "@/lib/authz"
 import { hashPassword } from "@/lib/auth"
 import { db } from "@/lib/db"
+import { createLogger } from "@/lib/logger"
 import { SubmissionJudgeResult, UserProblemStatus } from "@/lib/oj"
 import {
   buildJudgeConfigCreateManyInput,
@@ -11,6 +13,8 @@ import {
 } from "@/lib/problem-admin"
 import { storeTextAsset } from "@/lib/storage"
 import { ensureVipMembershipProduct } from "@/server/modules/membership/service"
+
+const logger = createLogger("admin-dev-seed")
 
 type DemoUserSeed = {
   email: string
@@ -1177,54 +1181,67 @@ async function refreshProblemStats(problemIds: string[]) {
 
 export const POST = withAuth(
   async (_req, _ctx, admin) => {
-    await ensureRole("student")
-    await ensureRole("teacher")
-    await ensureRole("parent")
-
-    const users = new Map<string, Awaited<ReturnType<typeof ensureDemoUser>>>()
-    for (const user of DEMO_USERS) {
-      users.set(user.email, await ensureDemoUser(user))
+    if (!isAdminDevRouteEnabled()) {
+      return NextResponse.json({ error: "not_found" }, { status: 404 })
     }
 
-    const demoStudent = users.get("demo@student.local")
-    const rivalStudent = users.get("rival@student.local")
-    const demoParent = users.get("demo@parent.local")
-    const demoTeacher = users.get("demo@teacher.local")
-
-    if (!demoStudent || !rivalStudent || !demoParent || !demoTeacher) {
-      return NextResponse.json({ ok: false, error: "seed_user_creation_failed" }, { status: 500 })
-    }
-
-    const ensuredProblems = new Map<string, EnsuredProblem>()
-    for (const seed of DEMO_PROBLEMS) {
-      const problem = await ensureProblem(seed, admin.id)
-      ensuredProblems.set(seed.key, problem)
-    }
-
-    const videoSeed = await ensureCourseVideo(admin.id)
-
-    const dpProblemSet = await ensureProblemSet(
-      admin.id,
-      "Seed 动态规划题单",
-      "seed-dp-problem-set",
-      [
-        ensuredProblems.get("stairs-dp")?.id,
-        ensuredProblems.get("bag-dp")?.id,
-        ensuredProblems.get("union-find")?.id,
-      ].filter((item): item is string => Boolean(item)),
-    )
-
-    await ensureWorkflowLog({
-      resourceType: "problem_set",
-      resourceId: dpProblemSet.id,
-      fromStatus: "draft",
-      toStatus: "published",
-      action: "seed_publish",
-      note: "生成最小可用训练路径题单",
-      operatorId: admin.id,
+    logger.info("seed_started", {
+      adminId: admin.id,
+      adminEmail: admin.email ?? null,
     })
 
-    const contentPackTargets = [
+    try {
+      await ensureRole("student")
+      await ensureRole("teacher")
+      await ensureRole("parent")
+
+      const users = new Map<string, Awaited<ReturnType<typeof ensureDemoUser>>>()
+      for (const user of DEMO_USERS) {
+        users.set(user.email, await ensureDemoUser(user))
+      }
+
+      const demoStudent = users.get("demo@student.local")
+      const rivalStudent = users.get("rival@student.local")
+      const demoParent = users.get("demo@parent.local")
+      const demoTeacher = users.get("demo@teacher.local")
+
+      if (!demoStudent || !rivalStudent || !demoParent || !demoTeacher) {
+        logger.error("seed_user_creation_failed", {
+          adminId: admin.id,
+        })
+        return NextResponse.json({ ok: false, error: "seed_user_creation_failed" }, { status: 500 })
+      }
+
+      const ensuredProblems = new Map<string, EnsuredProblem>()
+      for (const seed of DEMO_PROBLEMS) {
+        const problem = await ensureProblem(seed, admin.id)
+        ensuredProblems.set(seed.key, problem)
+      }
+
+      const videoSeed = await ensureCourseVideo(admin.id)
+
+      const dpProblemSet = await ensureProblemSet(
+        admin.id,
+        "Seed 动态规划题单",
+        "seed-dp-problem-set",
+        [
+          ensuredProblems.get("stairs-dp")?.id,
+          ensuredProblems.get("bag-dp")?.id,
+          ensuredProblems.get("union-find")?.id,
+        ].filter((item): item is string => Boolean(item)),
+      )
+
+      await ensureWorkflowLog({
+        resourceType: "problem_set",
+        resourceId: dpProblemSet.id,
+        fromStatus: "draft",
+        toStatus: "published",
+        action: "seed_publish",
+        note: "生成最小可用训练路径题单",
+        operatorId: admin.id,
+      })
+
+      const contentPackTargets = [
       {
         type: "training_path",
         id: "dynamic-programming",
@@ -2533,45 +2550,63 @@ export const POST = withAuth(
       operatorId: admin.id,
     })
 
-    return NextResponse.json({
-      ok: true,
-      message: "seed_ready",
-      users: DEMO_USERS.map((item) => ({
-        email: item.email,
-        password: item.password,
-        roles: item.roles,
-      })),
-      paths: ["intro", "search", "dynamic-programming", "graph-theory", "advanced-algorithms", "interview-prep"],
-      contests: {
-        upcoming: upcomingContest.slug,
-        finished: finishedContest.slug,
-      },
-      camp: {
-        slug: camp.slug,
-        classSlug: campClass.slug,
-      },
-      contentPack: {
-        slug: contentPack.product.slug,
-        includedTargetCount: contentPackTargets.length,
-      },
-      course: {
-        slug: videoSeed.course.slug,
-        lessonSlug: videoSeed.lesson.slug,
-      },
-      organization: {
-        slug: organization.slug,
-        classSlug: teachingGroup.slug,
-      },
-      community: {
-        groupSlug: studyGroup.slug,
-        postId: post.id,
-      },
-      notes: [
-        "部署到云服务器后，可用管理员账号调用 POST /api/admin/dev/seed 同步最小可用数据。",
-        "demo@student.local 已拥有 VIP、内容包、训练营和赛后复盘通行证，可直接验证解锁链路。",
-        "demo@parent.local 可用于验证家长绑定与增强报告，demo@teacher.local 可用于验证班级和后台内容管理。",
-      ],
-    })
+      logger.info("seed_completed", {
+        adminId: admin.id,
+        userCount: DEMO_USERS.length,
+        pathCount: 6,
+        upcomingContestSlug: upcomingContest.slug,
+        finishedContestSlug: finishedContest.slug,
+        campSlug: camp.slug,
+        contentPackSlug: contentPack.product.slug,
+        organizationSlug: organization.slug,
+      })
+
+      return NextResponse.json({
+        ok: true,
+        message: "seed_ready",
+        users: DEMO_USERS.map((item) => ({
+          email: item.email,
+          password: item.password,
+          roles: item.roles,
+        })),
+        paths: ["intro", "search", "dynamic-programming", "graph-theory", "advanced-algorithms", "interview-prep"],
+        contests: {
+          upcoming: upcomingContest.slug,
+          finished: finishedContest.slug,
+        },
+        camp: {
+          slug: camp.slug,
+          classSlug: campClass.slug,
+        },
+        contentPack: {
+          slug: contentPack.product.slug,
+          includedTargetCount: contentPackTargets.length,
+        },
+        course: {
+          slug: videoSeed.course.slug,
+          lessonSlug: videoSeed.lesson.slug,
+        },
+        organization: {
+          slug: organization.slug,
+          classSlug: teachingGroup.slug,
+        },
+        community: {
+          groupSlug: studyGroup.slug,
+          postId: post.id,
+        },
+        notes: [
+          "部署到云服务器后，可用管理员账号调用 POST /api/admin/dev/seed 同步最小可用数据。",
+          "demo@student.local 已拥有 VIP、内容包、训练营和赛后复盘通行证，可直接验证解锁链路。",
+          "demo@parent.local 可用于验证家长绑定与增强报告，demo@teacher.local 可用于验证班级和后台内容管理。",
+        ],
+      })
+    } catch (error) {
+      logger.error("seed_failed", {
+        adminId: admin.id,
+        error,
+      })
+      throw error
+    }
   },
   { roles: "admin" },
 )

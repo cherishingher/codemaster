@@ -19,6 +19,10 @@ type Overview = {
   topProblems: { problemId: string; title: string; total: number; accepted: number }[]
 }
 
+type OverviewResponse = {
+  data: Overview
+}
+
 export default function AdminStatsPage() {
   const [data, setData] = React.useState<Overview | null>(null)
   const [error, setError] = React.useState("")
@@ -26,12 +30,12 @@ export default function AdminStatsPage() {
   React.useEffect(() => {
     fetch("/api/admin/stats/overview", { credentials: "include" })
       .then(async (r) => {
-        const payload = await r.json().catch(() => null)
+        const payload = (await r.json().catch(() => null)) as Overview | OverviewResponse | null
         if (!r.ok) {
-          setError(payload?.error ?? "unauthorized")
+          setError((payload as { error?: string } | null)?.error ?? "unauthorized")
           return
         }
-        setData(payload)
+        setData(("data" in (payload ?? {}) ? (payload as OverviewResponse).data : payload) as Overview)
       })
   }, [])
 

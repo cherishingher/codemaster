@@ -77,7 +77,7 @@ export function LoginForm() {
               <p className="text-sm text-destructive">{errors.identifier.message}</p>
             )}
             <p className="text-xs text-muted-foreground">
-              支持邮箱或手机号登录，系统会自动识别并规范化格式。
+              支持邮箱或手机号登录，直接输入即可。
             </p>
           </div>
           <div className="grid gap-2">
@@ -107,7 +107,7 @@ export function LoginForm() {
               {error}
             </div>
           ) : null}
-          <Button className="w-full" disabled={isLoading}>
+          <Button type="submit" className="w-full" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             登录
           </Button>

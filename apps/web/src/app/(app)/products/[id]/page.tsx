@@ -120,7 +120,7 @@ export default function ProductDetailPage() {
               <div className="space-y-2">
                 <h1 className="text-3xl font-semibold tracking-tight text-foreground">{product.name}</h1>
                 <p className="text-base leading-8 text-muted-foreground">
-                  {product.description || product.summary || "该商品已配置基础信息，可被订单模块直接复用。"}
+                  {product.description || product.summary || "选择适合你的方案，完成购买后即可解锁对应内容和权益。"}
                 </p>
               </div>
               <ProductTagList tags={product.tags} />
@@ -158,7 +158,7 @@ export default function ProductDetailPage() {
                   <div>
                     <h2 className="text-lg font-semibold text-foreground">包含内容</h2>
                     <p className="text-sm text-muted-foreground">
-                      内容包会复用统一权限中心，购买后对应题解、视频和训练路径会自动解锁。
+                      购买后，这个内容包会一次性解锁对应的训练路径、题解、视频解析和专题题单。
                     </p>
                   </div>
                   <Button asChild variant="secondary" size="sm">
@@ -227,7 +227,7 @@ export default function ProductDetailPage() {
               <div>
                 <h2 className="text-lg font-semibold text-foreground">规格与价格</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  当前先完成 SKU 展示，支付模块会直接复用这些规格数据。
+                  选择适合你的规格后即可进入结算，价格、时长和权益会按当前选择生效。
                 </p>
               </div>
               <div className="space-y-3">
@@ -291,9 +291,9 @@ export default function ProductDetailPage() {
               <div className="flex items-start gap-3">
                 <Lock className="mt-1 size-5 text-primary" />
                 <div>
-                  <div className="text-base font-semibold text-foreground">mock 支付链路</div>
+                  <div className="text-base font-semibold text-foreground">购买说明</div>
                   <div className="text-sm text-muted-foreground">
-                    当前会进入标准结算页与支付中页面，再由 mock 回调完成支付和权益发放，后续正式支付可以直接复用。
+                    提交订单后会进入标准结算流程。支付成功后，商品权益会自动到账并立即更新访问状态。
                   </div>
                 </div>
               </div>

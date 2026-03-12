@@ -12,3 +12,4 @@ apps/web/storage/
 apps/web/.next/
 apps/web/node_modules/
 tmp/
+backups/

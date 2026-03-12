@@ -1,5 +1,7 @@
 import { Prisma } from "@prisma/client"
 import { db } from "@/lib/db"
+import { createLogger } from "@/lib/logger"
+import { recordPaymentCallbackMetric } from "@/lib/ops-metrics"
 import type {
   CreatePaymentResponse,
   PayOrderResponse,
@@ -28,6 +30,8 @@ type PaymentCallbackActor = {
   trusted?: boolean
 }
 
+const logger = createLogger("payment")
+
 async function loadPaymentByNo(tx: Prisma.TransactionClient | typeof db, paymentNo: string) {
   return tx.payment.findUnique({
     where: { paymentNo },
@@ -52,6 +56,12 @@ async function finalizeSuccessfulPayment(
   const paidAt = payment.paidAt ?? callbackAt
 
   if (payment.status === "SUCCEEDED") {
+    recordPaymentCallbackMetric("replayed")
+    logger.info("callback_replayed", {
+      paymentNo,
+      orderId: payment.orderId,
+      channel: payment.channel,
+    })
     await tx.payment.update({
       where: { id: payment.id },
       data: {
@@ -176,6 +186,12 @@ export async function createPaymentForOrder(
     })
 
     if (existing) {
+      logger.info("payment_reused", {
+        orderId: order.id,
+        paymentNo: existing.paymentNo,
+        channel: input.channel,
+        userId,
+      })
       if (order.status !== "PENDING") {
         await tx.order.update({
           where: { id: order.id },
@@ -209,6 +225,14 @@ export async function createPaymentForOrder(
         },
       },
       ...paymentArgs,
+    })
+
+    logger.info("payment_created", {
+      orderId: order.id,
+      paymentNo: created.paymentNo,
+      channel: input.channel,
+      amountCents: order.amountCents,
+      userId,
     })
 
     await tx.order.updateMany({
@@ -252,12 +276,27 @@ export async function handlePaymentCallback(
     const isAdmin = Boolean(actor.roles?.includes("admin"))
     if (!isTrusted) {
       if (!actor.userId) {
+        logger.warn("callback_rejected", {
+          paymentNo: input.paymentNo,
+          reason: "missing_actor",
+        })
         throw new OrderCenterError("unauthorized", "未授权的支付回调请求", 401)
       }
       if (!isAdmin && payment.order.userId !== actor.userId) {
+        logger.warn("callback_rejected", {
+          paymentNo: input.paymentNo,
+          actorUserId: actor.userId,
+          reason: "wrong_owner",
+        })
         throw new OrderCenterError("forbidden", "无权处理该支付单", 403)
       }
       if (payment.channel !== "MOCK") {
+        logger.warn("callback_rejected", {
+          paymentNo: input.paymentNo,
+          actorUserId: actor.userId,
+          channel: payment.channel,
+          reason: "unsupported_channel",
+        })
         throw new OrderCenterError("forbidden", "当前支付通道不支持客户端回调", 403)
       }
     }
@@ -266,6 +305,13 @@ export async function handlePaymentCallback(
 
     if (input.status === "SUCCEEDED") {
       const refreshed = await finalizeSuccessfulPayment(tx, input.paymentNo, callbackAt, input)
+      recordPaymentCallbackMetric("succeeded")
+      logger.info("callback_succeeded", {
+        paymentNo: refreshed.paymentNo,
+        orderId: refreshed.order.id,
+        channel: refreshed.channel,
+        trusted: isTrusted,
+      })
 
       return {
         data: mapPayment(refreshed),
@@ -278,12 +324,26 @@ export async function handlePaymentCallback(
         throw new OrderCenterError("payment_not_found", "支付单不存在", 404)
       }
 
+      recordPaymentCallbackMetric("replayed")
+      logger.info("callback_duplicate_success", {
+        paymentNo: refreshed.paymentNo,
+        orderId: refreshed.order.id,
+        channel: refreshed.channel,
+        trusted: isTrusted,
+      })
+
       return {
         data: mapPayment(refreshed),
       }
     }
 
     if (payment.status === "FAILED") {
+      recordPaymentCallbackMetric("replayed")
+      logger.info("callback_duplicate_failed", {
+        paymentNo: payment.paymentNo,
+        orderId: payment.orderId,
+        channel: payment.channel,
+      })
       return {
         data: mapPayment(payment),
       }
@@ -325,6 +385,14 @@ export async function handlePaymentCallback(
       })
       await releaseCampEnrollmentForOrder(tx, latestPayment.orderId)
       await releaseContestRegistrationForOrder(tx, latestPayment.orderId)
+      recordPaymentCallbackMetric("failed")
+      logger.warn("callback_failed", {
+        paymentNo: latestPayment.paymentNo,
+        orderId: latestPayment.orderId,
+        channel: latestPayment.channel,
+        trusted: isTrusted,
+        failureReason: input.failureReason ?? "MOCK 支付失败",
+      })
     }
 
     const refreshed = await loadPaymentByNo(tx, input.paymentNo)

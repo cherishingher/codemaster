@@ -4,13 +4,14 @@ import * as React from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2, CheckCircle2, XCircle, Clock } from "lucide-react"
 import { Submission, SubmissionStatus } from "@/lib/hooks/use-submission"
+import { getSubmissionStatusLabel } from "@/lib/submissions"
 
 interface SubmissionResultProps {
   submission: Submission | undefined;
   isLoading: boolean;
 }
 
-type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>;
+type IconType = React.ComponentType<React.SVGProps<SVGSVGElement>>
 
 const statusMap: Record<SubmissionStatus, { label: string; color: string; icon: IconType }> = {
   PENDING: { label: "等待中", color: "border-yellow-500/40 bg-yellow-500/10 text-yellow-700", icon: Clock },
@@ -23,15 +24,19 @@ const statusMap: Record<SubmissionStatus, { label: string; color: string; icon: 
   RUNTIME_ERROR: { label: "运行错误", color: "border-red-500/40 bg-red-500/10 text-red-700", icon: XCircle },
   COMPILE_ERROR: { label: "编译错误", color: "border-yellow-600/40 bg-yellow-500/10 text-yellow-800", icon: XCircle },
   SYSTEM_ERROR: { label: "系统错误", color: "border-border/60 bg-muted text-muted-foreground", icon: XCircle },
-};
+}
 
 export function SubmissionResult({ submission, isLoading }: SubmissionResultProps) {
   if (!submission && !isLoading) return null;
 
   const status = submission?.status || 'PENDING';
-  const config = statusMap[status] || statusMap.PENDING;
-  const Icon = config.icon;
-  const visibleCases = submission?.cases ?? [];
+  const config = statusMap[status] || statusMap.PENDING
+  const Icon = config.icon
+  const visibleCases = submission?.cases ?? []
+  const label =
+    submission?.status && submission.status !== "ACCEPTED"
+      ? getSubmissionStatusLabel(submission.status)
+      : config.label
 
   return (
     <Card className="mt-4 bg-background">
@@ -44,7 +49,7 @@ export function SubmissionResult({ submission, isLoading }: SubmissionResultProp
         <div className="flex items-center justify-between">
           <div className={`flex items-center gap-2 rounded-full border px-3 py-1 ${config.color}`}>
             <Icon className={`h-4 w-4 ${status === 'JUDGING' ? 'animate-spin' : ''}`} />
-            <span className="font-medium">{config.label}</span>
+            <span className="font-medium">{label}</span>
           </div>
           {submission && (
             <div className="text-sm text-muted-foreground space-x-4">

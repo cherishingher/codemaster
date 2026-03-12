@@ -1,11 +1,6 @@
-import Redis from "ioredis";
+import { getRequiredRedisClient } from "@/lib/redis";
 
-const redisUrl = process.env.REDIS_URL;
-if (!redisUrl) {
-  throw new Error("REDIS_URL is not set");
-}
-
-export const redis = new Redis(redisUrl);
+export const redis = getRequiredRedisClient();
 
 export async function pushJudgeJob(payload: Record<string, unknown>) {
   await redis.xadd("judge:jobs", "*", "payload", JSON.stringify(payload));

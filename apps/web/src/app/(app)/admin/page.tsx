@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
+import { isAdminDevToolsVisible } from "@/lib/admin-dev"
 
 const defaultPayload = {
   problems: [
@@ -37,6 +38,7 @@ const defaultPayload = {
 }
 
 export default function AdminToolsPage() {
+  const showAdminDevTools = isAdminDevToolsVisible()
   const [endpoint, setEndpoint] = React.useState("/api/admin/problems/import")
   const [method, setMethod] = React.useState("POST")
   const [body, setBody] = React.useState(JSON.stringify(defaultPayload, null, 2))
@@ -65,9 +67,9 @@ export default function AdminToolsPage() {
   return (
     <div className="container py-8 px-4 md:px-6">
       <div className="mb-6">
-        <h1 className="text-3xl font-bold tracking-tight">Admin Toolbox</h1>
+        <h1 className="text-3xl font-bold tracking-tight">运营与维护后台</h1>
         <p className="text-muted-foreground mt-2">
-          快速调用后端管理接口（导入/导出/题库管理/自测）
+          正式运营入口集中在上方；开发自检和演示工具统一收在下方，避免和日常配置流程混用。
         </p>
       </div>
 
@@ -111,6 +113,12 @@ export default function AdminToolsPage() {
         </Card>
         <Card>
           <CardContent className="p-6 space-y-4">
+            <div className="space-y-2">
+              <h2 className="text-lg font-semibold text-foreground">开发与诊断工具</h2>
+              <p className="text-sm text-muted-foreground">
+                仅在联调接口、生成演示数据或执行后台自检时使用。日常运营优先使用上方正式入口。
+              </p>
+            </div>
             <div className="grid gap-2">
               <label className="text-sm text-muted-foreground">Endpoint</label>
               <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
@@ -140,26 +148,30 @@ export default function AdminToolsPage() {
               <Button onClick={send} disabled={loading}>
                 {loading ? "请求中..." : "发送请求"}
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setEndpoint("/api/admin/dev/self-test")
-                  setMethod("GET")
-                  setBody("")
-                }}
-              >
-                自测
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  setEndpoint("/api/admin/dev/seed")
-                  setMethod("POST")
-                  setBody("")
-                }}
-              >
-                生成 Mock 数据
-              </Button>
+              {showAdminDevTools ? (
+                <>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEndpoint("/api/admin/dev/self-test")
+                      setMethod("GET")
+                      setBody("")
+                    }}
+                  >
+                    自测
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    onClick={() => {
+                      setEndpoint("/api/admin/dev/seed")
+                      setMethod("POST")
+                      setBody("")
+                    }}
+                  >
+                    生成 Mock 数据
+                  </Button>
+                </>
+              ) : null}
               <Button
                 variant="secondary"
                 onClick={() => {
@@ -181,6 +193,11 @@ export default function AdminToolsPage() {
                 导出题单(JSON)
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground">
+              {showAdminDevTools
+                ? "当前环境已开启开发工具入口，可用于自测、诊断和演示数据初始化。"
+                : "当前环境未开启开发工具入口，仅保留正式运营能力。"}
+            </p>
           </CardContent>
         </Card>
 

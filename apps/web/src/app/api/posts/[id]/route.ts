@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser } from "@/lib/authz";
+import { jsonData } from "@/lib/api-response";
 
 export async function GET(
   req: NextRequest,
@@ -25,7 +26,7 @@ export async function GET(
     }
   }
 
-  return NextResponse.json({
+  return jsonData({
     id: post.id,
     title: post.title,
     content: post.content,

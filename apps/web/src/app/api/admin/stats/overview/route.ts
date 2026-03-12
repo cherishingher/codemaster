@@ -1,6 +1,6 @@
-import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { jsonData } from "@/lib/api-response";
 
 export const GET = withAuth(async () => {
   const [
@@ -49,7 +49,7 @@ export const GET = withAuth(async () => {
     LIMIT 10;
   `;
 
-  return NextResponse.json({
+  return jsonData({
     counts: {
       users,
       problems,

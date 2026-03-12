@@ -1,5 +1,6 @@
 import { UserProblemStatus } from "@/lib/oj"
 import { db } from "@/lib/db"
+import { getOrSetJsonCache } from "@/lib/cache"
 import type {
   LearningReportData,
   LearningReportDifficultyBreakdown,
@@ -55,6 +56,8 @@ type LearningWindowData = {
   nextStepAdvice: string[]
   emptyState: LearningReportEmptyState | null
 }
+
+const LEARNING_REPORT_CACHE_TTL_SECONDS = 300
 
 function normalizeScope(value: string): LearningReportScope {
   return value === "basic" ? "basic" : "enhanced"
@@ -291,13 +294,27 @@ async function loadLearningWindowData(viewer: AccessViewer): Promise<LearningWin
     throw new Error("unauthorized")
   }
 
+  const rolesKey = [...(viewer.roles ?? [])].sort().join(",") || "none"
+  return getOrSetJsonCache(
+    `learning-report:${viewer.id}:${rolesKey}:${LEARNING_REPORT_WINDOW_DAYS}`,
+    LEARNING_REPORT_CACHE_TTL_SECONDS,
+    () => loadLearningWindowDataUncached(viewer),
+  )
+}
+
+async function loadLearningWindowDataUncached(viewer: AccessViewer): Promise<LearningWindowData> {
+  if (!viewer.id) {
+    throw new Error("unauthorized")
+  }
+
+  const userId = viewer.id
   const window = getWindowRange()
   const startAt = new Date(window.startAt)
 
   const [submissions, trainingPathList] = await Promise.all([
     db.submission.findMany({
       where: {
-        userId: viewer.id,
+        userId,
         createdAt: { gte: startAt },
       },
       orderBy: { createdAt: "desc" },
@@ -314,7 +331,7 @@ async function loadLearningWindowData(viewer: AccessViewer): Promise<LearningWin
 
   const progressRows = await db.userProblemProgress.findMany({
     where: {
-      userId: viewer.id,
+      userId,
       OR: [
         { updatedAt: { gte: startAt } },
         { solvedAt: { gte: startAt } },

@@ -134,7 +134,7 @@ export function TrainingPathsPage() {
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Training Paths</p>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">专题训练路径</h1>
           <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-            当前已覆盖入门、搜索、动态规划、图论，并补充高级算法和算法面试两条进阶路径。底层继续复用现有题目模型、标签和用户做题记录，不单独造新的题库体系。
+            当前已覆盖入门、搜索、动态规划、图论，并补充高级算法和算法面试两条进阶路径。你可以先从免费路径起步，再按专题或阶段继续进阶。
           </p>
         </div>
         <Button asChild variant="secondary">
@@ -162,7 +162,7 @@ export function TrainingPathsPage() {
             </div>
             <p className="text-lg font-semibold text-foreground">高级路径按会员或已购商品统一解锁。</p>
             <p className="text-sm leading-7 text-muted-foreground">
-              动态规划、图论、高级算法和面试路径都直接接统一权限中心，未解锁时只返回路径介绍和章节摘要。
+              动态规划、图论、高级算法和面试路径适合做专题突破；未解锁时可以先看路径介绍，再选择 VIP 或内容包继续深入。
             </p>
           </div>
         </div>
@@ -172,14 +172,14 @@ export function TrainingPathsPage() {
         <ProductPromoPanel
           badge="训练路径商品"
           title="把专题训练做成可复购商品"
-          description="训练路径商品与当前路径 ID 绑定，订单支付成功后会通过统一权限中心解锁对应路径。"
+          description="如果你已经确定目标专题，可以直接购买对应内容包或路径商品，解锁完整训练内容。"
           href="/products?type=training_path"
           ctaLabel="查看训练路径商品"
         />
         <ProductPromoPanel
           badge="VIP 会员"
           title="高级路径可直接纳入 VIP"
-          description="VIP 用户不需要重复下单，刷新页面后即可直接访问路径详情和完整题目清单。"
+          description="开通 VIP 后可以继续查看高级路径、题解、视频解析和增强版学习报告。"
           href="/membership"
           ctaLabel="查看会员权益"
         />

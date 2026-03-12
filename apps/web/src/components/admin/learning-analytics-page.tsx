@@ -9,6 +9,9 @@ import {
   formatReportRate,
 } from "@/lib/learning-reports"
 import type {
+  OpsOverviewResponse,
+} from "@/lib/ops-monitoring"
+import type {
   PlatformLearningOverviewResponse,
   PlatformLearningTrendsResponse,
 } from "@/lib/learning-analytics"
@@ -47,6 +50,10 @@ function TrendBars({
 }
 
 export function AdminLearningAnalyticsPage() {
+  const { data: opsResponse, error: opsError, mutate: mutateOps } = useSWR<OpsOverviewResponse>(
+    "/admin/analytics/ops/overview",
+    () => api.admin.analytics.ops.overview<OpsOverviewResponse>(),
+  )
   const { data: overviewResponse, error: overviewError, mutate: mutateOverview } = useSWR<PlatformLearningOverviewResponse>(
     "/admin/analytics/learning/overview",
     () => api.admin.analytics.learning.overview<PlatformLearningOverviewResponse>(),
@@ -57,14 +64,14 @@ export function AdminLearningAnalyticsPage() {
   )
 
   const retry = React.useCallback(() => {
-    void Promise.all([mutateOverview(), mutateTrends()])
-  }, [mutateOverview, mutateTrends])
+    void Promise.all([mutateOps(), mutateOverview(), mutateTrends()])
+  }, [mutateOps, mutateOverview, mutateTrends])
 
-  if (!overviewResponse || !trendsResponse) {
+  if (!opsResponse || !overviewResponse || !trendsResponse) {
     return <div className="page-wrap py-10 text-sm text-muted-foreground">平台学习分析加载中...</div>
   }
 
-  if (overviewError || trendsError) {
+  if (opsError || overviewError || trendsError) {
     return (
       <div className="page-wrap py-10">
         <Card className="bg-background">
@@ -80,6 +87,7 @@ export function AdminLearningAnalyticsPage() {
     )
   }
 
+  const ops = opsResponse.data
   const overview = overviewResponse.data
   const trends = trendsResponse.data
 
@@ -110,6 +118,45 @@ export function AdminLearningAnalyticsPage() {
         <Card className="bg-background"><CardContent className="p-5"><p className="text-sm text-muted-foreground">提交总数</p><p className="mt-2 text-3xl font-semibold text-foreground">{overview.kpis.totalSubmissions}</p></CardContent></Card>
         <Card className="bg-background"><CardContent className="p-5"><p className="text-sm text-muted-foreground">通过率</p><p className="mt-2 text-3xl font-semibold text-foreground">{formatReportRate(overview.kpis.acceptedRate)}</p></CardContent></Card>
         <Card className="bg-background"><CardContent className="p-5"><p className="text-sm text-muted-foreground">营/赛参与</p><p className="mt-2 text-xl font-semibold text-foreground">{overview.kpis.campParticipants} / {overview.kpis.contestParticipants}</p></CardContent></Card>
+      </section>
+
+      <section className="mt-6 grid gap-4 xl:grid-cols-4">
+        <Card className="bg-background">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-sm text-muted-foreground">健康检查</p>
+            <p className="text-base font-semibold text-foreground">
+              DB {ops.health.db ? "正常" : "异常"} · Redis {ops.health.redis ? "正常" : "异常"}
+            </p>
+            <p className="text-xs text-muted-foreground">startedAt: {new Date(ops.startedAt).toLocaleString("zh-CN")}</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-background">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-sm text-muted-foreground">接口错误数</p>
+            <p className="text-3xl font-semibold text-foreground">
+              {Object.values(ops.httpErrors).reduce((sum, value) => sum + value, 0)}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-background">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-sm text-muted-foreground">支付回调</p>
+            <p className="text-sm font-medium text-foreground">
+              成功 {ops.paymentCallbacks.succeeded ?? 0} · 失败 {ops.paymentCallbacks.failed ?? 0} · 回放 {ops.paymentCallbacks.replayed ?? 0}
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="bg-background">
+          <CardContent className="space-y-2 p-5">
+            <p className="text-sm text-muted-foreground">报告接口均值</p>
+            <p className="text-sm font-medium text-foreground">
+              overview {Math.round(ops.durations["learning_report_overview"]?.avgMs ?? 0)}ms · weekly {Math.round(ops.durations["learning_report_weekly"]?.avgMs ?? 0)}ms
+            </p>
+            <p className="text-xs text-muted-foreground">
+              cache hit {ops.cache.hit ?? 0} / miss {ops.cache.miss ?? 0}
+            </p>
+          </CardContent>
+        </Card>
       </section>
 
       <section className="mt-10 grid gap-6 xl:grid-cols-[1.08fr_0.92fr]">

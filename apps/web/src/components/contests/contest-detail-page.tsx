@@ -176,7 +176,7 @@ export function ContestDetailPage() {
             <div className="space-y-2">
               <h2 className="text-2xl font-semibold tracking-tight text-foreground">报名与访问</h2>
               <p className="text-sm leading-7 text-muted-foreground">
-                模拟赛报名继续复用一期商品、订单和支付链路，支付成功后自动写入报名资格，并接入统一权限中心控制赛后解析与报告。
+                购买报名券后会自动获得参赛资格；如果比赛提供赛后解析或报告，购买对应通行证后也会自动开放查看权限。
               </p>
             </div>
 

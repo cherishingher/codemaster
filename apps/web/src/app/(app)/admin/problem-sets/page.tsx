@@ -22,11 +22,18 @@ type ProblemSet = {
 }
 
 type ProblemSetListResponse = {
-  items: ProblemSet[]
-  page: number
-  pageSize: number
-  total: number
-  totalPages: number
+  data?: ProblemSet[]
+  meta?: {
+    page?: number
+    pageSize?: number
+    total?: number
+    totalPages?: number
+  }
+  items?: ProblemSet[]
+  page?: number
+  pageSize?: number
+  total?: number
+  totalPages?: number
 }
 
 function parsePositiveInt(value: string | null, fallback: number) {
@@ -101,11 +108,13 @@ export default function AdminProblemSetsPage() {
         credentials: "include",
       })
       const data = (await res.json()) as ProblemSetListResponse
-      setSets(Array.isArray(data.items) ? data.items : [])
-      setTotal(data.total ?? 0)
-      setPage(data.page ?? 1)
-      setPageSize(data.pageSize ?? 20)
-      setTotalPages(Math.max(data.totalPages ?? 1, 1))
+      const items = Array.isArray(data.data) ? data.data : Array.isArray(data.items) ? data.items : []
+      const meta = data.meta ?? {}
+      setSets(items)
+      setTotal(meta.total ?? data.total ?? 0)
+      setPage(meta.page ?? data.page ?? 1)
+      setPageSize(meta.pageSize ?? data.pageSize ?? 20)
+      setTotalPages(Math.max(meta.totalPages ?? data.totalPages ?? 1, 1))
     } finally {
       setLoading(false)
     }

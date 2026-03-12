@@ -10,24 +10,9 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
 import type { LearningReportResponse } from "@/lib/learning-reports"
+import type { ProgressListResponse } from "@/lib/progress"
 import { Loader2, Trophy, Clock, Target, Calendar, CheckCircle2, ArrowRight } from "lucide-react"
-
-type ProgressRow = {
-  problem: {
-    id: string
-    slug: string
-    title: string
-    difficulty: number
-    source?: string | null
-  }
-  status: number
-  attempts: number
-  bestScore: number
-  lastStatus?: string | null
-  solvedAt?: string | null
-  lastSubmissionId?: string | null
-  updatedAt: string
-}
+import { getSubmissionStatusLabel } from "@/lib/submissions"
 
 type SubmissionListResponse = {
   data: Array<{
@@ -42,39 +27,6 @@ type SubmissionListResponse = {
       title: string
     }
   }>
-}
-
-function getStatusLabel(status?: string | null) {
-  switch ((status ?? "").toUpperCase()) {
-    case "ACCEPTED":
-    case "AC":
-      return "已通过"
-    case "WRONG_ANSWER":
-    case "WA":
-      return "答案错误"
-    case "PARTIAL":
-      return "部分通过"
-    case "TIME_LIMIT_EXCEEDED":
-    case "TLE":
-      return "超时"
-    case "MEMORY_LIMIT_EXCEEDED":
-    case "MLE":
-      return "超内存"
-    case "RUNTIME_ERROR":
-    case "RE":
-      return "运行错误"
-    case "COMPILE_ERROR":
-    case "CE":
-      return "编译错误"
-    case "PENDING":
-    case "QUEUED":
-      return "等待中"
-    case "JUDGING":
-    case "RUNNING":
-      return "评测中"
-    default:
-      return status ?? "未知"
-  }
 }
 
 function getDifficultyLabel(difficulty: number) {
@@ -93,9 +45,9 @@ function getDifficultyLabel(difficulty: number) {
 export default function ProfilePage() {
   const { user, loading } = useAuth({ redirectTo: "/login" })
 
-  const { data: progressRows } = useSWR<ProgressRow[]>(
+  const { data: progressResponse } = useSWR<ProgressListResponse>(
     user ? "/progress" : null,
-    () => api.progress.list<ProgressRow[]>()
+    () => api.progress.list<ProgressListResponse>()
   )
   const { data: submissions } = useSWR<SubmissionListResponse>(
     user ? "/submissions?limit=10" : null,
@@ -107,7 +59,7 @@ export default function ProfilePage() {
   )
 
   const stats = React.useMemo(() => {
-    const rows = progressRows ?? []
+    const rows = progressResponse?.data ?? progressResponse?.items ?? []
     const solvedRows = rows.filter((item) => item.status >= 20 || item.solvedAt)
     return {
       attempted: rows.length,
@@ -119,7 +71,7 @@ export default function ProfilePage() {
       },
       recentActivity: submissions?.data ?? [],
     }
-  }, [progressRows, submissions?.data])
+  }, [progressResponse?.data, progressResponse?.items, submissions?.data])
 
   if (loading || !user) {
     return (
@@ -332,7 +284,7 @@ export default function ProfilePage() {
                               {activity.problem.title}
                             </Link>
                             <div className="text-xs text-muted-foreground">
-                              {getStatusLabel(activity.status)}
+                              {getSubmissionStatusLabel(activity.status)}
                               {activity.score !== undefined ? ` · ${activity.score} 分` : ""}
                             </div>
                           </div>
@@ -362,11 +314,11 @@ export default function ProfilePage() {
               <CardTitle>做题进度</CardTitle>
             </CardHeader>
             <CardContent>
-              {!progressRows || progressRows.length === 0 ? (
+              {!progressResponse?.data?.length && !progressResponse?.items?.length ? (
                 <div className="text-sm text-muted-foreground">暂无做题进度</div>
               ) : (
                 <div className="space-y-4">
-                  {progressRows.slice(0, 12).map((row) => (
+                  {(progressResponse?.data ?? progressResponse?.items ?? []).slice(0, 12).map((row) => (
                     <div
                       key={`${row.problem.id}-${row.lastSubmissionId ?? row.updatedAt}`}
                       className="flex items-center justify-between border-b pb-4 last:border-0 last:pb-0"
@@ -382,7 +334,7 @@ export default function ProfilePage() {
                           <span>{getDifficultyLabel(row.problem.difficulty)}</span>
                           <span>尝试 {row.attempts}</span>
                           <span>最高分 {row.bestScore}</span>
-                          <span>{getStatusLabel(row.lastStatus)}</span>
+                          <span>{getSubmissionStatusLabel(row.lastStatus)}</span>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">

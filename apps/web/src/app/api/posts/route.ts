@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { jsonData, jsonList } from "@/lib/api-response";
 
 const CreatePostSchema = z.object({
   title: z.string().min(1),
@@ -23,16 +24,26 @@ export async function GET(req: NextRequest) {
     },
   });
 
-  return NextResponse.json({
-    items: posts.map((p) => ({
+  const items = posts.map((p) => ({
       id: p.id,
       title: p.title,
       content: p.content,
       author: p.user?.name ?? null,
       createdAt: p.createdAt,
-    })),
-    nextCursor: posts.length === limit ? posts[posts.length - 1].id : null,
-  });
+    }))
+  const nextCursor = posts.length === limit ? posts[posts.length - 1].id : null
+
+  return jsonList(
+    items,
+    {
+      nextCursor,
+      limit,
+    },
+    {
+      items,
+      nextCursor,
+    },
+  );
 }
 
 export const POST = withAuth(async (req, _ctx, user) => {
@@ -47,5 +58,8 @@ export const POST = withAuth(async (req, _ctx, user) => {
     },
   });
 
-  return NextResponse.json({ id: post.id, status: post.status });
+  return jsonData(
+    { id: post.id, status: post.status },
+    { status: 201 },
+  );
 });

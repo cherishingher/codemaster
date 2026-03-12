@@ -1,7 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { jsonData, jsonList } from "@/lib/api-response";
 
 const CreateCommentSchema = z.object({
   content: z.string().min(1),
@@ -18,13 +19,22 @@ export async function GET(
     include: { user: { select: { id: true, name: true } } },
   });
 
-  return NextResponse.json(
-    comments.map((c) => ({
+  const items = comments.map((c) => ({
       id: c.id,
       content: c.content,
       author: c.user?.name ?? null,
       createdAt: c.createdAt,
     }))
+
+  return jsonList(
+    items,
+    {
+      total: items.length,
+      limit: items.length,
+    },
+    {
+      items,
+    },
   );
 }
 
@@ -40,5 +50,5 @@ export const POST = withAuth(async (req, { params }, user) => {
     },
   });
 
-  return NextResponse.json({ id: comment.id, status: comment.status });
+  return jsonData({ id: comment.id, status: comment.status }, { status: 201 });
 });

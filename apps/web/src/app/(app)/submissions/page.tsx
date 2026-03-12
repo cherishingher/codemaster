@@ -28,6 +28,10 @@ import {
 import { SectionHeading } from "@/components/patterns/section-heading"
 import { useCopyFeedback } from "@/lib/hooks/use-copy-feedback"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
+import {
+  getSubmissionStatusClass,
+  getSubmissionStatusLabel,
+} from "@/lib/submissions"
 
 type SubmissionListResponse = {
   data: Array<{
@@ -65,47 +69,6 @@ const LANGUAGE_PRESETS = [
   { value: "scratch-optional", label: "Scratch（可选）" },
   { value: "scratch-must", label: "Scratch（必做）" },
 ]
-
-function getStatusClass(status: string) {
-  switch (status) {
-    case "ACCEPTED":
-      return "border-emerald-200 bg-emerald-50 text-emerald-700"
-    case "PARTIAL":
-      return "border-amber-200 bg-amber-50 text-amber-700"
-    case "PENDING":
-    case "JUDGING":
-      return "border-blue-200 bg-blue-50 text-blue-700"
-    case "COMPILE_ERROR":
-      return "border-yellow-200 bg-yellow-50 text-yellow-700"
-    default:
-      return "border-rose-200 bg-rose-50 text-rose-700"
-  }
-}
-
-function getStatusLabel(status: string) {
-  switch (status) {
-    case "ACCEPTED":
-      return "已通过"
-    case "PARTIAL":
-      return "部分通过"
-    case "WRONG_ANSWER":
-      return "答案错误"
-    case "TIME_LIMIT_EXCEEDED":
-      return "超时"
-    case "MEMORY_LIMIT_EXCEEDED":
-      return "超内存"
-    case "RUNTIME_ERROR":
-      return "运行错误"
-    case "COMPILE_ERROR":
-      return "编译错误"
-    case "PENDING":
-      return "等待中"
-    case "JUDGING":
-      return "评测中"
-    default:
-      return status
-  }
-}
 
 function parsePositiveInt(value: string | null, fallback: number) {
   const parsed = Number(value)
@@ -462,7 +425,7 @@ export default function SubmissionsPage() {
               <div>
                 <CardTitle className="text-lg font-semibold tracking-tight">最近提交</CardTitle>
                 <p className="mt-1 text-sm leading-6 text-muted-foreground">
-                  按状态、题目和语言收束视图；状态映射和数据返回保持原样。
+                  按状态、题目和语言快速收束视图，回看最近一次提交更直接。
                 </p>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-xs font-medium text-muted-foreground">
@@ -498,8 +461,8 @@ export default function SubmissionsPage() {
                       >
                         #{submission.id}
                       </Link>
-                      <Badge variant="outline" className={getStatusClass(submission.status)}>
-                        {getStatusLabel(submission.status)}
+                      <Badge variant="outline" className={getSubmissionStatusClass(submission.status)}>
+                        {getSubmissionStatusLabel(submission.status)}
                       </Badge>
                       {submission.rawStatus && submission.rawStatus !== submission.status ? (
                         <Badge variant="outline" className="border-border bg-white text-foreground">

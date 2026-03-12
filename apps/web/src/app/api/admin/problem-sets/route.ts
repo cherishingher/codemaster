@@ -1,7 +1,7 @@
-import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { jsonData, jsonList } from "@/lib/api-response";
 
 const CreateSetSchema = z.object({
   title: z.string().min(1),
@@ -25,20 +25,32 @@ export const GET = withAuth(async (req) => {
     }),
   ]);
 
-  return NextResponse.json({
-    items: sets.map((s) => ({
+  const items = sets.map((s) => ({
       id: s.id,
       title: s.title,
       description: s.description,
       visibility: s.visibility,
       owner: s.owner,
       count: s.items.length,
-    })),
-    page,
-    pageSize,
-    total,
-    totalPages: Math.max(1, Math.ceil(total / pageSize)),
-  });
+    }))
+  const totalPages = Math.max(1, Math.ceil(total / pageSize))
+
+  return jsonList(
+    items,
+    {
+      page,
+      pageSize,
+      total,
+      totalPages,
+    },
+    {
+      items,
+      page,
+      pageSize,
+      total,
+      totalPages,
+    },
+  );
 }, { roles: "admin" });
 
 export const POST = withAuth(async (req, _ctx, user) => {
@@ -53,5 +65,5 @@ export const POST = withAuth(async (req, _ctx, user) => {
     },
   });
 
-  return NextResponse.json({ id: created.id });
+  return jsonData({ id: created.id }, { status: 201 });
 }, { roles: "admin" });

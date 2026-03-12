@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { jsonList } from "@/lib/api-response";
 
 export const GET = withAuth(async (req: NextRequest) => {
   const { searchParams } = new URL(req.url);
@@ -20,5 +21,14 @@ export const GET = withAuth(async (req: NextRequest) => {
     LIMIT ${limit};
   `;
 
-  return NextResponse.json(rows);
+  return jsonList(
+    rows,
+    {
+      total: rows.length,
+      limit,
+    },
+    {
+      rows,
+    },
+  );
 }, { roles: "admin" });

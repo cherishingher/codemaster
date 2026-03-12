@@ -1391,6 +1391,7 @@ model UserProblemProgress {
 
   @@id([userId, problemId])
   @@index([userId, updatedAt])
+  @@index([userId, solvedAt])
   @@index([userId, status, updatedAt])
   @@index([problemId])
 }

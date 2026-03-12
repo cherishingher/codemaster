@@ -20,8 +20,11 @@ import { toast } from "sonner"
 import { Breadcrumbs } from "@/components/ui/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
 import { AiTutorPanel } from "@/components/ai/ai-tutor-panel"
-import { ProductPromoPanel } from "@/components/products/product-promo-panel"
 import { ProblemSolutionsPanel } from "@/components/solutions/problem-solutions-panel"
+import {
+  getSubmissionStatusClass,
+  getSubmissionStatusLabel,
+} from "@/lib/submissions"
 import { cn } from "@/lib/utils"
 
 type ProblemDetail = {
@@ -195,47 +198,6 @@ function guessEditorLanguage(language: string) {
   if (normalized.includes("python") || normalized === "py") return "python"
   if (normalized.includes("scratch") || normalized === "sb3") return "json"
   return "cpp"
-}
-
-function getSubmissionStatusLabel(status: string) {
-  switch (status) {
-    case "ACCEPTED":
-      return "已通过"
-    case "PARTIAL":
-      return "部分通过"
-    case "WRONG_ANSWER":
-      return "答案错误"
-    case "TIME_LIMIT_EXCEEDED":
-      return "超时"
-    case "MEMORY_LIMIT_EXCEEDED":
-      return "超内存"
-    case "RUNTIME_ERROR":
-      return "运行错误"
-    case "COMPILE_ERROR":
-      return "编译错误"
-    case "PENDING":
-      return "等待中"
-    case "JUDGING":
-      return "评测中"
-    default:
-      return status
-  }
-}
-
-function getSubmissionStatusClass(status: string) {
-  switch (status) {
-    case "ACCEPTED":
-      return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700"
-    case "PARTIAL":
-      return "border-amber-500/40 bg-amber-500/10 text-amber-700"
-    case "PENDING":
-    case "JUDGING":
-      return "border-blue-500/40 bg-blue-500/10 text-blue-700"
-    case "COMPILE_ERROR":
-      return "border-yellow-600/40 bg-yellow-500/10 text-yellow-800"
-    default:
-      return "border-red-500/40 bg-red-500/10 text-red-700"
-  }
 }
 
 function buildLanguageOption(config: NonNullable<ProblemDetail["judgeConfigs"]>[number]): EditorLanguageOption {
@@ -867,21 +829,33 @@ export default function ProblemDetailPage() {
           </div>
         ) : null}
         {limitText ? <div className="mb-3 text-xs text-muted-foreground">{limitText}</div> : null}
-        <div className="mb-4 grid gap-3 lg:grid-cols-2">
-          <ProductPromoPanel
-            badge="会员商品"
-            title="解锁高级题解与视频解析"
-            description="题目详情页先承接最小商业化导流，用户可跳转商品中心查看会员商品。"
-            href="/products?type=membership"
-            ctaLabel="查看会员商品"
-          />
-          <ProductPromoPanel
-            badge="内容包"
-            title="按内容包补齐专题讲解"
-            description="针对当前刷题需求查看内容包商品，后续订单模块会直接复用商品与 SKU 数据。"
-            href="/content-packs"
-            ctaLabel="查看内容包专区"
-          />
+        <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div className="space-y-1">
+              <div className="text-sm font-semibold text-foreground">操作速览</div>
+              <div className="text-xs text-muted-foreground">
+                先完成提交，再按需要查看题解、视频解析或专题内容包。
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {problem?.slug ? (
+                <Button asChild size="sm" variant="secondary">
+                  <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
+                    查看该题提交
+                  </Link>
+                </Button>
+              ) : null}
+              <Button asChild size="sm" variant="outline">
+                <a href="#problem-solutions">题解与视频</a>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/products?type=membership">开通 VIP</Link>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <Link href="/content-packs">内容包专区</Link>
+              </Button>
+            </div>
+          </div>
         </div>
         {error ? (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700">
@@ -989,7 +963,7 @@ export default function ProblemDetailPage() {
             )}
           </div>
         ) : null}
-        <div className="mt-6">
+        <div id="problem-solutions" className="mt-6">
           <ProblemSolutionsPanel problemId={id} />
         </div>
         <div className="mt-6">
@@ -1001,7 +975,7 @@ export default function ProblemDetailPage() {
               <div>
                 <div className="text-sm font-semibold text-foreground">该题最近提交</div>
                 <div className="text-xs text-muted-foreground">
-                  直接读取当前用户在该题上的最新 5 条提交记录。
+                  查看你在这道题上的最近 5 次提交与结果变化。
                 </div>
               </div>
               {problem?.slug ? (
@@ -1021,7 +995,7 @@ export default function ProblemDetailPage() {
               <div>
                 <div className="text-sm font-semibold text-foreground">最近提交</div>
                 <div className="text-xs text-muted-foreground">
-                  不占用 Scratch 工作区，点击按钮弹出查看。
+                  不占用当前工作区，点击按钮查看最近提交。
                 </div>
               </div>
               <Button size="sm" variant="secondary" onClick={() => setShowScratchRecentModal(true)}>
@@ -1282,20 +1256,11 @@ export default function ProblemDetailPage() {
               {!submission && !submissionLoading && !isError ? (
                 <div className="mt-2 text-xs text-muted-foreground">正在等待评测结果...</div>
               ) : null}
-              <details className="mt-3 rounded-md border-2 border-border/50 bg-muted/30 px-3 py-2 text-xs text-foreground">
-                <summary className="cursor-pointer select-none text-muted-foreground">
-                  调试信息
-                </summary>
-                <div className="mt-2 space-y-1 text-[11px]">
-                  <div>当前状态: {submission?.status ?? "无"}</div>
-                  <div>是否加载中: {submissionLoading ? "是" : "否"}</div>
-                  <div>是否完成: {isFinished ? "是" : "否"}</div>
-                  <div>最近更新时间: {lastUpdateAt ? lastUpdateAt.toLocaleTimeString() : "无"}</div>
-                </div>
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
-                  {submission ? JSON.stringify(submission, null, 2) : "暂无数据"}
-                </pre>
-              </details>
+              <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-muted-foreground">
+                <span>当前状态：{submission?.status ?? "等待结果"}</span>
+                <span>结果刷新：{submissionLoading ? "进行中" : isFinished ? "已完成" : "等待中"}</span>
+                <span>最近更新：{lastUpdateAt ? lastUpdateAt.toLocaleTimeString() : "暂无"}</span>
+              </div>
             </div>
           )}
         </div>

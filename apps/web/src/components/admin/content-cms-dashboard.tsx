@@ -55,6 +55,9 @@ export function ContentCmsDashboard() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">
+            <Link href="/admin/store-products">商品绑定管理</Link>
+          </Button>
+          <Button asChild variant="secondary">
             <Link href="/admin/content/videos">视频资源管理</Link>
           </Button>
           <Button asChild variant="secondary">
@@ -102,6 +105,22 @@ export function ContentCmsDashboard() {
           )
         })}
       </section>
+
+      <Card className="bg-background">
+        <CardContent className="space-y-3 p-6">
+          <h2 className="text-xl font-semibold text-foreground">运营提示</h2>
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <p>内容发布后，建议同步检查商品绑定、题解可见性和训练路径入口，避免前台出现“内容已上线但无法购买或解锁”的断层。</p>
+            <p>
+              如果你在灰度环境需要一套可直接联调的演示数据，可前往
+              <Link href="/admin" className="mx-1 font-medium text-foreground underline underline-offset-4">
+                管理后台首页
+              </Link>
+              的开发与诊断工具执行 seed，并使用页面里提供的 demo 账号逐角色验收。
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card className="bg-background">
         <CardContent className="space-y-4 p-6">

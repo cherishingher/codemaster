@@ -1,7 +1,10 @@
 import { Prisma } from "@prisma/client"
 import { NextResponse } from "next/server"
 import { ZodError } from "zod"
+import { createLogger } from "@/lib/logger"
 import { OrderCenterError } from "@/server/modules/order-center/shared"
+
+const logger = createLogger("order-center")
 
 export function mapOrderCenterError(error: unknown) {
   if (error instanceof OrderCenterError) {
@@ -45,7 +48,7 @@ export function mapOrderCenterError(error: unknown) {
     )
   }
 
-  console.error("[order-center]", error)
+  logger.error("unhandled_error", { error })
   return NextResponse.json(
     {
       error: "internal_error",

@@ -1,6 +1,7 @@
 import useSWR from 'swr';
 import { api } from '@/lib/api-client';
 import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
 
 export interface User {
   id: string;
@@ -16,7 +17,7 @@ export function useAuth({
   redirectTo = '',
   redirectIfFound = false,
 } = {}) {
-  const { data: rawUser, error, mutate } = useSWR<User | { user: User | null } | null>(
+  const { data: rawUser, error, mutate } = useSWR<User | { user: User | null } | { data: User | null } | null>(
     '/auth/me',
     api.auth.me,
     {
@@ -29,21 +30,28 @@ export function useAuth({
     typeof rawUser === 'object' &&
     'user' in rawUser
       ? rawUser.user
+      : rawUser &&
+          typeof rawUser === 'object' &&
+          'data' in rawUser
+        ? rawUser.data
       : rawUser;
 
   const router = useRouter();
   const loading = rawUser === undefined && !error;
   const loggedIn = !!user && !error;
 
-  // Handle redirects
-  if (!loading) {
-    if (loggedIn && redirectIfFound) {
-      if (redirectTo) router.push(redirectTo);
+  useEffect(() => {
+    if (loading) return;
+
+    if (loggedIn && redirectIfFound && redirectTo) {
+      router.push(redirectTo);
+      return;
     }
+
     if (!loggedIn && redirectTo && !redirectIfFound) {
       router.push(redirectTo);
     }
-  }
+  }, [loading, loggedIn, redirectIfFound, redirectTo, router]);
 
   return {
     user,

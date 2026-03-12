@@ -32,6 +32,13 @@ type ProductFormState = {
   metadataJson: string
 }
 
+type IncludedTargetPreview = {
+  type: string
+  id: string
+  title?: string
+  summary?: string
+}
+
 function createEmptyForm(): ProductFormState {
   return {
     name: "",
@@ -147,6 +154,19 @@ function buildPayload(form: ProductFormState): ProductMutationInput {
   }
 }
 
+function parseJsonSafely<T>(value: string, fallback: T): T {
+  try {
+    return value.trim() ? (JSON.parse(value) as T) : fallback
+  } catch {
+    return fallback
+  }
+}
+
+function getIncludedTargets(metadataJson: string): IncludedTargetPreview[] {
+  const metadata = parseJsonSafely<{ includedTargets?: IncludedTargetPreview[] } | null>(metadataJson, null)
+  return Array.isArray(metadata?.includedTargets) ? metadata!.includedTargets : []
+}
+
 export default function AdminStoreProductsPage() {
   const [page, setPage] = React.useState(1)
   const [q, setQ] = React.useState("")
@@ -183,6 +203,11 @@ export default function AdminStoreProductsPage() {
     setErrorMessage("")
     setMessage("")
   }, [])
+
+  const previewSkus = React.useMemo(() => parseJsonSafely<Array<{ name?: string; priceCents?: number; currency?: string; isDefault?: boolean }>>(form.skuJson, []), [form.skuJson])
+  const previewBenefits = React.useMemo(() => parseJsonSafely<Array<{ title?: string }>>(form.benefitJson, []), [form.benefitJson])
+  const includedTargets = React.useMemo(() => getIncludedTargets(form.metadataJson), [form.metadataJson])
+  const defaultPreviewSku = previewSkus.find((item) => item.isDefault) ?? previewSkus[0]
 
   const loadDetail = React.useCallback(async (id: string) => {
     setErrorMessage("")
@@ -234,7 +259,7 @@ export default function AdminStoreProductsPage() {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">商品管理</h1>
-          <p className="mt-2 text-muted-foreground">维护会员商品、训练路径商品和内容包商品</p>
+          <p className="mt-2 text-muted-foreground">维护会员、比赛、训练营与内容包商品，并确认它们实际解锁的内容。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">
@@ -252,7 +277,7 @@ export default function AdminStoreProductsPage() {
             <div>
               <h2 className="text-lg font-semibold">{editingId ? "编辑商品" : "创建商品"}</h2>
               <p className="text-sm text-muted-foreground">
-                基础字段用表单维护，SKU 与权益先用 JSON 录入，保证数据结构稳定可复用。
+                先维护基础信息与解锁目标，再补 SKU、权益和内容包包含项。高阶 JSON 仍保留，但不再是唯一可读入口。
               </p>
             </div>
             {editingId ? (
@@ -325,6 +350,42 @@ export default function AdminStoreProductsPage() {
             onChange={(e) => setField("tags", e.target.value)}
           />
 
+          <div className="grid gap-3 lg:grid-cols-3">
+            <div className="rounded-xl border border-border/60 bg-secondary/30 p-4">
+              <div className="text-xs text-muted-foreground">解锁目标</div>
+              <div className="mt-2 text-sm font-medium text-foreground">
+                {form.targetType && form.targetId ? `${form.targetType} / ${form.targetId}` : "当前未绑定单一解锁目标"}
+              </div>
+              <div className="mt-2 text-xs leading-6 text-muted-foreground">
+                会员、比赛券、训练营报名这类商品通常在这里填写主目标。
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-secondary/30 p-4">
+              <div className="text-xs text-muted-foreground">规格预览</div>
+              <div className="mt-2 text-sm font-medium text-foreground">
+                {defaultPreviewSku?.name || "暂无默认规格"}
+                {defaultPreviewSku?.priceCents != null ? ` · ${defaultPreviewSku.priceCents} ${defaultPreviewSku.currency || form.currency}` : ""}
+              </div>
+              <div className="mt-2 text-xs leading-6 text-muted-foreground">
+                共 {previewSkus.length} 个 SKU，默认规格会作为商品列表与详情页首选展示。
+              </div>
+            </div>
+            <div className="rounded-xl border border-border/60 bg-secondary/30 p-4">
+              <div className="text-xs text-muted-foreground">包含内容</div>
+              <div className="mt-2 text-sm font-medium text-foreground">
+                {includedTargets.length ? `已配置 ${includedTargets.length} 项` : "未配置内容包包含项"}
+              </div>
+              <div className="mt-2 text-xs leading-6 text-muted-foreground">
+                {includedTargets.length
+                  ? includedTargets
+                      .slice(0, 3)
+                      .map((item) => item.title || `${item.type}:${item.id}`)
+                      .join(" / ")
+                  : "内容包可在 metadata.includedTargets 中补充训练路径、题解、视频和题单。"}
+              </div>
+            </div>
+          </div>
+
           <div className="grid gap-3 lg:grid-cols-2">
             <div className="space-y-2">
               <div className="text-sm font-medium text-foreground">SKU JSON</div>
@@ -352,8 +413,16 @@ export default function AdminStoreProductsPage() {
               onChange={(e) => setField("metadataJson", e.target.value)}
             />
             <p className="text-xs leading-6 text-muted-foreground">
-              内容包建议在 `includedTargets` 里配置 `training_path / solution / video / problem`。现有购买链路会复用商品主记录，权限中心会读取这些目标做多资源解锁。
+              内容包建议在 `includedTargets` 里配置 `training_path / solution / video / problem / problem_set`，这样前台能直接展示“购买后包含什么”。
             </p>
+          </div>
+
+          <div className="rounded-xl border border-dashed border-border/60 bg-secondary/20 p-4 text-sm text-muted-foreground">
+            演示或灰度联调时，如果你需要一套可直接验证的商品、比赛、训练营和内容包数据，请前往
+            <Link href="/admin" className="mx-1 font-medium text-foreground underline underline-offset-4">
+              管理后台首页
+            </Link>
+            的“开发与诊断工具”区域执行 seed。
           </div>
 
           <div className="flex gap-2">
@@ -426,6 +495,18 @@ export default function AdminStoreProductsPage() {
                     </div>
                     <div className="text-xs text-muted-foreground">
                       SKU {product.skuCount} 个 · 订单 {product.orderCount} · 权益 {product.entitlementCount}
+                    </div>
+                    <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
+                      {product.targetType && product.targetId ? (
+                        <span className="rounded-full border border-border/60 bg-secondary/30 px-2.5 py-1">
+                          目标：{product.targetType} / {product.targetId}
+                        </span>
+                      ) : null}
+                      {product.type === "content_pack" ? (
+                        <span className="rounded-full border border-border/60 bg-secondary/30 px-2.5 py-1">
+                          内容包商品，建议检查 includedTargets
+                        </span>
+                      ) : null}
                     </div>
                   </div>
                   <div className="flex gap-2">

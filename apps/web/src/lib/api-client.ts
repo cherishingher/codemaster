@@ -282,6 +282,9 @@ export const api = {
   },
   admin: {
     analytics: {
+      ops: {
+        overview: <T = unknown>() => client<T>("/admin/analytics/ops/overview"),
+      },
       learning: {
         overview: <T = unknown>() => client<T>("/admin/analytics/learning/overview"),
         trends: <T = unknown>() => client<T>("/admin/analytics/learning/trends"),

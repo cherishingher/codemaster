@@ -21,13 +21,14 @@ import { cn } from "@/lib/utils"
 import { Baby, BarChart3, BrainCircuit, Code2, Crown, Grid2X2, LogOut, User } from "lucide-react"
 
 const navItems = [
-  { href: "/camps", label: "训练营" },
-  { href: "/membership", label: "会员" },
-  { href: "/learn", label: "视频学习" },
   { href: "/problems", label: "题库" },
+  { href: "/training-paths", label: "训练路径" },
+  { href: "/contests", label: "比赛" },
+  { href: "/camps", label: "训练营" },
+  { href: "/products", label: "商品" },
+  { href: "/learn", label: "视频学习" },
+  { href: "/discuss", label: "社区" },
   { href: "/submissions", label: "提交" },
-  { href: "/contests", label: "竞赛" },
-  { href: "/discuss", label: "讨论" },
   { href: "/graphical", label: "图形化" },
 ]
 
@@ -35,6 +36,9 @@ export function Navbar() {
   const { user, loggedIn, logout } = useAuth()
   const { membership } = useMembership(loggedIn)
   const pathname = usePathname()
+  const isAdmin = user?.role === "admin" || user?.roles?.includes("admin")
+  const canAccessTenant = isAdmin || user?.roles?.includes("teacher") || user?.roles?.includes("org_admin")
+  const canAccessParent = isAdmin || user?.roles?.includes("parent")
   const isProblemWorkspace =
     pathname?.startsWith("/problems/") &&
     pathname.split("/").filter(Boolean).length === 2
@@ -132,11 +136,11 @@ export function Navbar() {
                       <AvatarFallback>{user?.name?.[0]?.toUpperCase() || "U"}</AvatarFallback>
                     </Avatar>
                     <div className="hidden text-left md:block">
-                      <p className="max-w-32 truncate text-sm font-semibold text-foreground">
+                      <p className="max-w-36 truncate text-sm font-semibold text-foreground">
                         {user?.name || "User"}
                       </p>
-                      <p className="max-w-32 truncate text-xs text-muted-foreground">
-                        {user?.email ?? user?.phone ?? "已登录"}
+                      <p className="max-w-36 truncate text-xs text-muted-foreground">
+                        {membership ? "会员与个人入口" : "个人中心与学习记录"}
                       </p>
                     </div>
                   </Button>
@@ -152,20 +156,9 @@ export function Navbar() {
                     </div>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
-                  {user?.role === "admin" || user?.roles?.includes("admin") ? (
-                    <DropdownMenuItem asChild>
-                      <Link href="/admin">
-                        <Grid2X2 className="mr-2 h-4 w-4" />
-                        <span>管理后台</span>
-                      </Link>
-                    </DropdownMenuItem>
-                  ) : null}
-                  <DropdownMenuItem asChild>
-                    <Link href="/membership">
-                      <Crown className="mr-2 h-4 w-4" />
-                      <span>会员中心</span>
-                    </Link>
-                  </DropdownMenuItem>
+                  <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    学习中心
+                  </DropdownMenuLabel>
                   <DropdownMenuItem asChild>
                     <Link href="/profile">
                       <User className="mr-2 h-4 w-4" />
@@ -179,29 +172,70 @@ export function Navbar() {
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuItem asChild>
-                    <Link href="/ai">
-                      <BrainCircuit className="mr-2 h-4 w-4" />
-                      <span>AI 辅导</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/tenant">
-                      <Grid2X2 className="mr-2 h-4 w-4" />
-                      <span>机构工作台</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
-                    <Link href="/parent">
-                      <Baby className="mr-2 h-4 w-4" />
-                      <span>家长报告</span>
-                    </Link>
-                  </DropdownMenuItem>
-                  <DropdownMenuItem asChild>
                     <Link href="/submissions">
                       <Code2 className="mr-2 h-4 w-4" />
                       <span>我的提交</span>
                     </Link>
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    交易与权益
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link href="/membership">
+                      <Crown className="mr-2 h-4 w-4" />
+                      <span>会员中心</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/me/orders">
+                      <Grid2X2 className="mr-2 h-4 w-4" />
+                      <span>我的订单</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem asChild>
+                    <Link href="/me/assets">
+                      <Grid2X2 className="mr-2 h-4 w-4" />
+                      <span>我的资产</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    扩展入口
+                  </DropdownMenuLabel>
+                  <DropdownMenuItem asChild>
+                    <Link href="/ai">
+                      <BrainCircuit className="mr-2 h-4 w-4" />
+                      <span>AI 辅导</span>
+                    </Link>
+                  </DropdownMenuItem>
+                  {canAccessTenant ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/tenant">
+                        <Grid2X2 className="mr-2 h-4 w-4" />
+                        <span>机构工作台</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : null}
+                  {canAccessParent ? (
+                    <DropdownMenuItem asChild>
+                      <Link href="/parent">
+                        <Baby className="mr-2 h-4 w-4" />
+                        <span>家长报告</span>
+                      </Link>
+                    </DropdownMenuItem>
+                  ) : null}
+                  {isAdmin ? (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem asChild>
+                        <Link href="/admin">
+                          <Grid2X2 className="mr-2 h-4 w-4" />
+                          <span>管理后台</span>
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
+                  ) : null}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" />
