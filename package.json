@@ -26,7 +26,10 @@
     "graphical:install": "CHROMEDRIVER_SKIP_DOWNLOAD=1 npm --prefix apps/graphical install --ignore-scripts --legacy-peer-deps",
     "graphical:build": "NODE_OPTIONS=--openssl-legacy-provider npm --prefix apps/graphical run build",
     "graphical:sync": "node scripts/graphical-sync.mjs",
-    "graphical:prepare": "npm run graphical:install && npm run graphical:build && npm run graphical:sync"
+    "graphical:prepare": "npm run graphical:install && npm run graphical:build && npm run graphical:sync",
+    "gesp:import:graphical-level1": "node scripts/import-gesp-graphical-level1.mjs",
+    "gesp:import:scratch-cpp": "node scripts/import-gesp-scratch-cpp.mjs",
+    "gesp:create-problem-sets": "node scripts/create-gesp-problem-sets.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
