@@ -19,7 +19,7 @@ const UpdateProblemSchema = z.object({
 function buildProblemWhere(idOrSlug: string) {
   return {
     OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-  } as const
+  }
 }
 
 export const GET = withAuth(async (_req, { params }) => {

@@ -157,7 +157,10 @@ export const POST = withAuth(
       effectiveRules = scratchRules
     }
 
-    const result = evaluateScratchProject(project, effectiveRules)
+    const result = evaluateScratchProject(
+      project as Parameters<typeof evaluateScratchProject>[0],
+      effectiveRules
+    )
     return NextResponse.json({
       ok: true,
       versionId: version.id,

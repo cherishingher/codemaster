@@ -165,7 +165,7 @@ export function completeScratchRuleDraft(
     completedParts.push(...generated)
   }
 
-  completedParts.sort((a, b) => partIndex(a.id) - partIndex(b.id))
+  completedParts.sort((a, b) => partIndex(a.id ?? "") - partIndex(b.id ?? ""))
 
   return {
     version: 1,

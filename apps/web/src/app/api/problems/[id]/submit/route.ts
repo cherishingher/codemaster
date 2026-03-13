@@ -105,7 +105,10 @@ export const POST = withAuth(async (req, { params }, user) => {
       },
     });
 
-    const evaluated = evaluateScratchProject(project, rawRules);
+    const evaluated = evaluateScratchProject(
+      project as Parameters<typeof evaluateScratchProject>[0],
+      rawRules
+    );
     await applyJudgeResult({
       submissionId: submission.id,
       status: evaluated.status,
