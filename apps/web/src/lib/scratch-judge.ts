@@ -24,6 +24,8 @@ export type ScratchRuleSet = {
   scripts: ScriptRule[];
 };
 
+export type ScratchGroupMode = "ordered" | "unordered" | "ordered_consecutive";
+
 export type ScratchScoreRuleItem = {
   score: number;
   rule: ScratchRuleSet;
@@ -35,13 +37,28 @@ export type ScratchScoreRuleSet = {
   totalScore?: number;
 };
 
+export type ScratchScoreByPartRuleItem = {
+  id?: string;
+  title?: string;
+  role?: string;
+  score: number;
+  rule: ScratchRuleSet;
+};
+
+export type ScratchScoreByPartRuleSet = {
+  version: 1;
+  mode: "score_by_part";
+  totalScore?: number;
+  parts: ScratchScoreByPartRuleItem[];
+};
+
 export type ScriptRule = {
   hat: string | string[];
   groups: GroupRule[];
 };
 
 export type GroupRule = {
-  mode?: "ordered" | "unordered";
+  mode?: ScratchGroupMode;
   blocks: BlockRule[];
 };
 
@@ -84,6 +101,17 @@ export type ScratchScoreResult = {
   errors: string[];
 };
 
+export type ScratchJudgeStatus = "AC" | "PARTIAL" | "WA";
+
+export type ScratchEvaluationResult = ScratchScoreResult & {
+  status: ScratchJudgeStatus;
+};
+
+export type ScratchAnyRuleSet =
+  | ScratchRuleSet
+  | ScratchScoreRuleSet
+  | ScratchScoreByPartRuleSet;
+
 const PLACEHOLDER_PREFIX = "$";
 
 export function judgeScratchProject(project: ScratchProject, rules: ScratchRuleSet): ScratchJudgeResult {
@@ -91,12 +119,174 @@ export function judgeScratchProject(project: ScratchProject, rules: ScratchRuleS
     return { ok: false, errors: ["project_invalid"] };
   }
 
-  const target = project.targets.find((t) => t.name === rules.role);
+  const target = findScratchTarget(project, rules.role);
   if (!target) {
     return { ok: false, errors: ["role_not_found"] };
   }
 
+  return judgeScratchTarget(target, rules);
+}
+
+export function isScratchRuleSet(value: unknown): value is ScratchRuleSet {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      typeof (value as { role?: unknown }).role === "string" &&
+      Array.isArray((value as { scripts?: unknown }).scripts)
+  );
+}
+
+export function isScratchScoreRuleSet(value: unknown): value is ScratchScoreRuleSet {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      Array.isArray((value as { rules?: unknown }).rules)
+  );
+}
+
+export function isScratchScoreByPartRuleSet(value: unknown): value is ScratchScoreByPartRuleSet {
+  return Boolean(
+    value &&
+      typeof value === "object" &&
+      (value as { mode?: unknown }).mode === "score_by_part" &&
+      Array.isArray((value as { parts?: unknown }).parts)
+  );
+}
+
+export function scoreScratchProject(project: ScratchProject, ruleSet: ScratchScoreRuleSet): ScratchScoreResult {
+  if (!project?.targets?.length) {
+    return { score: 0, total: ruleSet.totalScore ?? 0, passed: 0, errors: ["project_invalid"] };
+  }
+
+  const target = findScratchTarget(project, ruleSet.role);
+  if (!target) {
+    return { score: 0, total: ruleSet.totalScore ?? 0, passed: 0, errors: ["role_not_found"] };
+  }
+
   const scripts = extractScripts(target.blocks);
+  const total = ruleSet.totalScore ?? ruleSet.rules.reduce((sum, item) => sum + (item.score ?? 0), 0);
+  let score = 0;
+  let passed = 0;
+  const errors: string[] = [];
+
+  for (const item of ruleSet.rules) {
+    const result = judgeScratchScripts(target, scripts, item.rule);
+    if (result.ok) {
+      score += item.score ?? 0;
+      passed += 1;
+    } else {
+      errors.push(result.errors[0] ?? "script_rule_not_matched");
+    }
+  }
+
+  return { score, total, passed, errors };
+}
+
+export function scoreScratchProjectByParts(
+  project: ScratchProject,
+  ruleSet: ScratchScoreByPartRuleSet
+): ScratchScoreResult {
+  const total = ruleSet.totalScore ?? ruleSet.parts.reduce((sum, item) => sum + (item.score ?? 0), 0);
+  if (!project?.targets?.length) {
+    return { score: 0, total, passed: 0, errors: ["project_invalid"] };
+  }
+
+  let score = 0;
+  let passed = 0;
+  const errors: string[] = [];
+
+  for (const part of ruleSet.parts) {
+    const role = resolveScratchPartRole(part);
+    if (!role) {
+      errors.push(formatPartError(part, "part_role_missing"));
+      continue;
+    }
+
+    const target = findScratchTarget(project, role);
+    if (!target) {
+      errors.push(formatPartError(part, "role_not_found"));
+      continue;
+    }
+
+    const result = judgeScratchTarget(target, { ...part.rule, role });
+    if (result.ok) {
+      score += part.score ?? 0;
+      passed += 1;
+    } else {
+      errors.push(formatPartError(part, result.errors[0] ?? "script_rule_not_matched"));
+    }
+  }
+
+  return { score, total, passed, errors };
+}
+
+export function isSupportedScratchRuleSet(value: unknown): value is ScratchAnyRuleSet {
+  return isScratchRuleSet(value) || isScratchScoreRuleSet(value) || isScratchScoreByPartRuleSet(value);
+}
+
+export function evaluateScratchProject(
+  project: ScratchProject,
+  rules: ScratchAnyRuleSet
+): ScratchEvaluationResult {
+  if (isScratchScoreByPartRuleSet(rules)) {
+    const scored = scoreScratchProjectByParts(project, rules);
+    return {
+      ...scored,
+      status: resolveScratchScoreStatus(scored, rules.parts.length),
+    };
+  }
+
+  if (isScratchScoreRuleSet(rules)) {
+    const scored = scoreScratchProject(project, rules);
+    return {
+      ...scored,
+      status: resolveScratchScoreStatus(scored, rules.rules.length),
+    };
+  }
+
+  const result = judgeScratchProject(project, rules);
+  return {
+    status: result.ok ? "AC" : "WA",
+    score: result.ok ? 100 : 0,
+    total: 100,
+    passed: result.ok ? 1 : 0,
+    errors: result.errors,
+  };
+}
+
+function resolveScratchScoreStatus(result: ScratchScoreResult, totalItems: number): ScratchJudgeStatus {
+  const allRulesPassed = totalItems > 0 && result.passed >= totalItems;
+  const hasPartialPass = result.passed > 0 || result.score > 0;
+  if (allRulesPassed) return "AC";
+  return hasPartialPass ? "PARTIAL" : "WA";
+}
+
+function findScratchTarget(project: ScratchProject, role: string) {
+  if (role === "Stage") {
+    return project.targets.find((target) => target.isStage) ?? project.targets.find((target) => target.name === role);
+  }
+  return project.targets.find((target) => target.name === role);
+}
+
+function resolveScratchPartRole(part: ScratchScoreByPartRuleItem) {
+  const role = typeof part.role === "string" && part.role.trim() ? part.role.trim() : part.rule.role;
+  return typeof role === "string" && role.trim() ? role.trim() : null;
+}
+
+function formatPartError(part: ScratchScoreByPartRuleItem, error: string) {
+  return part.id ? `${part.id}:${error}` : error;
+}
+
+function judgeScratchTarget(target: ScratchTarget, rules: ScratchRuleSet): ScratchJudgeResult {
+  const scripts = extractScripts(target.blocks);
+  return judgeScratchScripts(target, scripts, rules);
+}
+
+function judgeScratchScripts(
+  target: ScratchTarget,
+  scripts: { hatId: string; hatOpcode: string; chain: string[] }[],
+  rules: ScratchRuleSet
+): ScratchJudgeResult {
   const ctx: MatchContext = {
     blocks: target.blocks,
     bindings: { values: new Map(), reverse: new Map() },
@@ -109,41 +299,6 @@ export function judgeScratchProject(project: ScratchProject, rules: ScratchRuleS
   }
 
   return { ok: true, errors: [] };
-}
-
-export function scoreScratchProject(project: ScratchProject, ruleSet: ScratchScoreRuleSet): ScratchScoreResult {
-  if (!project?.targets?.length) {
-    return { score: 0, total: ruleSet.totalScore ?? 0, passed: 0, errors: ["project_invalid"] };
-  }
-
-  const target = project.targets.find((t) => t.name === ruleSet.role);
-  if (!target) {
-    return { score: 0, total: ruleSet.totalScore ?? 0, passed: 0, errors: ["role_not_found"] };
-  }
-
-  const scripts = extractScripts(target.blocks);
-  const total = ruleSet.totalScore ?? ruleSet.rules.reduce((sum, item) => sum + (item.score ?? 0), 0);
-  let score = 0;
-  let passed = 0;
-  const errors: string[] = [];
-
-  for (const item of ruleSet.rules) {
-    const ctx: MatchContext = {
-      blocks: target.blocks,
-      bindings: { values: new Map(), reverse: new Map() },
-    };
-    const ok = item.rule.scripts.every((scriptRule) =>
-      matchScriptRule(scripts, scriptRule, ctx)
-    );
-    if (ok) {
-      score += item.score ?? 0;
-      passed += 1;
-    } else {
-      errors.push("script_rule_not_matched");
-    }
-  }
-
-  return { score, total, passed, errors };
 }
 
 function extractScripts(blocks: Record<string, ScratchBlock>) {
@@ -165,8 +320,12 @@ function matchScriptRule(
   const hats = Array.isArray(scriptRule.hat) ? scriptRule.hat : [scriptRule.hat];
   const candidates = scripts.filter((s) => hats.includes(s.hatOpcode));
   for (const script of candidates) {
-    const attempt = matchGroupsInChain(script.chain, scriptRule.groups, ctx);
-    if (attempt) return true;
+    const attemptCtx = cloneMatchContext(ctx);
+    const attempt = matchGroupsInChain(script.chain, scriptRule.groups, attemptCtx);
+    if (attempt) {
+      ctx.bindings = attemptCtx.bindings;
+      return true;
+    }
   }
   return false;
 }
@@ -187,10 +346,15 @@ function matchGroupsInChain(chain: string[], groups: GroupRule[], ctx: MatchCont
   let cursor = 0;
   for (const group of groups) {
     const mode = group.mode ?? "ordered";
-    const res = mode === "unordered"
-      ? matchUnorderedGroup(chain, cursor, group.blocks, ctx)
-      : matchOrderedGroup(chain, cursor, group.blocks, ctx);
+    const attemptCtx = cloneMatchContext(ctx);
+    const res =
+      mode === "unordered"
+        ? matchUnorderedGroup(chain, cursor, group.blocks, attemptCtx)
+        : mode === "ordered_consecutive"
+          ? matchOrderedConsecutiveGroup(chain, cursor, group.blocks, attemptCtx)
+          : matchOrderedGroup(chain, cursor, group.blocks, attemptCtx);
     if (!res) return false;
+    ctx.bindings = attemptCtx.bindings;
     cursor = res;
   }
   return true;
@@ -206,7 +370,9 @@ function matchOrderedGroup(
   for (const rule of blocks) {
     let found = false;
     for (let i = cursor; i < chain.length; i++) {
-      if (matchBlock(chain[i], rule, ctx)) {
+      const attemptCtx = cloneMatchContext(ctx);
+      if (matchBlock(chain[i], rule, attemptCtx)) {
+        ctx.bindings = attemptCtx.bindings;
         cursor = i + 1;
         found = true;
         break;
@@ -215,6 +381,34 @@ function matchOrderedGroup(
     if (!found) return false;
   }
   return cursor;
+}
+
+function matchOrderedConsecutiveGroup(
+  chain: string[],
+  start: number,
+  blocks: BlockRule[],
+  ctx: MatchContext
+) {
+  if (!blocks.length) return start;
+
+  for (let i = start; i + blocks.length <= chain.length; i++) {
+    const attemptCtx = cloneMatchContext(ctx);
+    let matched = true;
+
+    for (let offset = 0; offset < blocks.length; offset += 1) {
+      if (!matchBlock(chain[i + offset], blocks[offset], attemptCtx)) {
+        matched = false;
+        break;
+      }
+    }
+
+    if (matched) {
+      ctx.bindings = attemptCtx.bindings;
+      return i + blocks.length;
+    }
+  }
+
+  return false;
 }
 
 function matchUnorderedGroup(
@@ -229,7 +423,9 @@ function matchUnorderedGroup(
     let foundIndex: number | null = null;
     for (let i = start; i < chain.length; i++) {
       if (used.has(i)) continue;
-      if (matchBlock(chain[i], rule, ctx)) {
+      const attemptCtx = cloneMatchContext(ctx);
+      if (matchBlock(chain[i], rule, attemptCtx)) {
+        ctx.bindings = attemptCtx.bindings;
         foundIndex = i;
         break;
       }
@@ -239,6 +435,20 @@ function matchUnorderedGroup(
     if (foundIndex > maxIndex) maxIndex = foundIndex;
   }
   return maxIndex + 1;
+}
+
+function cloneMatchContext(ctx: MatchContext): MatchContext {
+  return {
+    blocks: ctx.blocks,
+    bindings: cloneBindings(ctx.bindings),
+  };
+}
+
+function cloneBindings(bindings: BindingState): BindingState {
+  return {
+    values: new Map(bindings.values),
+    reverse: new Map(bindings.reverse),
+  };
 }
 
 function matchBlock(blockId: string, rule: BlockRule, ctx: MatchContext): boolean {

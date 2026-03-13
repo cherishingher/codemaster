@@ -24,13 +24,28 @@ export type ScratchRuleSet = {
   scripts: ScriptRule[];
 };
 
+export type ScratchScoreByPartRuleItem = {
+  id: string;
+  title: string;
+  role: string;
+  score: number;
+  rule: ScratchRuleSet;
+};
+
+export type ScratchScoreByPartRuleSet = {
+  version: 1;
+  mode: "score_by_part";
+  totalScore: number;
+  parts: ScratchScoreByPartRuleItem[];
+};
+
 export type ScriptRule = {
   hat: string | string[];
   groups: GroupRule[];
 };
 
 export type GroupRule = {
-  mode?: "ordered" | "unordered";
+  mode?: "ordered" | "unordered" | "ordered_consecutive";
   blocks: BlockRule[];
 };
 
@@ -54,7 +69,15 @@ export type InputRule =
 type GeneratorOptions = {
   role?: string;
   topLevelUnorderedHatOpcodes?: string[];
-  substackMode?: "ordered" | "unordered";
+  substackMode?: "ordered" | "unordered" | "ordered_consecutive";
+};
+
+type ScoreByPartGeneratorOptions = GeneratorOptions & {
+  roles?: string[];
+  totalScore?: number;
+  perScript?: boolean;
+  includeStage?: boolean;
+  idPrefix?: string;
 };
 
 const DEFAULT_TOPLEVEL_UNORDERED = new Set(["event_whenflagclicked"]);
@@ -87,6 +110,81 @@ export function generateScratchRuleSet(
   });
 
   return { role: roleName, scripts: rules };
+}
+
+export function generateScratchScoreByPartRuleSet(
+  project: ScratchProject,
+  options: ScoreByPartGeneratorOptions = {}
+): ScratchScoreByPartRuleSet {
+  if (!project?.targets?.length) {
+    throw new Error("project_invalid");
+  }
+
+  const allowedRoles = options.roles ? new Set(options.roles) : null;
+  const includeStage = options.includeStage ?? true;
+  const perScript = options.perScript ?? true;
+  const idPrefix = options.idPrefix ?? "p";
+
+  const parts: ScratchScoreByPartRuleItem[] = [];
+
+  for (const target of project.targets) {
+    if (!includeStage && target.isStage) continue;
+    if (allowedRoles && !allowedRoles.has(target.name)) continue;
+
+    const ruleSet = generateScratchRuleSet(project, {
+      ...options,
+      role: target.name,
+    });
+    if (!ruleSet.scripts.length) continue;
+
+    if (perScript) {
+      for (const script of ruleSet.scripts) {
+        const index = parts.length + 1;
+        parts.push({
+          id: `${idPrefix}${index}`,
+          title: `${target.name} script ${index}`,
+          role: target.name,
+          score: 0,
+          rule: {
+            role: target.name,
+            scripts: [script],
+          },
+        });
+      }
+      continue;
+    }
+
+    const index = parts.length + 1;
+    parts.push({
+      id: `${idPrefix}${index}`,
+      title: `${target.name} scripts`,
+      role: target.name,
+      score: 0,
+      rule: ruleSet,
+    });
+  }
+
+  if (!parts.length) {
+    throw new Error("scratch_parts_empty");
+  }
+
+  const totalScore = Number.isFinite(options.totalScore) && (options.totalScore ?? 0) > 0
+    ? Math.floor(options.totalScore as number)
+    : parts.length;
+  const baseScore = Math.floor(totalScore / parts.length);
+  let remainder = totalScore % parts.length;
+
+  for (const part of parts) {
+    part.score = baseScore + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder -= 1;
+  }
+
+  return {
+    version: 1,
+    mode: "score_by_part",
+    totalScore,
+    parts,
+  };
 }
 
 function pickDefaultRole(targets: ScratchTarget[]) {

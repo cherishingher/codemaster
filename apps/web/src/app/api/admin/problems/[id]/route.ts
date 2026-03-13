@@ -16,9 +16,15 @@ const UpdateProblemSchema = z.object({
   tags: z.array(z.string().min(1)).optional(),
 });
 
+function buildProblemWhere(idOrSlug: string) {
+  return {
+    OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+  } as const
+}
+
 export const GET = withAuth(async (_req, { params }) => {
-  const problem = await db.problem.findUnique({
-    where: { id: params.id },
+  const problem = await db.problem.findFirst({
+    where: buildProblemWhere(params.id),
     include: {
       tags: { include: { tag: true } },
       versions: { orderBy: { version: "desc" }, take: 1 },
@@ -52,8 +58,8 @@ export const PATCH = withAuth(async (req, { params }) => {
   const payload = UpdateProblemSchema.parse(await req.json());
 
   const updated = await db.$transaction(async (tx) => {
-    const existing = await tx.problem.findUnique({
-      where: { id: params.id },
+    const existing = await tx.problem.findFirst({
+      where: buildProblemWhere(params.id),
       select: { id: true, title: true, visibility: true, publishedAt: true },
     });
     if (!existing) {
@@ -62,12 +68,12 @@ export const PATCH = withAuth(async (req, { params }) => {
     const resolvedVisibility = payload.visibility ?? existing.visibility;
     const lifecycle = buildProblemLifecycleData(resolvedVisibility);
     const problem = await tx.problem.update({
-      where: { id: params.id },
+      where: { id: existing.id },
       data: {
         slug:
           payload.slug ??
           (payload.title
-            ? await generateUniqueProblemSlug(tx, payload.title, params.id)
+            ? await generateUniqueProblemSlug(tx, payload.title, existing.id)
             : undefined),
         title: payload.title,
         difficulty: payload.difficulty,

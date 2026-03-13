@@ -3,6 +3,7 @@ import { withAuth } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { readZipEntries } from "@/lib/zip";
 import { generateScratchRuleSet } from "@/lib/scratch-rules-gen";
+import { completeScratchRuleDraft, isScratchRuleDraft } from "@/lib/scratch-rule-draft";
 import { load as loadYaml } from "js-yaml";
 import { Prisma } from "@prisma/client";
 
@@ -172,6 +173,16 @@ function mergeScratchRuleSets(
   };
 }
 
+async function resolveProblemId(idOrSlug: string) {
+  const problem = await db.problem.findFirst({
+    where: {
+      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+    },
+    select: { id: true },
+  })
+  return problem?.id ?? null
+}
+
 export const POST = withAuth(
   async (req, { params }) => {
     const form = await req.formData();
@@ -189,7 +200,7 @@ export const POST = withAuth(
       );
     }
 
-    const problemId = params.id;
+    const problemId = await resolveProblemId(params.id);
     const versionIdRaw = form.get("versionId");
     const roleRaw = form.get("role");
     const scoreRaw = form.get("score");
@@ -200,10 +211,14 @@ export const POST = withAuth(
     const mode = resolveBatchMode(modeRaw, "replace");
     const defaultItemScore = toNonNegativeInt(score, 10);
 
+    if (!versionId && !problemId) {
+      return NextResponse.json({ error: "problem_not_found" }, { status: 404 });
+    }
+
     const version = versionId
       ? await db.problemVersion.findUnique({ where: { id: versionId } })
       : await db.problemVersion.findFirst({
-          where: { problemId },
+          where: { problemId: problemId ?? undefined },
           orderBy: { version: "desc" },
         });
     if (!version) {
@@ -366,6 +381,27 @@ export const POST = withAuth(
         return NextResponse.json({ error: message }, { status: 400 });
       }
 
+      if (isScratchRuleDraft(version.scratchRules)) {
+        try {
+          nextRules = completeScratchRuleDraft(
+            project as Parameters<typeof generateScratchRuleSet>[0],
+            version.scratchRules
+          );
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "scratch_draft_completion_failed";
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
+
+        effectiveMode = "replace";
+        resultMeta = {
+          parts: Array.isArray((nextRules as { parts?: unknown[] }).parts)
+            ? (nextRules as { parts: unknown[] }).parts.length
+            : 0,
+          totalScore: (nextRules as { totalScore?: unknown }).totalScore ?? null,
+          completedFromDraft: true,
+          batch: false,
+        };
+      } else {
       let baseRule;
       try {
         baseRule = generateScratchRuleSet(project as Parameters<typeof generateScratchRuleSet>[0], {
@@ -398,6 +434,7 @@ export const POST = withAuth(
         imported: 1,
         batch: false,
       };
+      }
     }
 
     await db.problemVersion.update({

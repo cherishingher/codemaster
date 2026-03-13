@@ -5,12 +5,11 @@ import { withAuth } from "@/lib/authz";
 import { ensureHustojUser, submitToHustoj } from "@/lib/hustoj";
 import { applyJudgeResult } from "@/lib/judge-stats";
 import {
-  judgeScratchProject,
-  scoreScratchProject,
-  type ScratchRuleSet,
-  type ScratchScoreRuleSet,
+  evaluateScratchProject,
+  isSupportedScratchRuleSet,
+  type ScratchAnyRuleSet,
 } from "@/lib/scratch-judge";
-import { readZipEntries } from "@/lib/zip";
+import { parseScratchProjectCode } from "@/lib/scratch-project";
 import {
   getLanguageId,
   isScratchLanguage,
@@ -75,9 +74,14 @@ export const POST = withAuth(async (req, { params }, user) => {
       return NextResponse.json({ error: "scratch_rules_not_configured" }, { status: 400 });
     }
 
-    const project = await parseScratchProject(payload.code);
+    const project = await parseScratchProjectCode(payload.code);
     if (!project) {
       return NextResponse.json({ error: "scratch_project_invalid" }, { status: 400 });
+    }
+
+    const rawRules = currentVersion.scratchRules as ScratchAnyRuleSet;
+    if (!isSupportedScratchRuleSet(rawRules)) {
+      return NextResponse.json({ error: "scratch_rules_incomplete" }, { status: 400 });
     }
 
     const submission = await db.submission.create({
@@ -101,23 +105,13 @@ export const POST = withAuth(async (req, { params }, user) => {
       },
     });
 
-    const rawRules = currentVersion.scratchRules as ScratchRuleSet | ScratchScoreRuleSet;
-    let status = "WA";
-    let score = 0;
-    if (rawRules && "rules" in rawRules && Array.isArray(rawRules.rules)) {
-      const scored = scoreScratchProject(project, rawRules as ScratchScoreRuleSet);
-      score = scored.score;
-      const totalRules = rawRules.rules.length;
-      const allRulesPassed = totalRules > 0 && scored.passed >= totalRules;
-      const hasPartialPass = scored.passed > 0 || scored.score > 0;
-      status = allRulesPassed ? "AC" : hasPartialPass ? "PARTIAL" : "WA";
-    } else {
-      const result = judgeScratchProject(project, rawRules as ScratchRuleSet);
-      status = result.ok ? "AC" : "WA";
-      score = result.ok ? 100 : 0;
-    }
-    await applyJudgeResult({ submissionId: submission.id, status, score });
-    return NextResponse.json({ submissionId: submission.id, status });
+    const evaluated = evaluateScratchProject(project, rawRules);
+    await applyJudgeResult({
+      submissionId: submission.id,
+      status: evaluated.status,
+      score: evaluated.score,
+    });
+    return NextResponse.json({ submissionId: submission.id, status: evaluated.status });
   }
 
   const hustojUser = await ensureHustojUser({
@@ -194,52 +188,3 @@ export const POST = withAuth(async (req, { params }, user) => {
 
   return NextResponse.json({ submissionId: submission.id, status: submission.status });
 });
-
-async function parseScratchProject(code: string) {
-  const trimmed = code.trim();
-  if (!trimmed) return null;
-
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-    try {
-      const parsed = JSON.parse(trimmed);
-      if (parsed && typeof parsed === "object" && Array.isArray(parsed.targets)) {
-        return parsed;
-      }
-    } catch {
-      return null;
-    }
-    return null;
-  }
-
-  const base64 = trimmed.startsWith("data:")
-    ? trimmed.slice(trimmed.indexOf(",") + 1)
-    : trimmed;
-
-  let buffer: Buffer;
-  try {
-    buffer = Buffer.from(base64, "base64");
-  } catch {
-    return null;
-  }
-
-  if (buffer.length < 4 || buffer[0] !== 0x50 || buffer[1] !== 0x4b) {
-    return null;
-  }
-
-  const entries = await readZipEntries(buffer);
-  const projectEntry =
-    entries.get("project.json") ??
-    [...entries.entries()].find(([name]) => name.endsWith("/project.json"))?.[1];
-  if (!projectEntry) return null;
-
-  try {
-    const parsed = JSON.parse(projectEntry.toString("utf8"));
-    if (parsed && typeof parsed === "object" && Array.isArray(parsed.targets)) {
-      return parsed;
-    }
-  } catch {
-    return null;
-  }
-
-  return null;
-}

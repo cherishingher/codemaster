@@ -22,6 +22,7 @@ type Version = {
   inputFormat?: string | null
   outputFormat?: string | null
   samples?: unknown
+  scratchRules?: unknown
   notes?: string | null
   timeLimitMs: number
   memoryLimitMb: number
@@ -124,6 +125,15 @@ function asObject(value: unknown): JsonObject | null {
 function asInt(value: unknown, fallback = 0) {
   const parsed = Number(value)
   return Number.isFinite(parsed) ? Math.floor(parsed) : fallback
+}
+
+function formatJson(value: unknown) {
+  if (value == null) return ""
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return ""
+  }
 }
 
 function getProblemStatusLabel(status: number) {
@@ -348,6 +358,13 @@ export default function AdminProblemDetailPage() {
   const [scratchRuleMode, setScratchRuleMode] = React.useState<"append" | "replace">("append")
   const [scratchRuleResult, setScratchRuleResult] = React.useState<ZipResult | null>(null)
   const [scratchRuleGenerating, setScratchRuleGenerating] = React.useState(false)
+  const [scratchRulesText, setScratchRulesText] = React.useState("")
+  const [scratchRulesDirty, setScratchRulesDirty] = React.useState(false)
+  const [scratchRulesSaving, setScratchRulesSaving] = React.useState(false)
+  const [scratchRulesSaveResult, setScratchRulesSaveResult] = React.useState<ZipResult | null>(null)
+  const [scratchValidateFile, setScratchValidateFile] = React.useState<File | null>(null)
+  const [scratchValidateRunning, setScratchValidateRunning] = React.useState(false)
+  const [scratchValidateResult, setScratchValidateResult] = React.useState<ZipResult | null>(null)
   const [selectedTags, setSelectedTags] = React.useState<string[]>([])
   const [tagsSaving, setTagsSaving] = React.useState(false)
   const [judgeConfigsDraft, setJudgeConfigsDraft] = React.useState<JudgeConfigDraft[]>([])
@@ -355,6 +372,7 @@ export default function AdminProblemDetailPage() {
   const [editableTestcases, setEditableTestcases] = React.useState<EditableTestcaseDraft[]>([])
   const [testcaseSavingId, setTestcaseSavingId] = React.useState<string | null>(null)
   const [testcaseDeletingId, setTestcaseDeletingId] = React.useState<string | null>(null)
+  const prevScratchRulesVersionIdRef = React.useRef("")
 
   const languageTags = [
     "scratch-必做",
@@ -434,18 +452,19 @@ export default function AdminProblemDetailPage() {
       credentials: "include",
     })
     const vData = await vRes.json()
-    setVersions(vData)
+    const nextVersions = Array.isArray(vData) ? (vData as Version[]) : []
+    setVersions(nextVersions)
     setSelectedVersionId((current) =>
-      current && vData.some((item: Version) => item.id === current)
+      current && nextVersions.some((item) => item.id === current)
         ? current
-        : (vData[0]?.id ?? "")
+        : (nextVersions[0]?.id ?? "")
     )
 
     const sRes = await fetch(`/api/admin/problems/${problemId}/solutions`, {
       credentials: "include",
     })
     const sData = await sRes.json()
-    setSolutions(sData)
+    setSolutions(Array.isArray(sData) ? (sData as Solution[]) : [])
   }, [problemId])
 
   React.useEffect(() => {
@@ -479,6 +498,20 @@ export default function AdminProblemDetailPage() {
       (selectedVersion?.testcases ?? []).map(toEditableTestcase)
     )
   }, [selectedVersion])
+
+  React.useEffect(() => {
+    const versionChanged = prevScratchRulesVersionIdRef.current !== selectedVersionId
+    if (versionChanged || !scratchRulesDirty) {
+      setScratchRulesText(formatJson(selectedVersion?.scratchRules))
+      setScratchRulesSaveResult(null)
+      setScratchValidateResult(null)
+      setScratchValidateFile(null)
+      if (versionChanged) {
+        setScratchRulesDirty(false)
+      }
+    }
+    prevScratchRulesVersionIdRef.current = selectedVersionId
+  }, [selectedVersion, selectedVersionId, scratchRulesDirty])
 
   const createVersion = async () => {
     if (samples.trim() && samplePreview.error) {
@@ -865,9 +898,11 @@ export default function AdminProblemDetailPage() {
       data = null
     }
     if (res.ok && data) {
-      const msg = data.batch === true
-        ? `批量生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，导入 ${asInt(data.imported, 0)} 个得分点，总分 ${String(data.totalScore ?? data.score ?? scratchRuleScore)}`
-        : `生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，脚本 ${asInt(data.scripts, 0)}，分值 ${String(data.score ?? scratchRuleScore)}`
+      const msg = data.completedFromDraft === true
+        ? `已根据题干草稿和答案自动补全：版本 ${String(data.versionId ?? "-")}，分段 ${asInt(data.parts, 0)}，总分 ${String(data.totalScore ?? "-")}`
+        : data.batch === true
+          ? `批量生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，导入 ${asInt(data.imported, 0)} 个得分点，总分 ${String(data.totalScore ?? data.score ?? scratchRuleScore)}`
+          : `生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，脚本 ${asInt(data.scripts, 0)}，分值 ${String(data.score ?? scratchRuleScore)}`
       setScratchRuleResult({ type: "success", message: msg })
       toast.success("Scratch 规则已生成", { description: msg })
       setScratchRuleFile(null)
@@ -880,6 +915,96 @@ export default function AdminProblemDetailPage() {
     }
     setScratchRuleGenerating(false)
     await load()
+  }
+
+  const saveScratchRulesJson = async () => {
+    if (!selectedVersionId) return
+
+    let scratchRules: unknown = null
+    if (scratchRulesText.trim()) {
+      try {
+        scratchRules = JSON.parse(scratchRulesText)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "scratch_rules_json_invalid"
+        setScratchRulesSaveResult({ type: "error", message })
+        toast.error("Scratch 规则 JSON 无效", { description: message })
+        return
+      }
+    }
+
+    setScratchRulesSaving(true)
+    setScratchRulesSaveResult(null)
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/scratch-rules`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scratchRules }),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok) {
+      const message = scratchRules === null
+        ? `已清空版本 ${selectedVersionId} 的 Scratch 规则`
+        : `已保存版本 ${selectedVersionId} 的 Scratch 规则`
+      setScratchRulesDirty(false)
+      setScratchRulesSaveResult({ type: "success", message })
+      toast.success("Scratch 规则已保存", { description: message })
+      await load()
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setScratchRulesSaveResult({ type: "error", message })
+      toast.error("Scratch 规则保存失败", { description: message })
+    }
+
+    setScratchRulesSaving(false)
+  }
+
+  const validateScratchRulesJson = async () => {
+    if (!selectedVersionId || !scratchValidateFile) return
+
+    setScratchValidateRunning(true)
+    setScratchValidateResult(null)
+
+    const form = new FormData()
+    form.append("answer", scratchValidateFile)
+    if (scratchRulesText.trim()) {
+      form.append("scratchRules", scratchRulesText)
+    }
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/scratch-rules`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok && data) {
+      const prefix = data.completedFromDraft === true
+        ? "已按题干草稿自动补全后验证"
+        : "验证结果"
+      const message = `${prefix}：${String(data.status ?? "-")}，得分 ${String(data.score ?? 0)}/${String(data.total ?? 0)}，通过 ${String(data.passed ?? 0)} 项${Array.isArray(data.errors) && data.errors.length ? `，错误 ${JSON.stringify(data.errors)}` : ""}`
+      setScratchValidateResult({ type: "success", message })
+      toast.success("Scratch 规则验证完成", { description: message })
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setScratchValidateResult({ type: "error", message })
+      toast.error("Scratch 规则验证失败", { description: message })
+    }
+
+    setScratchValidateRunning(false)
   }
 
   const addSolution = async () => {
@@ -1552,6 +1677,7 @@ export default function AdminProblemDetailPage() {
             上传标准答案的 Scratch 项目（.sb3 / project.json）或批量 ZIP（可选附带 config.yml/config.yaml/config.json）。
             批量 ZIP 未提供配置时，会按文件名中的分值约定自动识别（如 10-step1.sb3、step2_20.sb3）。
             若不选版本，默认写入最新版本；可指定角色名（不填则自动选择第一个非舞台角色）。
+            如果该版本已经根据题干生成了 Scratch 草稿规则，上传标准答案后会自动补全成完整判题规则。
           </div>
           <div className="grid md:grid-cols-2 gap-3">
             <select
@@ -1612,6 +1738,83 @@ export default function AdminProblemDetailPage() {
               }`}
             >
               {scratchRuleResult.message}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <h2 className="text-lg font-semibold">Scratch 规则 JSON / 验证</h2>
+          <div className="text-xs text-muted-foreground">
+            这里用于维护可复用的自定义 Scratch 判题 JSON。保存后会写入当前题目版本的
+            <code className="mx-1">ProblemVersion.scratchRules</code>；新导入的 Scratch 题会先自动生成题干草稿 JSON，
+            也可以先不保存，直接上传标准答案或样例答案进行验证。
+          </div>
+          <select
+            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+            value={selectedVersionId}
+            onChange={(e) => setSelectedVersionId(e.target.value)}
+          >
+            <option value="">选择版本</option>
+            {versions.map((v) => (
+              <option key={v.id} value={v.id}>
+                v{v.version}
+              </option>
+            ))}
+          </select>
+          <textarea
+            className="min-h-[320px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+            placeholder="在这里粘贴 scratchRules JSON；留空表示清空该版本的 Scratch 规则。"
+            value={scratchRulesText}
+            onChange={(e) => {
+              setScratchRulesText(e.target.value)
+              setScratchRulesDirty(true)
+            }}
+          />
+          <div className="flex flex-wrap gap-3">
+            <Button onClick={saveScratchRulesJson} disabled={!selectedVersionId || scratchRulesSaving}>
+              {scratchRulesSaving ? "保存中..." : "保存 Scratch 规则 JSON"}
+            </Button>
+          </div>
+          {scratchRulesSaveResult && (
+            <div
+              className={`text-xs break-all ${
+                scratchRulesSaveResult.type === "success"
+                  ? "text-emerald-400"
+                  : scratchRulesSaveResult.type === "error"
+                    ? "text-red-400"
+                    : "text-amber-400"
+              }`}
+            >
+              {scratchRulesSaveResult.message}
+            </div>
+          )}
+          <div className="grid md:grid-cols-[1fr_auto] gap-3 items-center">
+            <input
+              type="file"
+              accept=".sb3,.json"
+              onChange={(e) => setScratchValidateFile(e.target.files?.[0] ?? null)}
+              className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            />
+            <Button
+              onClick={validateScratchRulesJson}
+              disabled={!selectedVersionId || !scratchValidateFile || scratchValidateRunning}
+            >
+              {scratchValidateRunning ? "验证中..." : "上传答案验证规则"}
+            </Button>
+          </div>
+          {scratchValidateResult && (
+            <div
+              className={`text-xs break-all ${
+                scratchValidateResult.type === "success"
+                  ? "text-emerald-400"
+                  : scratchValidateResult.type === "error"
+                    ? "text-red-400"
+                    : "text-amber-400"
+              }`}
+            >
+              {scratchValidateResult.message}
             </div>
           )}
         </CardContent>

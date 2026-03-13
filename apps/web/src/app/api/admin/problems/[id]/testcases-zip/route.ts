@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { withAuth } from "@/lib/authz";
+import { db } from "@/lib/db";
 import { readZipEntries } from "@/lib/zip";
 import {
   MAX_TESTCASE_ZIP_BYTES,
@@ -7,6 +8,15 @@ import {
   normalizeZipEntries,
   replaceProblemTestcasesFromEntries,
 } from "@/lib/testcase-zip";
+
+async function resolveProblem(idOrSlug: string) {
+  return db.problem.findFirst({
+    where: {
+      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+    },
+    select: { id: true, slug: true },
+  })
+}
 
 export const POST = withAuth(async (req, { params }) => {
   const form = await req.formData();
@@ -30,15 +40,19 @@ export const POST = withAuth(async (req, { params }) => {
     );
   }
 
-  const problemId = params.id;
+  const problem = await resolveProblem(params.id);
+  if (!problem) {
+    return NextResponse.json({ error: "problem_not_found" }, { status: 404 });
+  }
+
   const filename = file.name || "";
   if (!filename.toLowerCase().endsWith(".zip")) {
     return NextResponse.json({ error: "zip_extension_required" }, { status: 400 });
   }
   const baseName = filename.slice(0, -4);
-  if (baseName !== problemId) {
+  if (baseName !== problem.id && baseName !== problem.slug) {
     return NextResponse.json(
-      { error: "zip_name_mismatch", detail: `expected ${problemId}.zip` },
+      { error: "zip_name_mismatch", detail: `expected ${problem.id}.zip or ${problem.slug}.zip` },
       { status: 400 }
     );
   }
@@ -46,7 +60,7 @@ export const POST = withAuth(async (req, { params }) => {
   try {
     const buffer = Buffer.from(await file.arrayBuffer());
     const entries = normalizeZipEntries(await readZipEntries(buffer));
-    const result = await replaceProblemTestcasesFromEntries(problemId, entries, { skipSync });
+    const result = await replaceProblemTestcasesFromEntries(problem.id, entries, { skipSync });
     return NextResponse.json(result);
   } catch (error) {
     if (error instanceof TestcaseZipError) {

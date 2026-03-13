@@ -132,6 +132,103 @@ function buildStatementMd(problemText, manifest, questionNo) {
   ].join("\n");
 }
 
+function extractSection(text, title, stops) {
+  const startIndex = text.indexOf(title);
+  if (startIndex < 0) return "";
+  const colonIndex = text.indexOf("：", startIndex);
+  const contentStart = colonIndex >= 0 ? colonIndex + 1 : startIndex + title.length;
+  const tail = text.slice(contentStart);
+  let endIndex = tail.length;
+  for (const stop of stops) {
+    const hit = tail.indexOf(stop);
+    if (hit >= 0 && hit < endIndex) {
+      endIndex = hit;
+    }
+  }
+  return tail.slice(0, endIndex).trim();
+}
+
+function extractNumberedItems(section) {
+  const normalized = section.replace(/\uF06C/g, "\n").trim();
+  const regex = /[（(](\d+)[）)]/g;
+  const matches = [...normalized.matchAll(regex)];
+  const items = [];
+  for (let i = 0; i < matches.length; i += 1) {
+    const match = matches[i];
+    const start = (match.index ?? 0) + match[0].length;
+    const end = i + 1 < matches.length ? (matches[i + 1].index ?? normalized.length) : normalized.length;
+    items.push({
+      index: Number(match[1]),
+      text: normalized.slice(start, end).replace(/\s*\n\s*/g, " ").trim(),
+    });
+  }
+  return items;
+}
+
+function parseRoleHints(notesSection) {
+  const map = new Map();
+  for (const rawLine of notesSection.split(/\n+/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    const indexes = [...line.matchAll(/[（(](\d+)[）)]/g)].map((item) => Number(item[1]));
+    if (!indexes.length) continue;
+
+    let role = null;
+    if (/背景代码区/.test(line)) {
+      role = "Stage";
+    } else {
+      const roleMatch =
+        line.match(/角色\s*([A-Za-z0-9_-]+)\s*代码区/) ??
+        line.match(/角色\s*([^\s（）()，。,]+)\s*代码区/);
+      if (roleMatch?.[1]) role = roleMatch[1];
+    }
+    if (!role) continue;
+
+    for (const index of indexes) {
+      map.set(index, role);
+    }
+  }
+  return map;
+}
+
+function distributeScores(totalScore, count) {
+  const total = Number.isFinite(totalScore) && totalScore > 0 ? Math.floor(totalScore) : count;
+  const base = Math.floor(total / count);
+  let remainder = total % count;
+  return Array.from({ length: count }, () => {
+    const score = base + (remainder > 0 ? 1 : 0);
+    if (remainder > 0) remainder -= 1;
+    return score;
+  });
+}
+
+function buildScratchRuleDraft(problemText, totalScore = 100) {
+  const implementationSection = extractSection(problemText, "功能实现", ["注意事项", "参考程序"]);
+  const items = extractNumberedItems(implementationSection);
+  if (!items.length) return null;
+
+  const notesSection = extractSection(problemText, "注意事项", ["参考程序"]);
+  const roleMap = parseRoleHints(notesSection);
+  const scores = distributeScores(totalScore, items.length);
+
+  return {
+    version: 1,
+    mode: "score_by_part_draft",
+    source: "statement",
+    totalScore,
+    parts: items.map((item, index) => ({
+      id: `r${item.index}`,
+      index: item.index,
+      title: item.text.slice(0, 32) || `part ${item.index}`,
+      description: item.text,
+      role: roleMap.get(item.index),
+      score: scores[index],
+      ordered: /依次|先|后|然后|再|直到/.test(item.text),
+      consecutive: /依次|然后|再等待|再切换|再以|之后/.test(item.text),
+    })),
+  };
+}
+
 function buildVersionData(problemText, manifest, questionNo) {
   return {
     version: 1,
@@ -143,6 +240,7 @@ function buildVersionData(problemText, manifest, questionNo) {
     samples: null,
     hints: "建议根据“准备工作 / 功能实现 / 注意事项”分块实现。",
     notes: `原始 PDF：${manifest.pdfUrl}`,
+    scratchRules: buildScratchRuleDraft(problemText),
     timeLimitMs: 1000,
     memoryLimitMb: 256,
   };

@@ -8,6 +8,8 @@ import {
   buildProblemLifecycleData,
   generateUniqueProblemSlug,
 } from "@/lib/problem-admin";
+import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
+import { Prisma } from "@prisma/client";
 
 const CreateProblemSchema = z.object({
   title: z.string().min(1),
@@ -140,6 +142,12 @@ export const POST = withAuth(async (req) => {
       payload.hints ||
       payload.notes
     ) {
+      const scratchRules = maybeBuildScratchRuleDraft({
+        statement: payload.statement,
+        statementMd: payload.statementMd,
+        tags: payload.tags,
+      });
+
       const version = await tx.problemVersion.create({
         data: {
           problemId: problem.id,
@@ -152,6 +160,9 @@ export const POST = withAuth(async (req) => {
           outputFormat: payload.outputFormat,
           samples: payload.samples,
           notes: payload.notes,
+          scratchRules: scratchRules
+            ? (scratchRules as Prisma.InputJsonValue)
+            : undefined,
           timeLimitMs: payload.timeLimitMs ?? 1000,
           memoryLimitMb: payload.memoryLimitMb ?? 256,
         },

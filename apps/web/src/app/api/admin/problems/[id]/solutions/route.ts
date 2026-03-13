@@ -26,9 +26,24 @@ const CreateSolutionSchema = z.object({
   videoUrl: z.string().url().optional(),
 });
 
+async function resolveProblemId(idOrSlug: string) {
+  const problem = await db.problem.findFirst({
+    where: {
+      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+    },
+    select: { id: true },
+  })
+  return problem?.id ?? null
+}
+
 export const GET = withAuth(async (_req, { params }) => {
+  const problemId = await resolveProblemId(params.id)
+  if (!problemId) {
+    return NextResponse.json({ error: "problem_not_found" }, { status: 404 })
+  }
+
   const solutions = await db.solution.findMany({
-    where: { problemId: params.id },
+    where: { problemId },
     orderBy: { createdAt: "desc" },
     include: {
       author: { select: { id: true, name: true } },
@@ -56,12 +71,16 @@ export const GET = withAuth(async (_req, { params }) => {
 
 export const POST = withAuth(async (req, { params }, user) => {
   const payload = CreateSolutionSchema.parse(await req.json());
+  const problemId = await resolveProblemId(params.id)
+  if (!problemId) {
+    return NextResponse.json({ error: "problem_not_found" }, { status: 404 })
+  }
   const accessLevel = normalizeAccessLevel(payload.accessLevel)
   const isPremium = payload.isPremium ?? (accessLevel ? accessLevel !== "FREE" : payload.visibility !== "public")
 
   const solution = await db.solution.create({
     data: {
-      problemId: params.id,
+      problemId,
       versionId: payload.versionId,
       title: payload.title,
       summary: payload.summary,

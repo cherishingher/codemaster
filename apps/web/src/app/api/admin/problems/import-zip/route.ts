@@ -4,11 +4,13 @@ import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 import { storeTextAsset } from "@/lib/storage";
 import { readZipEntries } from "@/lib/zip";
+import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
 import {
   buildJudgeConfigCreateManyInput,
   buildProblemLifecycleData,
   generateUniqueProblemSlug,
 } from "@/lib/problem-admin";
+import { Prisma } from "@prisma/client";
 
 const TestcaseSchema = z
   .object({
@@ -44,6 +46,7 @@ const VersionSchema = z.object({
   samples: z.any().optional(),
   hints: z.string().optional(),
   notes: z.string().optional(),
+  scratchRules: z.unknown().optional(),
   timeLimitMs: z.number().int().positive().default(1000),
   memoryLimitMb: z.number().int().positive().default(256),
   testcases: z.array(TestcaseSchema).optional(),
@@ -125,6 +128,14 @@ export const POST = withAuth(async (req) => {
         let autoVersion = 1;
         let currentVersionId: string | null = null;
         for (const v of item.versions) {
+          const scratchRules =
+            v.scratchRules ??
+            maybeBuildScratchRuleDraft({
+              statement: v.statement,
+              statementMd: v.statementMd,
+              tags: item.tags,
+            });
+
           const version = await tx.problemVersion.create({
             data: {
               problemId: problem.id,
@@ -137,6 +148,9 @@ export const POST = withAuth(async (req) => {
               outputFormat: v.outputFormat,
               samples: v.samples,
               notes: v.notes,
+              scratchRules: scratchRules
+                ? (scratchRules as Prisma.InputJsonValue)
+                : undefined,
               timeLimitMs: v.timeLimitMs,
               memoryLimitMb: v.memoryLimitMb,
             },

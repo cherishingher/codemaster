@@ -91,6 +91,8 @@ codemaster/
 
 - 平台使用文档：[`docs/user-guide/README.md`](./docs/user-guide/README.md)
 - 适合产品、测试、运营、教研、实施、机构对接同学快速了解前台、后台和租户工作台能力
+- Scratch 判题工作流：[`docs/scratch-judge-workflow.md`](./docs/scratch-judge-workflow.md)
+- 说明 Scratch 草稿规则、标准答案自动补全、多角色分段评分与后台验证链路
 - 分阶段发布说明：
   - [`docs/releases/phase-1/README.md`](./docs/releases/phase-1/README.md)
   - [`docs/releases/phase-2/README.md`](./docs/releases/phase-2/README.md)

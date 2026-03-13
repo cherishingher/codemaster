@@ -3,6 +3,8 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 import { buildJudgeConfigCreateManyInput } from "@/lib/problem-admin";
+import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
+import { Prisma } from "@prisma/client";
 
 const CreateVersionSchema = z.object({
   statement: z.string().min(1),
@@ -25,9 +27,28 @@ const CreateVersionSchema = z.object({
   memoryLimitMb: z.number().int().positive(),
 });
 
+async function resolveProblem(idOrSlug: string) {
+  return db.problem.findFirst({
+    where: {
+      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+    },
+    select: {
+      id: true,
+      tags: {
+        include: { tag: true },
+      },
+    },
+  })
+}
+
 export const GET = withAuth(async (_req, { params }) => {
+  const problem = await resolveProblem(params.id)
+  if (!problem) {
+    return NextResponse.json({ error: "problem_not_found" }, { status: 404 })
+  }
+
   const versions = await db.problemVersion.findMany({
-    where: { problemId: params.id },
+    where: { problemId: problem.id },
     orderBy: { version: "desc" },
     include: {
       judgeConfigs: {
@@ -48,6 +69,7 @@ export const GET = withAuth(async (_req, { params }) => {
       inputFormat: v.inputFormat,
       outputFormat: v.outputFormat,
       samples: v.samples,
+      scratchRules: v.scratchRules,
       notes: v.notes,
       timeLimitMs: v.timeLimitMs,
       memoryLimitMb: v.memoryLimitMb,
@@ -88,26 +110,38 @@ export const POST = withAuth(async (req, { params }) => {
   const payload = CreateVersionSchema.parse(await req.json());
 
   const created = await db.$transaction(async (tx) => {
-    const latest = await tx.problemVersion.findFirst({
-      where: { problemId: params.id },
-      orderBy: { version: "desc" },
-      select: { version: true },
-    });
-
-    const problem = await tx.problem.findUnique({
-      where: { id: params.id },
+    const problem = await tx.problem.findFirst({
+      where: {
+        OR: [{ id: params.id }, { slug: params.id }],
+      },
       select: {
+        id: true,
         tags: {
           include: { tag: true },
         },
       },
     });
+    if (!problem) {
+      throw new Error("problem_not_found")
+    }
+
+    const latest = await tx.problemVersion.findFirst({
+      where: { problemId: problem.id },
+      orderBy: { version: "desc" },
+      select: { version: true },
+    });
 
     const nextVersion = (latest?.version ?? 0) + 1;
+    const tags = problem?.tags.map((item) => item.tag.name);
+    const scratchRules = maybeBuildScratchRuleDraft({
+      statement: payload.statement,
+      statementMd: payload.statementMd,
+      tags,
+    });
 
     const version = await tx.problemVersion.create({
       data: {
-        problemId: params.id,
+        problemId: problem.id,
         version: nextVersion,
         statement: payload.statement,
         statementMd: payload.statementMd ?? payload.statement,
@@ -117,13 +151,16 @@ export const POST = withAuth(async (req, { params }) => {
         outputFormat: payload.outputFormat,
         samples: payload.samples,
         notes: payload.notes,
+        scratchRules: scratchRules
+          ? (scratchRules as Prisma.InputJsonValue)
+          : undefined,
         timeLimitMs: payload.timeLimitMs,
         memoryLimitMb: payload.memoryLimitMb,
       },
     });
 
     await tx.problem.update({
-      where: { id: params.id },
+      where: { id: problem.id },
       data: { currentVersionId: version.id },
     });
 
