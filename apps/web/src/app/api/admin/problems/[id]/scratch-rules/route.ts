@@ -3,7 +3,11 @@ import { withAuth } from "@/lib/authz";
 import { db } from "@/lib/db";
 import { readZipEntries } from "@/lib/zip";
 import { generateScratchRuleSet } from "@/lib/scratch-rules-gen";
-import { completeScratchRuleDraft, isScratchRuleDraft } from "@/lib/scratch-rule-draft";
+import {
+  completeScratchRuleDraft,
+  isScratchRuleDraft,
+  resolveScratchRuleDraft,
+} from "@/lib/scratch-rule-draft";
 import { load as loadYaml } from "js-yaml";
 import { Prisma } from "@prisma/client";
 
@@ -27,6 +31,36 @@ type ScratchBatchConfig = {
 type ScratchRuleItem = {
   score: number;
   rule: ReturnType<typeof generateScratchRuleSet>;
+};
+
+const SCRATCH_VERSION_SELECT = {
+  id: true,
+  scratchRules: true,
+  statement: true,
+  statementMd: true,
+  problem: {
+    select: {
+      id: true,
+      tags: {
+        select: {
+          tag: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ProblemVersionSelect;
+
+type ScratchVersionRecord = Prisma.ProblemVersionGetPayload<{
+  select: typeof SCRATCH_VERSION_SELECT;
+}>;
+
+type ScratchDraftResolution = {
+  draft: NonNullable<ReturnType<typeof resolveScratchRuleDraft>>;
+  source: "stored" | "statement";
 };
 
 function normalizeName(filePath: string) {
@@ -183,6 +217,22 @@ async function resolveProblemId(idOrSlug: string) {
   return problem?.id ?? null
 }
 
+function resolveScratchDraftForUpload(
+  version: ScratchVersionRecord
+): ScratchDraftResolution | null {
+  const draft = resolveScratchRuleDraft(version.scratchRules, {
+    statement: version.statement,
+    statementMd: version.statementMd,
+    tags: version.problem.tags.map((item) => item.tag.name),
+  });
+  if (!draft) return null;
+
+  return {
+    draft,
+    source: isScratchRuleDraft(version.scratchRules) ? "stored" : "statement",
+  };
+}
+
 export const POST = withAuth(
   async (req, { params }) => {
     const form = await req.formData();
@@ -216,13 +266,20 @@ export const POST = withAuth(
     }
 
     const version = versionId
-      ? await db.problemVersion.findUnique({ where: { id: versionId } })
+      ? await db.problemVersion.findUnique({
+          where: { id: versionId },
+          select: SCRATCH_VERSION_SELECT,
+        })
       : await db.problemVersion.findFirst({
           where: { problemId: problemId ?? undefined },
           orderBy: { version: "desc" },
+          select: SCRATCH_VERSION_SELECT,
         });
     if (!version) {
       return NextResponse.json({ error: "version_not_found" }, { status: 404 });
+    }
+    if (problemId && version.problem.id !== problemId) {
+      return NextResponse.json({ error: "version_problem_mismatch" }, { status: 400 });
     }
 
     let effectiveMode = mode;
@@ -381,11 +438,12 @@ export const POST = withAuth(
         return NextResponse.json({ error: message }, { status: 400 });
       }
 
-      if (isScratchRuleDraft(version.scratchRules)) {
+      const draftResolution = resolveScratchDraftForUpload(version);
+      if (draftResolution) {
         try {
           nextRules = completeScratchRuleDraft(
             project as Parameters<typeof generateScratchRuleSet>[0],
-            version.scratchRules
+            draftResolution.draft
           );
         } catch (err) {
           const message = err instanceof Error ? err.message : "scratch_draft_completion_failed";
@@ -393,47 +451,48 @@ export const POST = withAuth(
         }
 
         effectiveMode = "replace";
-        resultMeta = {
+      resultMeta = {
           parts: Array.isArray((nextRules as { parts?: unknown[] }).parts)
             ? (nextRules as { parts: unknown[] }).parts.length
             : 0,
           totalScore: (nextRules as { totalScore?: unknown }).totalScore ?? null,
           completedFromDraft: true,
+          draftSource: draftResolution.source,
           batch: false,
         };
       } else {
-      let baseRule;
-      try {
-        baseRule = generateScratchRuleSet(project as Parameters<typeof generateScratchRuleSet>[0], {
-          role,
-          substackMode: "unordered",
-        });
-      } catch (err) {
-        const message = err instanceof Error ? err.message : "rule_generation_failed";
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
+        let baseRule;
+        try {
+          baseRule = generateScratchRuleSet(project as Parameters<typeof generateScratchRuleSet>[0], {
+            role,
+            substackMode: "unordered",
+          });
+        } catch (err) {
+          const message = err instanceof Error ? err.message : "rule_generation_failed";
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
 
-      const incoming = {
-        role: baseRule.role,
-        rules: [{ score: defaultItemScore, rule: baseRule }],
-        totalScore: defaultItemScore,
-      };
-      try {
-        nextRules = mergeScratchRuleSets(version.scratchRules, incoming, effectiveMode);
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : "scratch_role_conflict_with_existing_rules";
-        return NextResponse.json({ error: message }, { status: 400 });
-      }
+        const incoming = {
+          role: baseRule.role,
+          rules: [{ score: defaultItemScore, rule: baseRule }],
+          totalScore: defaultItemScore,
+        };
+        try {
+          nextRules = mergeScratchRuleSets(version.scratchRules, incoming, effectiveMode);
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : "scratch_role_conflict_with_existing_rules";
+          return NextResponse.json({ error: message }, { status: 400 });
+        }
 
-      resultMeta = {
-        role: baseRule.role,
-        scripts: baseRule.scripts.length,
-        score: defaultItemScore,
-        totalScore: defaultItemScore,
-        imported: 1,
-        batch: false,
-      };
+        resultMeta = {
+          role: baseRule.role,
+          scripts: baseRule.scripts.length,
+          score: defaultItemScore,
+          totalScore: defaultItemScore,
+          imported: 1,
+          batch: false,
+        };
       }
     }
 

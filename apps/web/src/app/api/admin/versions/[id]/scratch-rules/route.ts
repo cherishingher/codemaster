@@ -11,10 +11,39 @@ import { parseScratchProjectFile } from "@/lib/scratch-project"
 import {
   completeScratchRuleDraft,
   isScratchRuleDraft,
+  resolveScratchRuleDraft,
   type ScratchRuleDraft,
 } from "@/lib/scratch-rule-draft"
 
 export const runtime = "nodejs"
+
+const VERSION_SELECT = {
+  id: true,
+  version: true,
+  statement: true,
+  statementMd: true,
+  scratchRules: true,
+  problem: {
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      tags: {
+        select: {
+          tag: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
+    },
+  },
+} satisfies Prisma.ProblemVersionSelect
+
+type ScratchVersionRecord = Prisma.ProblemVersionGetPayload<{
+  select: typeof VERSION_SELECT
+}>
 
 function normalizeScratchRulesInput(value: unknown) {
   if (value && typeof value === "object" && "scratchRules" in value) {
@@ -26,19 +55,20 @@ function normalizeScratchRulesInput(value: unknown) {
 async function findVersion(id: string) {
   return db.problemVersion.findUnique({
     where: { id },
-    select: {
-      id: true,
-      version: true,
-      scratchRules: true,
-      problem: {
-        select: {
-          id: true,
-          slug: true,
-          title: true,
-        },
-      },
-    },
+    select: VERSION_SELECT,
   })
+}
+
+function deriveScratchRuleDraft(version: ScratchVersionRecord) {
+  return resolveScratchRuleDraft(version.scratchRules, {
+    statement: version.statement,
+    statementMd: version.statementMd,
+    tags: version.problem.tags.map((item) => item.tag.name),
+  })
+}
+
+function resolveStoredOrDerivedScratchRules(version: ScratchVersionRecord) {
+  return version.scratchRules ?? deriveScratchRuleDraft(version)
 }
 
 function isScratchRulePayload(
@@ -64,8 +94,12 @@ export const GET = withAuth(
     return NextResponse.json({
       id: version.id,
       version: version.version,
-      problem: version.problem,
-      scratchRules: version.scratchRules,
+      problem: {
+        id: version.problem.id,
+        slug: version.problem.slug,
+        title: version.problem.title,
+      },
+      scratchRules: resolveStoredOrDerivedScratchRules(version),
     })
   },
   { roles: "admin" }
@@ -122,11 +156,15 @@ export const POST = withAuth(
       return NextResponse.json({ error: "answer_file_required" }, { status: 400 })
     }
 
-    let scratchRules: unknown = version.scratchRules
+    let scratchRules: unknown = resolveStoredOrDerivedScratchRules(version)
     const scratchRulesText = form.get("scratchRules")
-    if (typeof scratchRulesText === "string" && scratchRulesText.trim()) {
+    const hasScratchRulesOverride =
+      typeof scratchRulesText === "string" && Boolean(scratchRulesText.trim())
+    const usedStoredDraft = isScratchRuleDraft(version.scratchRules)
+    const usedDerivedDraft = !version.scratchRules && isScratchRuleDraft(scratchRules)
+    if (hasScratchRulesOverride) {
       try {
-        scratchRules = JSON.parse(scratchRulesText)
+        scratchRules = JSON.parse(scratchRulesText as string)
       } catch {
         return NextResponse.json({ error: "scratch_rules_json_invalid" }, { status: 400 })
       }
@@ -171,6 +209,15 @@ export const POST = withAuth(
       errors: result.errors,
       ruleKind: resolveScratchRuleKind(effectiveRules),
       completedFromDraft: isScratchRuleDraft(scratchRules),
+      draftSource: isScratchRuleDraft(scratchRules)
+        ? hasScratchRulesOverride
+          ? "request"
+          : usedStoredDraft
+          ? "stored"
+          : usedDerivedDraft
+            ? "statement"
+            : "request"
+        : null,
     })
   },
   { roles: "admin" }

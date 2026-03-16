@@ -46,6 +46,7 @@ export const GET = withAuth(async (_req, { params }) => {
   if (!problem) {
     return NextResponse.json({ error: "problem_not_found" }, { status: 404 })
   }
+  const tags = problem.tags.map((item) => item.tag.name)
 
   const versions = await db.problemVersion.findMany({
     where: { problemId: problem.id },
@@ -69,7 +70,11 @@ export const GET = withAuth(async (_req, { params }) => {
       inputFormat: v.inputFormat,
       outputFormat: v.outputFormat,
       samples: v.samples,
-      scratchRules: v.scratchRules,
+      scratchRules: v.scratchRules ?? maybeBuildScratchRuleDraft({
+        statement: v.statement,
+        statementMd: v.statementMd,
+        tags,
+      }),
       notes: v.notes,
       timeLimitMs: v.timeLimitMs,
       memoryLimitMb: v.memoryLimitMb,

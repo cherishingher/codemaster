@@ -34,7 +34,7 @@ export type ScratchRuleDraft = {
   parts: ScratchRuleDraftPart[]
 }
 
-type ScratchRuleDraftSeed = {
+export type ScratchRuleDraftSeed = {
   statement?: string | null
   statementMd?: string | null
   tags?: string[] | null
@@ -128,6 +128,16 @@ export function maybeBuildScratchRuleDraft(seed: ScratchRuleDraftSeed): ScratchR
   } catch {
     return null
   }
+}
+
+export function resolveScratchRuleDraft(
+  scratchRules: unknown,
+  seed: ScratchRuleDraftSeed
+): ScratchRuleDraft | null {
+  if (isScratchRuleDraft(scratchRules)) {
+    return scratchRules
+  }
+  return maybeBuildScratchRuleDraft(seed)
 }
 
 export function completeScratchRuleDraft(

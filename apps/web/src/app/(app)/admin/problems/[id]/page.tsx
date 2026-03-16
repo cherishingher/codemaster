@@ -355,7 +355,7 @@ export default function AdminProblemDetailPage() {
   const [scratchRuleFile, setScratchRuleFile] = React.useState<File | null>(null)
   const [scratchRole, setScratchRole] = React.useState("")
   const [scratchRuleScore, setScratchRuleScore] = React.useState("10")
-  const [scratchRuleMode, setScratchRuleMode] = React.useState<"append" | "replace">("append")
+  const [scratchRuleMode, setScratchRuleMode] = React.useState<"append" | "replace">("replace")
   const [scratchRuleResult, setScratchRuleResult] = React.useState<ZipResult | null>(null)
   const [scratchRuleGenerating, setScratchRuleGenerating] = React.useState(false)
   const [scratchRulesText, setScratchRulesText] = React.useState("")
@@ -899,7 +899,9 @@ export default function AdminProblemDetailPage() {
     }
     if (res.ok && data) {
       const msg = data.completedFromDraft === true
-        ? `已根据题干草稿和答案自动补全：版本 ${String(data.versionId ?? "-")}，分段 ${asInt(data.parts, 0)}，总分 ${String(data.totalScore ?? "-")}`
+        ? data.draftSource === "statement"
+          ? `已根据题干和答案自动生成完整规则：版本 ${String(data.versionId ?? "-")}，分段 ${asInt(data.parts, 0)}，总分 ${String(data.totalScore ?? "-")}`
+          : `已根据题干草稿和答案自动补全：版本 ${String(data.versionId ?? "-")}，分段 ${asInt(data.parts, 0)}，总分 ${String(data.totalScore ?? "-")}`
         : data.batch === true
           ? `批量生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，导入 ${asInt(data.imported, 0)} 个得分点，总分 ${String(data.totalScore ?? data.score ?? scratchRuleScore)}`
           : `生成成功：版本 ${String(data.versionId ?? "-")}，角色 ${String(data.role ?? "-")}，脚本 ${asInt(data.scripts, 0)}，分值 ${String(data.score ?? scratchRuleScore)}`
@@ -993,7 +995,9 @@ export default function AdminProblemDetailPage() {
 
     if (res.ok && data) {
       const prefix = data.completedFromDraft === true
-        ? "已按题干草稿自动补全后验证"
+        ? data.draftSource === "statement"
+          ? "已按题干自动生成规则后验证"
+          : "已按题干草稿自动补全后验证"
         : "验证结果"
       const message = `${prefix}：${String(data.status ?? "-")}，得分 ${String(data.score ?? 0)}/${String(data.total ?? 0)}，通过 ${String(data.passed ?? 0)} 项${Array.isArray(data.errors) && data.errors.length ? `，错误 ${JSON.stringify(data.errors)}` : ""}`
       setScratchValidateResult({ type: "success", message })
@@ -1677,7 +1681,8 @@ export default function AdminProblemDetailPage() {
             上传标准答案的 Scratch 项目（.sb3 / project.json）或批量 ZIP（可选附带 config.yml/config.yaml/config.json）。
             批量 ZIP 未提供配置时，会按文件名中的分值约定自动识别（如 10-step1.sb3、step2_20.sb3）。
             若不选版本，默认写入最新版本；可指定角色名（不填则自动选择第一个非舞台角色）。
-            如果该版本已经根据题干生成了 Scratch 草稿规则，上传标准答案后会自动补全成完整判题规则。
+            如果题目题干能识别出 Scratch 要求点，上传标准答案后会优先按题干自动生成或复用草稿，再补全成完整的多角色分段判题规则。
+            角色名 / 分值 / 追加模式主要用于旧的单角色规则或批量 ZIP 导入。
           </div>
           <div className="grid md:grid-cols-2 gap-3">
             <select
@@ -1699,7 +1704,7 @@ export default function AdminProblemDetailPage() {
             />
           </div>
           <div className="grid md:grid-cols-2 gap-3">
-              <Input
+            <Input
               placeholder="分值（单文件得分点 / 批量默认分值）"
               value={scratchRuleScore}
               onChange={(e) => setScratchRuleScore(e.target.value)}
@@ -1709,8 +1714,8 @@ export default function AdminProblemDetailPage() {
               value={scratchRuleMode}
               onChange={(e) => setScratchRuleMode(e.target.value as "append" | "replace")}
             >
-              <option value="append">追加（推荐）</option>
-              <option value="replace">覆盖</option>
+              <option value="replace">覆盖（推荐）</option>
+              <option value="append">追加</option>
             </select>
           </div>
           <div className="grid md:grid-cols-2 gap-3">
