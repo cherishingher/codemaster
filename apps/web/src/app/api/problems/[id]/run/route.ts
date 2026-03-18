@@ -4,6 +4,7 @@ import { mkdtemp, rm, writeFile } from "fs/promises"
 import { tmpdir } from "os"
 import path from "path"
 import { spawn } from "child_process"
+import { isSandboxAvailable, runInSandbox, compileInSandbox, type SandboxResult } from "@/lib/sandbox"
 
 export const runtime = "nodejs"
 
@@ -143,6 +144,8 @@ const handler = async (req: Request) => {
     warning = "已在本地运行中自动替换 <bits/stdc++.h> 为标准头文件"
   }
 
+  const useDocker = isSandboxAvailable()
+
   try {
   if (normalizedLanguage.startsWith("cpp")) {
       const sourcePath = path.join(workDir, "main.cpp")
@@ -156,24 +159,35 @@ const handler = async (req: Request) => {
           ? "c++14"
           : "c++17"
 
-      let compileResult: RunResult
+      let compileResult: RunResult | SandboxResult
       try {
-        const preferredCompiler = process.env.CPP_COMPILER ?? "g++"
-        try {
-          compileResult = await runCommand(
-            preferredCompiler,
-            ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
-            { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
-          )
-        } catch (err) {
-          if (preferredCompiler !== "clang++") {
+        if (useDocker) {
+          compileResult = await compileInSandbox({
+            workDir,
+            sourceName: "main.cpp",
+            outputName: "main",
+            compiler: "g++",
+            compilerArgs: [`-std=${stdFlag}`, "-O2"],
+            timeoutMs: COMPILE_TIMEOUT_MS,
+          })
+        } else {
+          const preferredCompiler = process.env.CPP_COMPILER ?? "g++"
+          try {
             compileResult = await runCommand(
-              "clang++",
+              preferredCompiler,
               ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
               { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
             )
-          } else {
-            throw err
+          } catch (err) {
+            if (preferredCompiler !== "clang++") {
+              compileResult = await runCommand(
+                "clang++",
+                ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
+                { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
+              )
+            } else {
+              throw err
+            }
           }
         }
       } catch (err) {
@@ -192,34 +206,51 @@ const handler = async (req: Request) => {
         })
       }
 
-      const runResult = await runCommand(binPath, [], {
-        cwd: workDir,
-        input,
-        timeoutMs: RUN_TIMEOUT_MS,
-        sandbox: true,
-      })
+      const runResult = useDocker
+        ? await runInSandbox({
+            workDir,
+            command: "./main",
+            input,
+            timeoutMs: RUN_TIMEOUT_MS,
+          })
+        : await runCommand(binPath, [], {
+            cwd: workDir,
+            input,
+            timeoutMs: RUN_TIMEOUT_MS,
+            sandbox: true,
+          })
 
       return NextResponse.json({
         ok: true,
         phase: "run",
         warning,
+        sandbox: useDocker ? "docker" : "ulimit",
         ...runResult,
       })
     }
 
     const sourcePath = path.join(workDir, "main.py")
     await writeFile(sourcePath, normalizedCode, "utf8")
-    const runResult = await runCommand("python3", [sourcePath], {
-      cwd: workDir,
-      input,
-      timeoutMs: RUN_TIMEOUT_MS,
-      sandbox: true,
-    })
+    const runResult = useDocker
+      ? await runInSandbox({
+          workDir,
+          command: "python3",
+          args: ["/sandbox/work/main.py"],
+          input,
+          timeoutMs: RUN_TIMEOUT_MS,
+        })
+      : await runCommand("python3", [sourcePath], {
+          cwd: workDir,
+          input,
+          timeoutMs: RUN_TIMEOUT_MS,
+          sandbox: true,
+        })
 
     return NextResponse.json({
       ok: true,
       phase: "run",
       warning,
+      sandbox: useDocker ? "docker" : "ulimit",
       ...runResult,
     })
   } finally {

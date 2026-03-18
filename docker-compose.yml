@@ -20,5 +20,13 @@ services:
     ports:
       - "127.0.0.1:6379:6379"
 
+  sandbox:
+    build:
+      context: .
+      dockerfile: infra/sandbox/Dockerfile
+    image: codemaster-sandbox
+    profiles:
+      - build-only
+
 volumes:
   pgdata:

@@ -4,6 +4,17 @@ const PROTECTED_PREFIXES = ["/api/admin", "/admin"];
 
 export function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const proto = req.headers.get("x-forwarded-proto");
+
+  if (
+    process.env.NODE_ENV === "production" &&
+    proto === "http" &&
+    !pathname.startsWith("/api/health")
+  ) {
+    const httpsUrl = req.nextUrl.clone();
+    httpsUrl.protocol = "https";
+    return NextResponse.redirect(httpsUrl, 301);
+  }
 
   const isProtected = PROTECTED_PREFIXES.some((p) => pathname.startsWith(p));
   if (!isProtected) {
@@ -25,5 +36,5 @@ export function middleware(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/admin/:path*", "/api/admin/:path*"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };
