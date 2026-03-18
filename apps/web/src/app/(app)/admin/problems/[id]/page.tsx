@@ -23,6 +23,7 @@ type Version = {
   outputFormat?: string | null
   samples?: unknown
   scratchRules?: unknown
+  testdataGenerationConfig?: unknown
   notes?: string | null
   timeLimitMs: number
   memoryLimitMb: number
@@ -51,6 +52,9 @@ type Version = {
     score: number
     groupId?: string | null
     isSample: boolean
+    sourceType?: "MANUAL" | "ZIP_IMPORT" | "AUTO_GENERATED"
+    generationTaskId?: string | null
+    generationOrdinal?: number | null
     orderIndex?: number | null
   }[]
 }
@@ -114,6 +118,104 @@ type EditableTestcaseDraft = {
 type ZipResult = {
   type: "success" | "error" | "info"
   message: string
+}
+
+type StandardSolutionItem = {
+  id: string
+  label: string
+  language: string
+  status: string
+  isPrimary: boolean
+  sourceHash?: string | null
+  notes?: string | null
+  sourceAsset?: {
+    id: string
+    uri: string
+    fileName: string
+    byteSize: number
+    checksumSha256?: string | null
+  } | null
+  createdAt: string
+  updatedAt?: string
+}
+
+type TestdataTaskItem = {
+  id: string
+  status: string
+  stage: string
+  mode: string
+  configSource?: string
+  seed?: string | null
+  attemptNo: number
+  standardSolution?: {
+    id: string
+    label: string
+    language: string
+  } | null
+  plannedCaseCount: number
+  generatedCaseCount: number
+  succeededCaseCount: number
+  failedCaseCount: number
+  persistedCaseCount: number
+  errorCode?: string | null
+  errorMessage?: string | null
+  packageAsset?: {
+    id: string
+    uri: string
+    fileName: string
+  } | null
+  createdAt: string
+  startedAt?: string | null
+  finishedAt?: string | null
+}
+
+type TestdataTaskLogItem = {
+  id: string
+  sequenceNo: number
+  level: string
+  stage: string
+  code?: string | null
+  message: string
+  detail?: unknown
+  createdAt: string
+}
+
+type TestdataTaskCaseItem = {
+  id: string
+  ordinal: number
+  groupKey?: string | null
+  title?: string | null
+  score: number
+  status: string
+  executionStatus: string
+  errorCode?: string | null
+  errorMessage?: string | null
+  inputAsset?: {
+    id: string
+    uri: string
+    fileName: string
+  } | null
+  expectedOutputAsset?: {
+    id: string
+    uri: string
+    fileName: string
+  } | null
+}
+
+type TestdataAnalysisResult = {
+  summary: {
+    problemCategory: string[]
+    inputStructures: string[]
+    likelyPitfalls: string[]
+  }
+  recommendations: {
+    primaryGenerator: {
+      type: string
+      score: number
+    } | null
+  }
+  warnings: string[]
+  reviewRequired: boolean
 }
 
 type JsonObject = Record<string, unknown>
@@ -365,6 +467,33 @@ export default function AdminProblemDetailPage() {
   const [scratchValidateFile, setScratchValidateFile] = React.useState<File | null>(null)
   const [scratchValidateRunning, setScratchValidateRunning] = React.useState(false)
   const [scratchValidateResult, setScratchValidateResult] = React.useState<ZipResult | null>(null)
+  const [testdataConfigText, setTestdataConfigText] = React.useState("")
+  const [testdataConfigDirty, setTestdataConfigDirty] = React.useState(false)
+  const [testdataConfigSaving, setTestdataConfigSaving] = React.useState(false)
+  const [testdataConfigResult, setTestdataConfigResult] = React.useState<ZipResult | null>(null)
+  const [testdataAnalysisLoading, setTestdataAnalysisLoading] = React.useState(false)
+  const [testdataAnalysisResult, setTestdataAnalysisResult] = React.useState<TestdataAnalysisResult | null>(null)
+  const [standardSolutions, setStandardSolutions] = React.useState<StandardSolutionItem[]>([])
+  const [standardSolutionFile, setStandardSolutionFile] = React.useState<File | null>(null)
+  const [standardSolutionLanguage, setStandardSolutionLanguage] = React.useState("cpp17")
+  const [standardSolutionLabel, setStandardSolutionLabel] = React.useState("")
+  const [standardSolutionIsPrimary, setStandardSolutionIsPrimary] = React.useState(true)
+  const [standardSolutionUploading, setStandardSolutionUploading] = React.useState(false)
+  const [standardSolutionResult, setStandardSolutionResult] = React.useState<ZipResult | null>(null)
+  const [selectedStandardSolutionId, setSelectedStandardSolutionId] = React.useState("")
+  const [testdataTaskMode, setTestdataTaskMode] = React.useState<"APPEND" | "REPLACE_GENERATED" | "REPLACE_ALL">("REPLACE_GENERATED")
+  const [testdataTaskCaseCount, setTestdataTaskCaseCount] = React.useState("10")
+  const [testdataTaskTotalScore, setTestdataTaskTotalScore] = React.useState("100")
+  const [testdataTaskSeed, setTestdataTaskSeed] = React.useState("")
+  const [testdataTaskCreating, setTestdataTaskCreating] = React.useState(false)
+  const [testdataTaskResult, setTestdataTaskResult] = React.useState<ZipResult | null>(null)
+  const [testdataTasks, setTestdataTasks] = React.useState<TestdataTaskItem[]>([])
+  const [selectedTestdataTaskId, setSelectedTestdataTaskId] = React.useState("")
+  const [selectedTestdataTask, setSelectedTestdataTask] = React.useState<TestdataTaskItem | null>(null)
+  const [testdataTaskLoading, setTestdataTaskLoading] = React.useState(false)
+  const [testdataTaskLogs, setTestdataTaskLogs] = React.useState<TestdataTaskLogItem[]>([])
+  const [testdataTaskCases, setTestdataTaskCases] = React.useState<TestdataTaskCaseItem[]>([])
+  const [testdataTaskRefreshing, setTestdataTaskRefreshing] = React.useState(false)
   const [selectedTags, setSelectedTags] = React.useState<string[]>([])
   const [tagsSaving, setTagsSaving] = React.useState(false)
   const [judgeConfigsDraft, setJudgeConfigsDraft] = React.useState<JudgeConfigDraft[]>([])
@@ -373,6 +502,7 @@ export default function AdminProblemDetailPage() {
   const [testcaseSavingId, setTestcaseSavingId] = React.useState<string | null>(null)
   const [testcaseDeletingId, setTestcaseDeletingId] = React.useState<string | null>(null)
   const prevScratchRulesVersionIdRef = React.useRef("")
+  const prevTestdataConfigVersionIdRef = React.useRef("")
 
   const languageTags = [
     "scratch-必做",
@@ -512,6 +642,117 @@ export default function AdminProblemDetailPage() {
     }
     prevScratchRulesVersionIdRef.current = selectedVersionId
   }, [selectedVersion, selectedVersionId, scratchRulesDirty])
+
+  React.useEffect(() => {
+    const versionChanged = prevTestdataConfigVersionIdRef.current !== selectedVersionId
+    if (versionChanged || !testdataConfigDirty) {
+      setTestdataConfigText(formatJson(selectedVersion?.testdataGenerationConfig))
+      setTestdataConfigResult(null)
+      setTestdataAnalysisResult(null)
+      if (versionChanged) {
+        setTestdataConfigDirty(false)
+      }
+    }
+    prevTestdataConfigVersionIdRef.current = selectedVersionId
+  }, [selectedVersion, selectedVersionId, testdataConfigDirty])
+
+  const loadTestdataResources = React.useCallback(async () => {
+    if (!selectedVersionId) {
+      setStandardSolutions([])
+      setTestdataTasks([])
+      setSelectedStandardSolutionId("")
+      setSelectedTestdataTaskId("")
+      setSelectedTestdataTask(null)
+      setTestdataTaskLogs([])
+      setTestdataTaskCases([])
+      return
+    }
+
+    setTestdataTaskRefreshing(true)
+    const [solutionsRes, tasksRes] = await Promise.all([
+      fetch(`/api/admin/versions/${selectedVersionId}/standard-solutions`, {
+        credentials: "include",
+      }),
+      fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-tasks`, {
+        credentials: "include",
+      }),
+    ])
+
+    const solutionsData = await solutionsRes.json().catch(() => null)
+    const nextSolutions = Array.isArray(solutionsData?.items)
+      ? (solutionsData.items as StandardSolutionItem[])
+      : []
+    setStandardSolutions(nextSolutions)
+    setSelectedStandardSolutionId((current) => {
+      if (current && nextSolutions.some((item) => item.id === current)) {
+        return current
+      }
+      return nextSolutions.find((item) => item.isPrimary)?.id ?? nextSolutions[0]?.id ?? ""
+    })
+
+    const tasksData = await tasksRes.json().catch(() => null)
+    const nextTasks = Array.isArray(tasksData?.items)
+      ? (tasksData.items as TestdataTaskItem[])
+      : []
+    setTestdataTasks(nextTasks)
+    setSelectedTestdataTaskId((current) => {
+      if (current && nextTasks.some((item) => item.id === current)) {
+        return current
+      }
+      return nextTasks[0]?.id ?? ""
+    })
+    setTestdataTaskRefreshing(false)
+  }, [selectedVersionId])
+
+  React.useEffect(() => {
+    void loadTestdataResources()
+  }, [loadTestdataResources])
+
+  React.useEffect(() => {
+    if (!selectedTestdataTaskId) {
+      setSelectedTestdataTask(null)
+      setTestdataTaskLogs([])
+      setTestdataTaskCases([])
+      return
+    }
+
+    let cancelled = false
+    const run = async () => {
+      setTestdataTaskLoading(true)
+      const [taskRes, logsRes, casesRes] = await Promise.all([
+        fetch(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}`, {
+          credentials: "include",
+        }),
+        fetch(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}/logs?pageSize=50`, {
+          credentials: "include",
+        }),
+        fetch(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}/cases?pageSize=50`, {
+          credentials: "include",
+        }),
+      ])
+
+      const [taskData, logsData, casesData] = await Promise.all([
+        taskRes.json().catch(() => null),
+        logsRes.json().catch(() => null),
+        casesRes.json().catch(() => null),
+      ])
+
+      if (cancelled) return
+      setSelectedTestdataTask(taskData as TestdataTaskItem | null)
+      setTestdataTaskLogs(
+        Array.isArray(logsData?.items) ? (logsData.items as TestdataTaskLogItem[]) : []
+      )
+      setTestdataTaskCases(
+        Array.isArray(casesData?.items) ? (casesData.items as TestdataTaskCaseItem[]) : []
+      )
+      setTestdataTaskLoading(false)
+    }
+
+    void run()
+    return () => {
+      cancelled = true
+    }
+  }, [selectedTestdataTaskId])
 
   const createVersion = async () => {
     if (samples.trim() && samplePreview.error) {
@@ -1011,6 +1252,236 @@ export default function AdminProblemDetailPage() {
     setScratchValidateRunning(false)
   }
 
+  const saveTestdataGenerationConfig = async () => {
+    if (!selectedVersionId) return
+
+    let config: unknown = null
+    if (testdataConfigText.trim()) {
+      try {
+        config = JSON.parse(testdataConfigText)
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "testdata_generation_config_invalid"
+        setTestdataConfigResult({ type: "error", message })
+        toast.error("测试数据生成配置无效", { description: message })
+        return
+      }
+    }
+
+    setTestdataConfigSaving(true)
+    setTestdataConfigResult(null)
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-config`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok) {
+      const message = `已保存版本 ${selectedVersionId} 的测试数据生成配置`
+      setTestdataConfigDirty(false)
+      setTestdataConfigResult({ type: "success", message })
+      toast.success("测试数据生成配置已保存", { description: message })
+      await load()
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setTestdataConfigResult({ type: "error", message })
+      toast.error("测试数据生成配置保存失败", { description: message })
+    }
+
+    setTestdataConfigSaving(false)
+  }
+
+  const analyzeTestdataGenerationConfig = async () => {
+    if (!selectedVersionId) return
+
+    setTestdataAnalysisLoading(true)
+    setTestdataConfigResult(null)
+
+    try {
+      const search = new URLSearchParams()
+      if (testdataTaskCaseCount.trim()) {
+        search.set("testcaseCount", testdataTaskCaseCount.trim())
+      }
+      if (testdataTaskTotalScore.trim()) {
+        search.set("totalScore", testdataTaskTotalScore.trim())
+      }
+      const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-analysis?${search.toString()}`, {
+        credentials: "include",
+      })
+      const text = await res.text()
+      let data: JsonObject | null = null
+      try {
+        data = asObject(JSON.parse(text))
+      } catch {
+        data = null
+      }
+
+      if (!res.ok) {
+        const message = data?.message ? String(data.message) : data?.error ? String(data.error) : text || res.statusText
+        throw new Error(message)
+      }
+
+      const analysis = asObject(data?.analysis) as TestdataAnalysisResult | null
+      setTestdataAnalysisResult(analysis)
+
+      if (data?.configDraft) {
+        setTestdataConfigText(JSON.stringify(data.configDraft, null, 2))
+        setTestdataConfigDirty(true)
+        const primary = analysis?.recommendations?.primaryGenerator?.type ?? "unknown"
+        const message = `已按题面分析生成 ${primary} 配置草稿；你现在可以直接创建任务，或先保存为高级配置`
+        setTestdataConfigResult({ type: "info", message })
+        toast.success("已生成测试数据配置草稿", { description: message })
+      } else {
+        const message = "已生成分析结果，但当前题型仍需要人工补充 generator 配置"
+        setTestdataConfigResult({ type: "info", message })
+        toast.message("需要人工补充配置", { description: message })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "testdata_generation_analysis_failed"
+      setTestdataConfigResult({ type: "error", message })
+      toast.error("题目分析失败", { description: message })
+    }
+
+    setTestdataAnalysisLoading(false)
+  }
+
+  const uploadStandardSolution = async () => {
+    if (!selectedVersionId || !standardSolutionFile) return
+
+    setStandardSolutionUploading(true)
+    setStandardSolutionResult(null)
+    const form = new FormData()
+    form.append("file", standardSolutionFile)
+    form.append("language", standardSolutionLanguage)
+    if (standardSolutionLabel.trim()) {
+      form.append("label", standardSolutionLabel.trim())
+    }
+    form.append("isPrimary", String(standardSolutionIsPrimary))
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/standard-solutions`, {
+      method: "POST",
+      credentials: "include",
+      body: form,
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok && data) {
+      const solution = asObject(data.solution)
+      const message = `已上传标程 ${String(solution?.label ?? standardSolutionFile.name)}`
+      setStandardSolutionResult({ type: "success", message })
+      toast.success("标程上传成功", { description: message })
+      setStandardSolutionFile(null)
+      setStandardSolutionLabel("")
+      await loadTestdataResources()
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setStandardSolutionResult({ type: "error", message })
+      toast.error("标程上传失败", { description: message })
+    }
+
+    setStandardSolutionUploading(false)
+  }
+
+  const createTestdataGenerationTask = async () => {
+    if (!selectedVersionId || !selectedStandardSolutionId) return
+
+    setTestdataTaskCreating(true)
+    setTestdataTaskResult(null)
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-tasks`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        standardSolutionId: selectedStandardSolutionId,
+        mode: testdataTaskMode,
+        testcaseCount: Number(testdataTaskCaseCount || 0),
+        totalScore: Number(testdataTaskTotalScore || 0),
+        seed: testdataTaskSeed.trim() || undefined,
+      }),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok && data) {
+      const task = asObject(data.task)
+      const taskId = String(task?.id ?? "")
+      const configSource = typeof task?.configSource === "string" ? task.configSource : "saved_config"
+      const message = `已创建任务 ${taskId}，计划 ${String(task?.plannedCaseCount ?? 0)} 组，来源 ${configSource === "auto_analysis" ? "自动分析" : "已保存配置"}`
+      setTestdataTaskResult({ type: "success", message })
+      toast.success("测试数据生成任务已创建", { description: message })
+      setTestdataTaskSeed("")
+      await loadTestdataResources()
+      if (taskId) {
+        setSelectedTestdataTaskId(taskId)
+      }
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setTestdataTaskResult({ type: "error", message })
+      toast.error("测试数据生成任务创建失败", { description: message })
+    }
+
+    setTestdataTaskCreating(false)
+  }
+
+  const retrySelectedTestdataTask = async () => {
+    if (!selectedTestdataTaskId) return
+
+    setTestdataTaskCreating(true)
+    const res = await fetch(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}/retry`, {
+      method: "POST",
+      credentials: "include",
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (res.ok && data) {
+      const task = asObject(data.task)
+      const taskId = String(task?.id ?? "")
+      const message = `已创建重试任务 ${taskId}`
+      setTestdataTaskResult({ type: "success", message })
+      toast.success("已重试测试数据生成任务", { description: message })
+      await loadTestdataResources()
+      if (taskId) {
+        setSelectedTestdataTaskId(taskId)
+      }
+    } else {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      setTestdataTaskResult({ type: "error", message })
+      toast.error("任务重试失败", { description: message })
+    }
+
+    setTestdataTaskCreating(false)
+  }
+
+  const downloadSelectedTestdataPackage = () => {
+    if (!selectedTestdataTaskId) return
+    window.open(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}/package`, "_blank", "noopener,noreferrer")
+  }
+
   const addSolution = async () => {
     await fetch(`/api/admin/problems/${problemId}/solutions`, {
       method: "POST",
@@ -1453,6 +1924,430 @@ export default function AdminProblemDetailPage() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">自动测试数据生成</h2>
+              <div className="text-xs text-muted-foreground">
+                先保存模板化 generator 配置，再上传标程并异步生成测试点。
+                当前 MVP 已支持 array / string / intervals / queries。
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedVersionId}
+                onChange={(e) => setSelectedVersionId(e.target.value)}
+              >
+                <option value="">选择版本</option>
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.version}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="ghost"
+                onClick={() => void loadTestdataResources()}
+                disabled={!selectedVersionId || testdataTaskRefreshing}
+              >
+                {testdataTaskRefreshing ? "刷新中..." : "刷新任务"}
+              </Button>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="text-sm font-medium">1. 高级配置（可选）</div>
+            <div className="text-xs text-muted-foreground">
+              正常使用只需要上传标程，再填写测试点个数和总分创建任务。下面的 JSON 配置仅用于高级覆盖。
+            </div>
+            <textarea
+              className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
+              placeholder="可选：在这里粘贴 testdataGenerationConfig JSON"
+              value={testdataConfigText}
+              onChange={(e) => {
+                setTestdataConfigText(e.target.value)
+                setTestdataConfigDirty(true)
+              }}
+            />
+            <div className="flex flex-wrap gap-3">
+              <Button
+                variant="secondary"
+                onClick={analyzeTestdataGenerationConfig}
+                disabled={!selectedVersionId || testdataAnalysisLoading || testdataConfigSaving}
+              >
+                {testdataAnalysisLoading ? "分析中..." : "分析题目生成草稿"}
+              </Button>
+              <Button
+                onClick={saveTestdataGenerationConfig}
+                disabled={!selectedVersionId || !testdataConfigText.trim() || testdataConfigSaving}
+              >
+                {testdataConfigSaving ? "保存中..." : "保存测试数据生成配置"}
+              </Button>
+            </div>
+            {testdataConfigResult && (
+              <div
+                className={`text-xs break-all ${
+                  testdataConfigResult.type === "success"
+                    ? "text-emerald-400"
+                    : testdataConfigResult.type === "error"
+                      ? "text-red-400"
+                      : "text-amber-400"
+                }`}
+              >
+                {testdataConfigResult.message}
+              </div>
+            )}
+            {testdataAnalysisResult ? (
+              <div className="rounded-lg border border-border/70 p-3 text-sm">
+                <div className="font-medium">分析结果</div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  主推荐 generator：
+                  <span className="ml-1 text-foreground">
+                    {testdataAnalysisResult.recommendations.primaryGenerator?.type ?? "未识别"}
+                  </span>
+                  {typeof testdataAnalysisResult.recommendations.primaryGenerator?.score === "number" ? (
+                    <span className="ml-2">
+                      置信度 {Math.round(testdataAnalysisResult.recommendations.primaryGenerator.score * 100)}%
+                    </span>
+                  ) : null}
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">
+                  题型：{testdataAnalysisResult.summary.problemCategory.join(" / ") || "未识别"}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  输入结构：{testdataAnalysisResult.summary.inputStructures.join(" / ") || "未识别"}
+                </div>
+                <div className="mt-1 text-xs text-muted-foreground">
+                  风险点：{testdataAnalysisResult.summary.likelyPitfalls.join(" / ") || "无"}
+                </div>
+                {testdataAnalysisResult.reviewRequired ? (
+                  <div className="mt-2 text-xs text-amber-400">该草稿建议人工复核后再保存。</div>
+                ) : null}
+                {testdataAnalysisResult.warnings.length > 0 ? (
+                  <div className="mt-2 space-y-1 text-xs text-amber-400">
+                    {testdataAnalysisResult.warnings.slice(0, 4).map((warning) => (
+                      <div key={warning}>{warning}</div>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border/70 p-4">
+            <div className="text-sm font-medium">2. 上传标程</div>
+            <div className="grid gap-3 md:grid-cols-3">
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={standardSolutionLanguage}
+                onChange={(e) => setStandardSolutionLanguage(e.target.value)}
+              >
+                <option value="cpp17">C++17</option>
+                <option value="cpp14">C++14</option>
+                <option value="cpp11">C++11</option>
+                <option value="python">Python</option>
+              </select>
+              <Input
+                placeholder="标程名称（可选）"
+                value={standardSolutionLabel}
+                onChange={(e) => setStandardSolutionLabel(e.target.value)}
+              />
+              <label className="text-sm text-muted-foreground flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={standardSolutionIsPrimary}
+                  onChange={(e) => setStandardSolutionIsPrimary(e.target.checked)}
+                />
+                设为默认标程
+              </label>
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] items-center">
+              <input
+                type="file"
+                accept=".cpp,.cc,.cxx,.py,.txt"
+                onChange={(e) => setStandardSolutionFile(e.target.files?.[0] ?? null)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              />
+              <Button
+                onClick={uploadStandardSolution}
+                disabled={!selectedVersionId || !standardSolutionFile || standardSolutionUploading}
+              >
+                {standardSolutionUploading ? "上传中..." : "上传标程"}
+              </Button>
+            </div>
+            {standardSolutionResult && (
+              <div
+                className={`text-xs break-all ${
+                  standardSolutionResult.type === "success"
+                    ? "text-emerald-400"
+                    : standardSolutionResult.type === "error"
+                      ? "text-red-400"
+                      : "text-amber-400"
+                }`}
+              >
+                {standardSolutionResult.message}
+              </div>
+            )}
+            {standardSolutions.length > 0 ? (
+              <div className="space-y-2">
+                {standardSolutions.map((solution) => (
+                  <label
+                    key={solution.id}
+                    className="flex items-center justify-between gap-3 rounded-md border border-border/70 px-3 py-2 text-sm"
+                  >
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="radio"
+                        name="selected-standard-solution"
+                        checked={selectedStandardSolutionId === solution.id}
+                        onChange={() => setSelectedStandardSolutionId(solution.id)}
+                      />
+                      <div>
+                        <div className="font-medium">
+                          {solution.label} · {solution.language}
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {solution.sourceAsset?.fileName ?? solution.id}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {solution.isPrimary ? <Badge variant="outline">default</Badge> : null}
+                      <Badge variant="outline">{solution.status}</Badge>
+                    </div>
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="text-sm text-muted-foreground">当前版本还没有标程。</div>
+            )}
+          </div>
+
+          <div className="space-y-3 rounded-lg border border-border/70 p-4">
+            <div className="text-sm font-medium">3. 创建生成任务</div>
+            <div className="text-xs text-muted-foreground">
+              系统会按题面、输入格式和数据规模自动选择 generator，并按测试点个数平分总分。
+            </div>
+            <div className="grid gap-3 md:grid-cols-4">
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={testdataTaskMode}
+                onChange={(e) =>
+                  setTestdataTaskMode(
+                    e.target.value as "APPEND" | "REPLACE_GENERATED" | "REPLACE_ALL"
+                  )
+                }
+              >
+                <option value="REPLACE_GENERATED">替换自动生成测试点</option>
+                <option value="APPEND">追加</option>
+                <option value="REPLACE_ALL">替换全部测试点</option>
+              </select>
+              <Input
+                placeholder="测试点个数"
+                value={testdataTaskCaseCount}
+                onChange={(e) => setTestdataTaskCaseCount(e.target.value)}
+              />
+              <Input
+                placeholder="总分（平分）"
+                value={testdataTaskTotalScore}
+                onChange={(e) => setTestdataTaskTotalScore(e.target.value)}
+              />
+              <Input
+                placeholder="随机种子（可选）"
+                value={testdataTaskSeed}
+                onChange={(e) => setTestdataTaskSeed(e.target.value)}
+              />
+            </div>
+            <Button
+              onClick={createTestdataGenerationTask}
+              disabled={!selectedVersionId || !selectedStandardSolutionId || testdataTaskCreating}
+            >
+              {testdataTaskCreating ? "创建中..." : "自动创建生成任务"}
+            </Button>
+            {testdataTaskResult && (
+              <div
+                className={`text-xs break-all ${
+                  testdataTaskResult.type === "success"
+                    ? "text-emerald-400"
+                    : testdataTaskResult.type === "error"
+                      ? "text-red-400"
+                      : "text-amber-400"
+                }`}
+              >
+                {testdataTaskResult.message}
+              </div>
+            )}
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
+            <div className="space-y-3">
+              <div className="text-sm font-medium">任务列表</div>
+              {!selectedVersionId ? (
+                <div className="text-sm text-muted-foreground">请先选择版本。</div>
+              ) : testdataTasks.length === 0 ? (
+                <div className="text-sm text-muted-foreground">当前版本暂无生成任务。</div>
+              ) : (
+                testdataTasks.map((task) => (
+                  <button
+                    key={task.id}
+                    type="button"
+                    className={`w-full rounded-lg border p-3 text-left transition-colors ${
+                      selectedTestdataTaskId === task.id
+                        ? "border-emerald-500/50 bg-emerald-500/10"
+                        : "border-border/70 bg-muted/10 hover:border-border"
+                    }`}
+                    onClick={() => setSelectedTestdataTaskId(task.id)}
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="font-medium text-sm">{task.id.slice(0, 12)}</div>
+                      <Badge variant="outline">{task.status}</Badge>
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      {task.stage} · {task.mode}
+                    </div>
+                    <div className="mt-2 text-xs text-muted-foreground">
+                      计划 {task.plannedCaseCount} · 成功 {task.succeededCaseCount} · 写入 {task.persistedCaseCount}
+                    </div>
+                    {task.errorMessage ? (
+                      <div className="mt-2 text-xs text-red-400 break-all">{task.errorMessage}</div>
+                    ) : null}
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="text-sm font-medium">任务详情</div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="ghost"
+                    onClick={() => void loadTestdataResources()}
+                    disabled={!selectedVersionId || testdataTaskRefreshing}
+                  >
+                    {testdataTaskRefreshing ? "刷新中..." : "刷新"}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={downloadSelectedTestdataPackage}
+                    disabled={!selectedTestdataTaskId || selectedTestdataTask?.status !== "SUCCEEDED"}
+                  >
+                    下载数据包
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    onClick={retrySelectedTestdataTask}
+                    disabled={
+                      !selectedTestdataTaskId ||
+                      testdataTaskCreating ||
+                      (selectedTestdataTask?.status !== "FAILED" &&
+                        selectedTestdataTask?.status !== "CANCELLED")
+                    }
+                  >
+                    重试任务
+                  </Button>
+                </div>
+              </div>
+
+              {!selectedTestdataTaskId ? (
+                <div className="text-sm text-muted-foreground">请选择一个任务查看详情。</div>
+              ) : testdataTaskLoading ? (
+                <div className="text-sm text-muted-foreground">任务加载中...</div>
+              ) : !selectedTestdataTask ? (
+                <div className="text-sm text-muted-foreground">任务详情不可用。</div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                    <div className="rounded-lg border border-border/70 p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">状态</div>
+                      <div className="mt-1 font-medium">
+                        {selectedTestdataTask.status} / {selectedTestdataTask.stage}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">标程</div>
+                      <div className="mt-1 font-medium">
+                        {selectedTestdataTask.standardSolution?.label ?? "-"}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">统计</div>
+                      <div className="mt-1 font-medium">
+                        {selectedTestdataTask.succeededCaseCount}/{selectedTestdataTask.plannedCaseCount}
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-border/70 p-3 text-sm">
+                      <div className="text-xs text-muted-foreground">写入测试点</div>
+                      <div className="mt-1 font-medium">{selectedTestdataTask.persistedCaseCount}</div>
+                    </div>
+                  </div>
+
+                  {selectedTestdataTask.packageAsset?.fileName ? (
+                    <div className="text-xs text-muted-foreground">
+                      已缓存数据包：{selectedTestdataTask.packageAsset.fileName}
+                    </div>
+                  ) : null}
+
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="space-y-2 rounded-lg border border-border/70 p-4">
+                      <div className="text-sm font-medium">执行日志</div>
+                      {testdataTaskLogs.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">暂无日志。</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {testdataTaskLogs.slice(-12).map((log) => (
+                            <div key={log.id} className="rounded-md bg-muted/20 p-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">
+                                  #{log.sequenceNo} · {log.level} · {log.stage}
+                                </span>
+                                <span className="text-muted-foreground">{log.code ?? "-"}</span>
+                              </div>
+                              <div className="mt-1 break-all">{log.message}</div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-2 rounded-lg border border-border/70 p-4">
+                      <div className="text-sm font-medium">生成结果</div>
+                      {testdataTaskCases.length === 0 ? (
+                        <div className="text-sm text-muted-foreground">暂无 case。</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {testdataTaskCases.slice(0, 12).map((item) => (
+                            <div key={item.id} className="rounded-md bg-muted/20 p-2 text-xs">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="font-medium">
+                                  #{item.ordinal} · {item.groupKey ?? "-"} · {item.status}
+                                </span>
+                                <span>{item.executionStatus}</span>
+                              </div>
+                              <div className="mt-1 text-muted-foreground">
+                                score {item.score}
+                                {item.expectedOutputAsset?.fileName
+                                  ? ` · ${item.expectedOutputAsset.fileName}`
+                                  : ""}
+                              </div>
+                              {item.errorMessage ? (
+                                <div className="mt-1 text-red-400 break-all">{item.errorMessage}</div>
+                              ) : null}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
         </CardContent>
       </Card>
 

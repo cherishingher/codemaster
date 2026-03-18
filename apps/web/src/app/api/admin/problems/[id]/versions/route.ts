@@ -75,6 +75,7 @@ export const GET = withAuth(async (_req, { params }) => {
         statementMd: v.statementMd,
         tags,
       }),
+      testdataGenerationConfig: v.testdataGenerationConfig,
       notes: v.notes,
       timeLimitMs: v.timeLimitMs,
       memoryLimitMb: v.memoryLimitMb,
@@ -105,6 +106,9 @@ export const GET = withAuth(async (_req, { params }) => {
         score: tc.score,
         groupId: tc.groupId,
         isSample: tc.isSample,
+        sourceType: tc.sourceType,
+        generationTaskId: tc.generationTaskId,
+        generationOrdinal: tc.generationOrdinal,
         orderIndex: tc.orderIndex,
       })),
     }))

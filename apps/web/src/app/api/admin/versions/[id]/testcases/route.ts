@@ -44,6 +44,9 @@ export const GET = withAuth(async (_req, { params }) => {
       isPretest: tc.isPretest ?? false,
       groupId: tc.groupId,
       isSample: tc.isSample,
+      sourceType: tc.sourceType,
+      generationTaskId: tc.generationTaskId,
+      generationOrdinal: tc.generationOrdinal,
       orderIndex: tc.orderIndex,
     }))
   );
@@ -101,6 +104,7 @@ export const POST = withAuth(async (req, { params }) => {
       isPretest: r.isPretest ?? false,
       groupId: r.groupId,
       isSample: r.isSample ?? false,
+      sourceType: "MANUAL",
       orderIndex: r.orderIndex,
     })),
   });

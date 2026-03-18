@@ -7,86 +7,179 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum StandardSolutionStatus {
+  ACTIVE
+  ARCHIVED
+  DISABLED
+  INVALID
+}
+
+enum TestdataGenerationTaskStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+  CANCELLED
+}
+
+enum TestdataGenerationTaskStage {
+  VALIDATE_CONFIG
+  PREPARE_WORKDIR
+  COMPILE_SOLUTION
+  PLAN_CASES
+  GENERATE_INPUTS
+  VALIDATE_INPUTS
+  RUN_SOLUTION
+  PERSIST_CASES
+  FINALIZE
+}
+
+enum TestdataPublishMode {
+  APPEND
+  REPLACE_GENERATED
+  REPLACE_ALL
+}
+
+enum TestdataCaseStatus {
+  PENDING
+  INPUT_READY
+  RUNNING
+  OUTPUT_READY
+  PERSISTED
+  FAILED
+  SKIPPED
+}
+
+enum ProgramExecutionStatus {
+  NOT_STARTED
+  SUCCESS
+  COMPILE_ERROR
+  RUNTIME_ERROR
+  TIME_LIMIT_EXCEEDED
+  MEMORY_LIMIT_EXCEEDED
+  OUTPUT_LIMIT_EXCEEDED
+  SYSTEM_ERROR
+}
+
+enum GenerationLogLevel {
+  DEBUG
+  INFO
+  WARN
+  ERROR
+}
+
+enum FileAssetKind {
+  SOURCE_CODE
+  TESTCASE_INPUT
+  TESTCASE_EXPECTED_OUTPUT
+  COMPILE_STDOUT
+  COMPILE_STDERR
+  RUNTIME_STDERR
+  TASK_MANIFEST
+  TASK_PACKAGE
+}
+
+enum FileStorageProvider {
+  LOCAL_FILE
+  S3
+  OSS
+}
+
+enum FileAssetStatus {
+  ACTIVE
+  ORPHANED
+  DELETED
+}
+
+enum TestcaseSourceType {
+  MANUAL
+  ZIP_IMPORT
+  AUTO_GENERATED
+}
+
 model User {
-  id          String   @id @default(cuid())
-  email       String?  @unique
-  phone       String?  @unique
-  emailVerifiedAt DateTime?
-  phoneVerifiedAt DateTime?
-  password    String
-  name        String?
-  status      String   @default("active")
-  pointsBalance Int    @default(0)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  roles       UserRole[]
-  sessions    Session[]
-  submissions Submission[]
-  enrollments Enrollment[]
-  orders      Order[]
-  posts       Post[]
-  comments    Comment[]
-  contestParticipants ContestParticipant[]
-  contestRegistrations ContestRegistration[]
-  contestReports ContestReport[]
-  guardianRelationsAsGuardian GuardianRelation[] @relation("GuardianUser")
-  guardianRelationsAsStudent GuardianRelation[] @relation("StudentUser")
-  parentReportSnapshotsAsGuardian ParentReportSnapshot[] @relation("ParentReportGuardian")
-  parentReportSnapshotsAsStudent ParentReportSnapshot[] @relation("ParentReportStudent")
-  teacherProfile TeacherProfile?
-  organizationMemberships OrganizationMember[]
-  teachingGroupsOwned TeachingGroup[] @relation("TeachingGroupOwner")
-  teachingGroupMemberships TeachingGroupMember[]
-  teachingGroupAssignments TeachingGroupProblemSetAssignment[] @relation("TeachingGroupAssignmentOperator")
-  teachingGroupAssignmentGrades TeachingGroupAssignmentGrade[]
-  gradedTeachingGroupAssignmentGrades TeachingGroupAssignmentGrade[] @relation("TeachingGroupAssignmentGradeGrader")
-  organizationApiKeys OrganizationApiKey[]
-  contentAssets ContentAsset[] @relation("ContentAssetUploader")
-  contentWorkflowLogs ContentWorkflowLog[] @relation("ContentWorkflowOperator")
-  moderationLogs ModerationLog[]
-  adminProblemBulkOperationLogs AdminProblemBulkOperationLog[]
-  solutions   Solution[]
-  problemSets ProblemSet[]
-  problemProgress UserProblemProgress[]
-  entitlements Entitlement[]
-  membershipSubscriptions MembershipSubscription[]
-  refundRequests RefundRequest[]
-  campEnrollments CampEnrollment[]
-  campCheckins CampCheckin[]
-  campRankSnapshots CampRankSnapshot[]
-  studyGroupsOwned StudyGroup[] @relation("StudyGroupOwner")
-  studyGroupMemberships StudyGroupMember[]
-  pointTransactions PointTransaction[]
-  pointRedemptions PointRedemption[]
+  id                                  String                              @id @default(cuid())
+  email                               String?                             @unique
+  phone                               String?                             @unique
+  emailVerifiedAt                     DateTime?
+  phoneVerifiedAt                     DateTime?
+  password                            String
+  name                                String?
+  status                              String                              @default("active")
+  pointsBalance                       Int                                 @default(0)
+  createdAt                           DateTime                            @default(now())
+  updatedAt                           DateTime                            @updatedAt
+  roles                               UserRole[]
+  sessions                            Session[]
+  submissions                         Submission[]
+  enrollments                         Enrollment[]
+  orders                              Order[]
+  posts                               Post[]
+  comments                            Comment[]
+  contestParticipants                 ContestParticipant[]
+  contestRegistrations                ContestRegistration[]
+  contestReports                      ContestReport[]
+  guardianRelationsAsGuardian         GuardianRelation[]                  @relation("GuardianUser")
+  guardianRelationsAsStudent          GuardianRelation[]                  @relation("StudentUser")
+  parentReportSnapshotsAsGuardian     ParentReportSnapshot[]              @relation("ParentReportGuardian")
+  parentReportSnapshotsAsStudent      ParentReportSnapshot[]              @relation("ParentReportStudent")
+  teacherProfile                      TeacherProfile?
+  organizationMemberships             OrganizationMember[]
+  teachingGroupsOwned                 TeachingGroup[]                     @relation("TeachingGroupOwner")
+  teachingGroupMemberships            TeachingGroupMember[]
+  teachingGroupAssignments            TeachingGroupProblemSetAssignment[] @relation("TeachingGroupAssignmentOperator")
+  teachingGroupAssignmentGrades       TeachingGroupAssignmentGrade[]
+  gradedTeachingGroupAssignmentGrades TeachingGroupAssignmentGrade[]      @relation("TeachingGroupAssignmentGradeGrader")
+  organizationApiKeys                 OrganizationApiKey[]
+  contentAssets                       ContentAsset[]                      @relation("ContentAssetUploader")
+  contentWorkflowLogs                 ContentWorkflowLog[]                @relation("ContentWorkflowOperator")
+  moderationLogs                      ModerationLog[]
+  adminProblemBulkOperationLogs       AdminProblemBulkOperationLog[]
+  solutions                           Solution[]
+  problemSets                         ProblemSet[]
+  problemProgress                     UserProblemProgress[]
+  entitlements                        Entitlement[]
+  membershipSubscriptions             MembershipSubscription[]
+  refundRequests                      RefundRequest[]
+  campEnrollments                     CampEnrollment[]
+  campCheckins                        CampCheckin[]
+  campRankSnapshots                   CampRankSnapshot[]
+  studyGroupsOwned                    StudyGroup[]                        @relation("StudyGroupOwner")
+  studyGroupMemberships               StudyGroupMember[]
+  pointTransactions                   PointTransaction[]
+  pointRedemptions                    PointRedemption[]
+  standardSolutionsUploaded           StandardSolution[]                  @relation("StandardSolutionUploader")
+  testdataGenerationTasksRequested    TestdataGenerationTask[]            @relation("TestdataGenerationRequester")
+  fileAssetsCreated                   FileAsset[]                         @relation("FileAssetCreator")
 }
 
 model VerificationCode {
-  id        String   @id @default(cuid())
+  id        String    @id @default(cuid())
   target    String
   type      String
-  purpose   String   @default("register")
+  purpose   String    @default("register")
   codeHash  String
   expiresAt DateTime
   usedAt    DateTime?
-  attempts  Int      @default(0)
+  attempts  Int       @default(0)
   ip        String?
-  createdAt DateTime @default(now())
+  createdAt DateTime  @default(now())
 
   @@index([target, type, purpose, createdAt])
   @@index([expiresAt])
 }
 
 model Role {
-  id    String @id @default(cuid())
-  name  String @unique
+  id    String     @id @default(cuid())
+  name  String     @unique
   users UserRole[]
 }
 
 model UserRole {
   userId String
   roleId String
-  user   User  @relation(fields: [userId], references: [id])
-  role   Role  @relation(fields: [roleId], references: [id])
+  user   User   @relation(fields: [userId], references: [id])
+  role   Role   @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
   @@index([roleId])
@@ -103,33 +196,34 @@ model Session {
 }
 
 model Problem {
-  id          String   @id @default(cuid())
-  slug        String   @unique
-  title       String
-  difficulty  Int
-  status      Int      @default(0)
-  visible     Boolean  @default(true)
-  defunct     String   @default("N") @db.Char(1)
-  visibility  String   @default("public")
-  source      String?
-  publishedAt DateTime?
-  totalSubmissions Int @default(0)
-  acceptedSubmissions Int @default(0)
-  passRate    Float    @default(0)
-  currentVersionId String? @unique
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  tags        ProblemTag[]
-  versions    ProblemVersion[] @relation("ProblemVersions")
-  currentVersion ProblemVersion? @relation("ProblemCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
-  submissions Submission[]
-  contestProblems ContestProblem[]
-  solutions   Solution[]
-  problemSetItems ProblemSetItem[]
-  stats       ProblemStat?
-  progress    UserProblemProgress[]
-  hustojMap   HustojProblemMap?
-  campTasks   CampTask[]
+  id                      String                   @id @default(cuid())
+  slug                    String                   @unique
+  title                   String
+  difficulty              Int
+  status                  Int                      @default(0)
+  visible                 Boolean                  @default(true)
+  defunct                 String                   @default("N") @db.Char(1)
+  visibility              String                   @default("public")
+  source                  String?
+  publishedAt             DateTime?
+  totalSubmissions        Int                      @default(0)
+  acceptedSubmissions     Int                      @default(0)
+  passRate                Float                    @default(0)
+  currentVersionId        String?                  @unique
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  tags                    ProblemTag[]
+  versions                ProblemVersion[]         @relation("ProblemVersions")
+  currentVersion          ProblemVersion?          @relation("ProblemCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  submissions             Submission[]
+  contestProblems         ContestProblem[]
+  solutions               Solution[]
+  problemSetItems         ProblemSetItem[]
+  stats                   ProblemStat?
+  progress                UserProblemProgress[]
+  hustojMap               HustojProblemMap?
+  campTasks               CampTask[]
+  testdataGenerationTasks TestdataGenerationTask[]
 
   @@index([difficulty])
   @@index([status, visible, defunct, publishedAt])
@@ -137,28 +231,31 @@ model Problem {
 }
 
 model ProblemVersion {
-  id            String @id @default(cuid())
-  problemId     String
-  version       Int
-  statement     String
-  statementMd   String?
-  constraints   String?
-  hints         String?
-  inputFormat   String?
-  outputFormat  String?
-  samples       Json?
-  scratchRules  Json?
-  notes         String?
-  timeLimitMs   Int
-  memoryLimitMb Int
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  problem       Problem @relation("ProblemVersions", fields: [problemId], references: [id])
-  currentFor    Problem[] @relation("ProblemCurrentVersion")
-  testcases     Testcase[]
-  judgeConfigs  ProblemJudgeConfig[]
-  submissions   Submission[]
-  solutions     Solution[]
+  id                       String                   @id @default(cuid())
+  problemId                String
+  version                  Int
+  statement                String
+  statementMd              String?
+  constraints              String?
+  hints                    String?
+  inputFormat              String?
+  outputFormat             String?
+  samples                  Json?
+  scratchRules             Json?
+  testdataGenerationConfig Json?
+  notes                    String?
+  timeLimitMs              Int
+  memoryLimitMb            Int
+  createdAt                DateTime                 @default(now())
+  updatedAt                DateTime                 @updatedAt
+  problem                  Problem                  @relation("ProblemVersions", fields: [problemId], references: [id])
+  currentFor               Problem[]                @relation("ProblemCurrentVersion")
+  testcases                Testcase[]
+  judgeConfigs             ProblemJudgeConfig[]
+  submissions              Submission[]
+  solutions                Solution[]
+  standardSolutions        StandardSolution[]
+  testdataGenerationTasks  TestdataGenerationTask[]
 
   @@unique([problemId, version])
   @@index([problemId])
@@ -166,34 +263,39 @@ model ProblemVersion {
 }
 
 model Testcase {
-  id        String @id @default(cuid())
-  versionId String
-  title     String?
-  caseType  Int    @default(1)
-  visible   Boolean @default(false)
-  inputUri  String
-  outputUri String
-  score     Int
-  timeLimitMs Int?
-  memoryLimitKb Int?
-  subtaskId Int?
-  isPretest Boolean @default(false)
-  groupId   String?
-  isSample  Boolean @default(false)
-  orderIndex Int?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  version   ProblemVersion @relation(fields: [versionId], references: [id])
-  cases     SubmissionCase[]
+  id                String                  @id @default(cuid())
+  versionId         String
+  title             String?
+  caseType          Int                     @default(1)
+  visible           Boolean                 @default(false)
+  inputUri          String
+  outputUri         String
+  score             Int
+  timeLimitMs       Int?
+  memoryLimitKb     Int?
+  subtaskId         Int?
+  isPretest         Boolean                 @default(false)
+  groupId           String?
+  isSample          Boolean                 @default(false)
+  sourceType        TestcaseSourceType      @default(MANUAL)
+  generationTaskId  String?
+  generationOrdinal Int?
+  orderIndex        Int?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  version           ProblemVersion          @relation(fields: [versionId], references: [id])
+  cases             SubmissionCase[]
+  generationTask    TestdataGenerationTask? @relation("GeneratedTestcases", fields: [generationTaskId], references: [id])
 
   @@index([versionId])
   @@index([versionId, caseType, orderIndex])
   @@index([versionId, groupId])
+  @@index([generationTaskId, generationOrdinal])
 }
 
 model Tag {
-  id       String @id @default(cuid())
-  name     String @unique
+  id       String       @id @default(cuid())
+  name     String       @unique
   problems ProblemTag[]
 }
 
@@ -208,33 +310,33 @@ model ProblemTag {
 }
 
 model Submission {
-  id        String   @id @default(cuid())
-  userId    String
-  problemId String
+  id               String           @id @default(cuid())
+  userId           String
+  problemId        String
   problemVersionId String
-  lang      String
-  languageId Int?
-  codeUri   String?
-  code      String?  @db.Text
-  status    String   @default("QUEUED")
-  judgeResult Int    @default(0)
-  score     Int      @default(0)
-  judgeBackend String @default("hustoj")
+  lang             String
+  languageId       Int?
+  codeUri          String?
+  code             String?          @db.Text
+  status           String           @default("QUEUED")
+  judgeResult      Int              @default(0)
+  score            Int              @default(0)
+  judgeBackend     String           @default("hustoj")
   hustojSolutionId Int?
-  timeUsedMs Int?
-  memoryUsedKb Int?
-  visible   Boolean  @default(true)
-  defunct   String   @default("N") @db.Char(1)
-  createdAt DateTime @default(now())
-  finishedAt DateTime?
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  problem   Problem  @relation(fields: [problemId], references: [id])
-  problemVersion ProblemVersion @relation(fields: [problemVersionId], references: [id])
-  cases     SubmissionCase[]
-  sourceCode SourceCode?
-  compileInfo CompileInfo?
-  runtimeInfo RuntimeInfo?
+  timeUsedMs       Int?
+  memoryUsedKb     Int?
+  visible          Boolean          @default(true)
+  defunct          String           @default("N") @db.Char(1)
+  createdAt        DateTime         @default(now())
+  finishedAt       DateTime?
+  updatedAt        DateTime         @updatedAt
+  user             User             @relation(fields: [userId], references: [id])
+  problem          Problem          @relation(fields: [problemId], references: [id])
+  problemVersion   ProblemVersion   @relation(fields: [problemVersionId], references: [id])
+  cases            SubmissionCase[]
+  sourceCode       SourceCode?
+  compileInfo      CompileInfo?
+  runtimeInfo      RuntimeInfo?
 
   @@index([userId, createdAt])
   @@index([problemId, createdAt])
@@ -255,48 +357,48 @@ model HustojProblemMap {
 }
 
 model SubmissionCase {
-  id           String @id @default(cuid())
-  submissionId String
-  testcaseId   String?
-  ordinal      Int?
-  status       String
-  judgeResult  Int    @default(0)
-  timeMs       Int
-  memoryMb     Int
-  score        Int
-  inputPreview String? @db.Text
-  outputPreview String? @db.Text
-  expectedPreview String? @db.Text
-  checkerMessage String? @db.Text
-  createdAt    DateTime @default(now())
-  submission   Submission @relation(fields: [submissionId], references: [id])
-  testcase     Testcase? @relation(fields: [testcaseId], references: [id])
+  id              String     @id @default(cuid())
+  submissionId    String
+  testcaseId      String?
+  ordinal         Int?
+  status          String
+  judgeResult     Int        @default(0)
+  timeMs          Int
+  memoryMb        Int
+  score           Int
+  inputPreview    String?    @db.Text
+  outputPreview   String?    @db.Text
+  expectedPreview String?    @db.Text
+  checkerMessage  String?    @db.Text
+  createdAt       DateTime   @default(now())
+  submission      Submission @relation(fields: [submissionId], references: [id])
+  testcase        Testcase?  @relation(fields: [testcaseId], references: [id])
 
+  @@unique([submissionId, testcaseId])
   @@index([submissionId])
   @@index([submissionId, ordinal])
-  @@unique([submissionId, testcaseId])
 }
 
 model ProblemJudgeConfig {
-  id             String   @id @default(cuid())
-  versionId      String
-  language       String
-  languageId     Int
-  judgeMode      String   @default("standard")
-  timeLimitMs    Int?
-  memoryLimitMb  Int?
-  templateCode   String?  @db.Text
+  id              String         @id @default(cuid())
+  versionId       String
+  language        String
+  languageId      Int
+  judgeMode       String         @default("standard")
+  timeLimitMs     Int?
+  memoryLimitMb   Int?
+  templateCode    String?        @db.Text
   templateCodeUri String?
-  entrypoint     String?
-  entrySignature String?
-  compileCommand String?
-  runCommand     String?
-  isEnabled      Boolean  @default(true)
-  isDefault      Boolean  @default(false)
-  sortOrder      Int      @default(0)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  version        ProblemVersion @relation(fields: [versionId], references: [id])
+  entrypoint      String?
+  entrySignature  String?
+  compileCommand  String?
+  runCommand      String?
+  isEnabled       Boolean        @default(true)
+  isDefault       Boolean        @default(false)
+  sortOrder       Int            @default(0)
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  version         ProblemVersion @relation(fields: [versionId], references: [id])
 
   @@unique([versionId, language])
   @@index([versionId, isEnabled, sortOrder])
@@ -304,67 +406,67 @@ model ProblemJudgeConfig {
 }
 
 model SourceCode {
-  submissionId String   @id
-  source       String?  @db.Text
+  submissionId String     @id
+  source       String?    @db.Text
   objectKey    String?
-  storageType  String   @default("inline")
+  storageType  String     @default("inline")
   sourceSize   Int?
   sourceHash   String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   submission   Submission @relation(fields: [submissionId], references: [id])
 }
 
 model CompileInfo {
-  submissionId String   @id
+  submissionId String     @id
   compiler     String?
   command      String?
   exitCode     Int?
-  message      String?  @db.Text
+  message      String?    @db.Text
   objectKey    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
   submission   Submission @relation(fields: [submissionId], references: [id])
 }
 
 model RuntimeInfo {
-  submissionId   String   @id
+  submissionId   String     @id
   exitCode       Int?
   signal         String?
-  stdoutPreview  String?  @db.Text
-  stderrPreview  String?  @db.Text
-  checkerMessage String?  @db.Text
+  stdoutPreview  String?    @db.Text
+  stderrPreview  String?    @db.Text
+  checkerMessage String?    @db.Text
   objectKey      String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
   submission     Submission @relation(fields: [submissionId], references: [id])
 }
 
 model Contest {
-  id               String @id @default(cuid())
-  slug             String @unique
-  name             String
-  summary          String?
-  description      String?
-  coverImage       String?
-  status           String   @default("draft")
-  visibility       String   @default("public")
-  accessLevel      String?
-  registrationLimit Int?
+  id                  String                @id @default(cuid())
+  slug                String                @unique
+  name                String
+  summary             String?
+  description         String?
+  coverImage          String?
+  status              String                @default("draft")
+  visibility          String                @default("public")
+  accessLevel         String?
+  registrationLimit   Int?
   registrationStartAt DateTime?
-  registrationEndAt DateTime?
-  startAt          DateTime
-  endAt            DateTime
-  rule             String @default("ACM")
-  sortOrder        Int      @default(0)
-  publishedAt      DateTime?
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
-  problems         ContestProblem[]
-  participants     ContestParticipant[]
-  registrations    ContestRegistration[]
-  reports          ContestReport[]
-  unlockRules      ContestUnlockRule[]
+  registrationEndAt   DateTime?
+  startAt             DateTime
+  endAt               DateTime
+  rule                String                @default("ACM")
+  sortOrder           Int                   @default(0)
+  publishedAt         DateTime?
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+  problems            ContestProblem[]
+  participants        ContestParticipant[]
+  registrations       ContestRegistration[]
+  reports             ContestReport[]
+  unlockRules         ContestUnlockRule[]
 
   @@index([status, sortOrder])
   @@index([visibility, status, sortOrder])
@@ -385,16 +487,16 @@ model ContestProblem {
 model ContestParticipant {
   contestId  String
   userId     String
-  orderId    String? @unique
-  status     String  @default("PENDING_PAYMENT")
-  sourceType String  @default("PURCHASE")
+  orderId    String?   @unique
+  status     String    @default("PENDING_PAYMENT")
+  sourceType String    @default("PURCHASE")
   sourceId   String?
-  joinedAt   DateTime @default(now())
+  joinedAt   DateTime  @default(now())
   paidAt     DateTime?
-  updatedAt  DateTime @updatedAt
-  contest    Contest @relation(fields: [contestId], references: [id])
-  user       User    @relation(fields: [userId], references: [id])
-  order      Order?  @relation(fields: [orderId], references: [id])
+  updatedAt  DateTime  @updatedAt
+  contest    Contest   @relation(fields: [contestId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+  order      Order?    @relation(fields: [orderId], references: [id])
 
   @@id([contestId, userId])
   @@index([contestId])
@@ -403,22 +505,22 @@ model ContestParticipant {
 }
 
 model ContestRegistration {
-  id         String   @id @default(cuid())
-  contestId   String
-  userId      String
-  orderId     String?  @unique
-  status      String   @default("PENDING_PAYMENT")
-  sourceType  String   @default("PURCHASE")
-  sourceId    String?
-  groupKey    String   @default("public")
-  groupLabel  String   @default("公开组")
-  joinedAt    DateTime @default(now())
-  paidAt      DateTime?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  contest     Contest  @relation(fields: [contestId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
-  order       Order?   @relation(fields: [orderId], references: [id])
+  id         String    @id @default(cuid())
+  contestId  String
+  userId     String
+  orderId    String?   @unique
+  status     String    @default("PENDING_PAYMENT")
+  sourceType String    @default("PURCHASE")
+  sourceId   String?
+  groupKey   String    @default("public")
+  groupLabel String    @default("公开组")
+  joinedAt   DateTime  @default(now())
+  paidAt     DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  contest    Contest   @relation(fields: [contestId], references: [id])
+  user       User      @relation(fields: [userId], references: [id])
+  order      Order?    @relation(fields: [orderId], references: [id])
 
   @@unique([contestId, userId])
   @@index([contestId, status, joinedAt])
@@ -453,17 +555,17 @@ model ContestReport {
 }
 
 model ContestUnlockRule {
-  id             String   @id @default(cuid())
+  id             String    @id @default(cuid())
   contestId      String
   resourceType   String
-  requiredSource String   @default("PURCHASE")
+  requiredSource String    @default("PURCHASE")
   startsAt       DateTime?
   endsAt         DateTime?
-  isEnabled      Boolean  @default(true)
+  isEnabled      Boolean   @default(true)
   summary        String?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  contest        Contest  @relation(fields: [contestId], references: [id])
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+  contest        Contest   @relation(fields: [contestId], references: [id])
 
   @@unique([contestId, resourceType])
   @@index([contestId, isEnabled])
@@ -507,24 +609,24 @@ model ParentReportSnapshot {
 }
 
 model Organization {
-  id            String   @id @default(cuid())
-  slug          String   @unique
-  name          String
-  shortName     String?
-  externalCode  String?  @unique
-  type          String   @default("institution")
-  status        String   @default("draft")
-  description   String?
-  contactName   String?
-  contactEmail  String?
-  contactPhone  String?
-  settings      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  members       OrganizationMember[]
+  id              String               @id @default(cuid())
+  slug            String               @unique
+  name            String
+  shortName       String?
+  externalCode    String?              @unique
+  type            String               @default("institution")
+  status          String               @default("draft")
+  description     String?
+  contactName     String?
+  contactEmail    String?
+  contactPhone    String?
+  settings        Json?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  members         OrganizationMember[]
   teacherProfiles TeacherProfile[]
-  teachingGroups TeachingGroup[]
-  apiKeys       OrganizationApiKey[]
+  teachingGroups  TeachingGroup[]
+  apiKeys         OrganizationApiKey[]
 
   @@index([type, status, createdAt])
   @@index([status, createdAt])
@@ -533,11 +635,11 @@ model Organization {
 model OrganizationMember {
   organizationId String
   userId         String
-  role           String   @default("member")
-  status         String   @default("active")
-  joinedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  role           String       @default("member")
+  status         String       @default("active")
+  joinedAt       DateTime     @default(now())
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
   user           User         @relation(fields: [userId], references: [id])
 
@@ -547,57 +649,57 @@ model OrganizationMember {
 }
 
 model TeacherProfile {
-  userId         String   @id
+  userId         String        @id
   organizationId String?
   displayName    String?
   title          String?
   bio            String?
   specialties    Json?
-  status         String   @default("draft")
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  user           User         @relation(fields: [userId], references: [id])
+  status         String        @default("draft")
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  user           User          @relation(fields: [userId], references: [id])
   organization   Organization? @relation(fields: [organizationId], references: [id])
 
   @@index([organizationId, status, createdAt])
 }
 
 model TeachingGroup {
-  id             String   @id @default(cuid())
+  id             String                              @id @default(cuid())
   organizationId String?
   ownerId        String
-  slug           String   @unique
+  slug           String                              @unique
   name           String
   code           String?
   externalCode   String?
-  groupType      String   @default("class")
-  status         String   @default("draft")
+  groupType      String                              @default("class")
+  status         String                              @default("draft")
   summary        String?
   startAt        DateTime?
   endAt          DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  organization   Organization? @relation(fields: [organizationId], references: [id])
-  owner          User          @relation("TeachingGroupOwner", fields: [ownerId], references: [id])
+  createdAt      DateTime                            @default(now())
+  updatedAt      DateTime                            @updatedAt
+  organization   Organization?                       @relation(fields: [organizationId], references: [id])
+  owner          User                                @relation("TeachingGroupOwner", fields: [ownerId], references: [id])
   members        TeachingGroupMember[]
   campClasses    CampClass[]
   assignments    TeachingGroupProblemSetAssignment[]
 
+  @@unique([organizationId, externalCode])
   @@index([organizationId, status, createdAt])
   @@index([ownerId, status, createdAt])
-  @@unique([organizationId, externalCode])
 }
 
 model TeachingGroupMember {
-  groupId        String
-  userId         String
-  memberRole     String   @default("student")
-  status         String   @default("active")
-  joinedAt       DateTime @default(now())
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
-  group          TeachingGroup @relation(fields: [groupId], references: [id])
-  user           User          @relation(fields: [userId], references: [id])
+  groupId    String
+  userId     String
+  memberRole String        @default("student")
+  status     String        @default("active")
+  joinedAt   DateTime      @default(now())
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+  group      TeachingGroup @relation(fields: [groupId], references: [id])
+  user       User          @relation(fields: [userId], references: [id])
 
   @@id([groupId, userId])
   @@index([userId, memberRole, status, createdAt])
@@ -605,22 +707,22 @@ model TeachingGroupMember {
 }
 
 model TeachingGroupProblemSetAssignment {
-  id          String   @id @default(cuid())
+  id           String                         @id @default(cuid())
   groupId      String
   problemSetId String
   assignedById String
-  status       String   @default("active")
+  status       String                         @default("active")
   title        String?
   note         String?
   dueAt        DateTime?
-  maxScore     Int      @default(100)
-  gradingMode  String   @default("auto")
+  maxScore     Int                            @default(100)
+  gradingMode  String                         @default("auto")
   publishedAt  DateTime?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  group        TeachingGroup @relation(fields: [groupId], references: [id])
-  problemSet   ProblemSet    @relation(fields: [problemSetId], references: [id])
-  assignedBy   User          @relation("TeachingGroupAssignmentOperator", fields: [assignedById], references: [id])
+  createdAt    DateTime                       @default(now())
+  updatedAt    DateTime                       @updatedAt
+  group        TeachingGroup                  @relation(fields: [groupId], references: [id])
+  problemSet   ProblemSet                     @relation(fields: [problemSetId], references: [id])
+  assignedBy   User                           @relation("TeachingGroupAssignmentOperator", fields: [assignedById], references: [id])
   grades       TeachingGroupAssignmentGrade[]
 
   @@unique([groupId, problemSetId])
@@ -630,27 +732,27 @@ model TeachingGroupProblemSetAssignment {
 }
 
 model TeachingGroupAssignmentGrade {
-  id                   String   @id @default(cuid())
-  assignmentId         String
-  userId               String
-  status               String   @default("pending")
-  autoScore            Int      @default(0)
-  manualScore          Int?
-  finalScore           Int      @default(0)
-  maxScore             Int      @default(100)
-  completionRate       Float    @default(0)
-  solvedProblemCount   Int      @default(0)
-  attemptedProblemCount Int     @default(0)
-  submissionCount      Int      @default(0)
-  lastSubmissionAt     DateTime?
-  gradedAt             DateTime?
-  gradedById           String?
-  feedback             String?
-  createdAt            DateTime @default(now())
-  updatedAt            DateTime @updatedAt
-  assignment           TeachingGroupProblemSetAssignment @relation(fields: [assignmentId], references: [id])
-  user                 User     @relation(fields: [userId], references: [id])
-  gradedBy             User?    @relation("TeachingGroupAssignmentGradeGrader", fields: [gradedById], references: [id])
+  id                    String                            @id @default(cuid())
+  assignmentId          String
+  userId                String
+  status                String                            @default("pending")
+  autoScore             Int                               @default(0)
+  manualScore           Int?
+  finalScore            Int                               @default(0)
+  maxScore              Int                               @default(100)
+  completionRate        Float                             @default(0)
+  solvedProblemCount    Int                               @default(0)
+  attemptedProblemCount Int                               @default(0)
+  submissionCount       Int                               @default(0)
+  lastSubmissionAt      DateTime?
+  gradedAt              DateTime?
+  gradedById            String?
+  feedback              String?
+  createdAt             DateTime                          @default(now())
+  updatedAt             DateTime                          @updatedAt
+  assignment            TeachingGroupProblemSetAssignment @relation(fields: [assignmentId], references: [id])
+  user                  User                              @relation(fields: [userId], references: [id])
+  gradedBy              User?                             @relation("TeachingGroupAssignmentGradeGrader", fields: [gradedById], references: [id])
 
   @@unique([assignmentId, userId])
   @@index([assignmentId, status, finalScore])
@@ -659,16 +761,16 @@ model TeachingGroupAssignmentGrade {
 }
 
 model OrganizationApiKey {
-  id             String   @id @default(cuid())
+  id             String       @id @default(cuid())
   organizationId String
   createdById    String
   name           String
-  tokenHash      String   @unique
-  status         String   @default("active")
+  tokenHash      String       @unique
+  status         String       @default("active")
   lastUsedAt     DateTime?
   expiresAt      DateTime?
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
   organization   Organization @relation(fields: [organizationId], references: [id])
   createdBy      User         @relation(fields: [createdById], references: [id])
 
@@ -720,15 +822,15 @@ model ContentWorkflowLog {
 }
 
 model Course {
-  id          String @id @default(cuid())
-  slug        String @unique
+  id          String       @id @default(cuid())
+  slug        String       @unique
   title       String
   summary     String?
   description String?
   category    String?
   coverImage  String?
-  status      String @default("draft")
-  sortOrder   Int    @default(0)
+  status      String       @default("draft")
+  sortOrder   Int          @default(0)
   sections    Section[]
   enrollments Enrollment[]
 
@@ -737,21 +839,21 @@ model Course {
 }
 
 model Section {
-  id          String @id @default(cuid())
-  slug        String @unique
+  id          String   @id @default(cuid())
+  slug        String   @unique
   courseId    String
   title       String
   description String?
-  sortOrder   Int    @default(0)
+  sortOrder   Int      @default(0)
   lessons     Lesson[]
-  course      Course @relation(fields: [courseId], references: [id])
+  course      Course   @relation(fields: [courseId], references: [id])
 
   @@index([courseId, sortOrder])
 }
 
 model Lesson {
-  id           String @id @default(cuid())
-  slug         String @unique
+  id           String   @id @default(cuid())
+  slug         String   @unique
   sectionId    String
   title        String
   type         String
@@ -760,11 +862,11 @@ model Lesson {
   thumbnailUrl String?
   assetUri     String?
   durationSec  Int?
-  isPreview    Boolean @default(false)
-  status       String @default("published")
-  sortOrder    Int     @default(0)
+  isPreview    Boolean  @default(false)
+  status       String   @default("published")
+  sortOrder    Int      @default(0)
   updatedAt    DateTime @updatedAt
-  section      Section @relation(fields: [sectionId], references: [id])
+  section      Section  @relation(fields: [sectionId], references: [id])
 
   @@index([status, sortOrder])
   @@index([sectionId, sortOrder])
@@ -783,31 +885,31 @@ model Enrollment {
 }
 
 model Product {
-  id           String   @id @default(cuid())
-  slug         String?  @unique
-  name         String
-  summary      String?
-  description  String?
-  coverImage   String?
-  priceCents   Int
-  type         String
-  validDays    Int?
-  currency     String   @default("CNY")
-  status       String   @default("active")
-  sortOrder    Int      @default(0)
-  tags         Json?
-  targetType   String?
-  targetId     String?
-  metadata     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  orders       Order[]
-  entitlements Entitlement[]
-  skus         ProductSku[]
-  benefits     ProductBenefit[]
+  id                      String                   @id @default(cuid())
+  slug                    String?                  @unique
+  name                    String
+  summary                 String?
+  description             String?
+  coverImage              String?
+  priceCents              Int
+  type                    String
+  validDays               Int?
+  currency                String                   @default("CNY")
+  status                  String                   @default("active")
+  sortOrder               Int                      @default(0)
+  tags                    Json?
+  targetType              String?
+  targetId                String?
+  metadata                Json?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  orders                  Order[]
+  entitlements            Entitlement[]
+  skus                    ProductSku[]
+  benefits                ProductBenefit[]
   membershipSubscriptions MembershipSubscription[]
-  campSkus     CampSku[]
-  pointRedemptions PointRedemption[]
+  campSkus                CampSku[]
+  pointRedemptions        PointRedemption[]
 
   @@index([type])
   @@index([status, sortOrder])
@@ -816,25 +918,25 @@ model Product {
 }
 
 model ProductSku {
-  id                 String   @id @default(cuid())
-  productId          String
-  skuCode            String
-  name               String
-  description        String?
-  priceCents         Int
-  originalPriceCents Int?
-  currency           String   @default("CNY")
-  validDays          Int?
-  status             String   @default("active")
-  isDefault          Boolean  @default(false)
-  sortOrder          Int      @default(0)
-  metadata           Json?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  product            Product  @relation(fields: [productId], references: [id])
-  orders             Order[]
+  id                      String                   @id @default(cuid())
+  productId               String
+  skuCode                 String
+  name                    String
+  description             String?
+  priceCents              Int
+  originalPriceCents      Int?
+  currency                String                   @default("CNY")
+  validDays               Int?
+  status                  String                   @default("active")
+  isDefault               Boolean                  @default(false)
+  sortOrder               Int                      @default(0)
+  metadata                Json?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  product                 Product                  @relation(fields: [productId], references: [id])
+  orders                  Order[]
   membershipSubscriptions MembershipSubscription[]
-  campSkus           CampSku[]
+  campSkus                CampSku[]
 
   @@unique([productId, skuCode])
   @@index([productId, status, sortOrder])
@@ -855,33 +957,33 @@ model ProductBenefit {
 }
 
 model Order {
-  id                  String     @id @default(cuid())
-  orderNo             String     @unique
-  userId              String
-  productId           String?
-  skuId               String?
-  amountCents         Int
-  currency            String     @default("CNY")
-  productNameSnapshot String?
-  skuNameSnapshot     String?
-  validDaysSnapshot   Int?
-  status              String     @default("CREATED")
-  createdAt           DateTime   @default(now())
-  paidAt              DateTime?
-  closedAt            DateTime?
-  closedReason        String?
-  refundRequestedAt   DateTime?
-  refundProcessedAt   DateTime?
-  updatedAt           DateTime   @updatedAt
-  user                User       @relation(fields: [userId], references: [id])
-  product             Product?   @relation(fields: [productId], references: [id])
-  sku                 ProductSku? @relation(fields: [skuId], references: [id])
-  payments            Payment[]
+  id                     String                  @id @default(cuid())
+  orderNo                String                  @unique
+  userId                 String
+  productId              String?
+  skuId                  String?
+  amountCents            Int
+  currency               String                  @default("CNY")
+  productNameSnapshot    String?
+  skuNameSnapshot        String?
+  validDaysSnapshot      Int?
+  status                 String                  @default("CREATED")
+  createdAt              DateTime                @default(now())
+  paidAt                 DateTime?
+  closedAt               DateTime?
+  closedReason           String?
+  refundRequestedAt      DateTime?
+  refundProcessedAt      DateTime?
+  updatedAt              DateTime                @updatedAt
+  user                   User                    @relation(fields: [userId], references: [id])
+  product                Product?                @relation(fields: [productId], references: [id])
+  sku                    ProductSku?             @relation(fields: [skuId], references: [id])
+  payments               Payment[]
   membershipSubscription MembershipSubscription?
-  refundRequest       RefundRequest?
-  campEnrollment      CampEnrollment?
-  contestParticipant  ContestParticipant?
-  contestRegistration ContestRegistration?
+  refundRequest          RefundRequest?
+  campEnrollment         CampEnrollment?
+  contestParticipant     ContestParticipant?
+  contestRegistration    ContestRegistration?
 
   @@index([userId, createdAt])
   @@index([userId, status, createdAt])
@@ -890,21 +992,21 @@ model Order {
 }
 
 model MembershipSubscription {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String
-  skuId     String?
-  tier      String   @default("VIP")
-  status    String   @default("ACTIVE")
-  startedAt DateTime
-  expiresAt DateTime
-  lastOrderId String? @unique
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
-  sku       ProductSku? @relation(fields: [skuId], references: [id])
-  lastOrder Order?   @relation(fields: [lastOrderId], references: [id])
+  id          String      @id @default(cuid())
+  userId      String
+  productId   String
+  skuId       String?
+  tier        String      @default("VIP")
+  status      String      @default("ACTIVE")
+  startedAt   DateTime
+  expiresAt   DateTime
+  lastOrderId String?     @unique
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+  user        User        @relation(fields: [userId], references: [id])
+  product     Product     @relation(fields: [productId], references: [id])
+  sku         ProductSku? @relation(fields: [skuId], references: [id])
+  lastOrder   Order?      @relation(fields: [lastOrderId], references: [id])
 
   @@unique([userId, tier])
   @@index([userId, status, expiresAt])
@@ -914,22 +1016,22 @@ model MembershipSubscription {
 }
 
 model Payment {
-  id          String   @id @default(cuid())
-  paymentNo   String   @unique
-  orderId     String
-  channel     String   @default("MOCK")
-  status      String   @default("PENDING")
-  amountCents Int?
-  tradeNo     String?
-  payload     Json?
-  callbackPayload Json?
-  callbackAt  DateTime?
-  failureReason String?
+  id                   String    @id @default(cuid())
+  paymentNo            String    @unique
+  orderId              String
+  channel              String    @default("MOCK")
+  status               String    @default("PENDING")
+  amountCents          Int?
+  tradeNo              String?
+  payload              Json?
+  callbackPayload      Json?
+  callbackAt           DateTime?
+  failureReason        String?
   entitlementGrantedAt DateTime?
-  createdAt   DateTime @default(now())
-  paidAt      DateTime?
-  updatedAt   DateTime @updatedAt
-  order       Order    @relation(fields: [orderId], references: [id])
+  createdAt            DateTime  @default(now())
+  paidAt               DateTime?
+  updatedAt            DateTime  @updatedAt
+  order                Order     @relation(fields: [orderId], references: [id])
 
   @@index([orderId])
   @@index([orderId, status, createdAt])
@@ -937,32 +1039,32 @@ model Payment {
 }
 
 model RefundRequest {
-  id             String   @id @default(cuid())
-  refundNo       String   @unique
-  orderId        String   @unique
-  userId         String
-  status         String   @default("CREATED")
-  reason         String?
-  note           String?
-  createdAt      DateTime @default(now())
-  processedAt    DateTime?
-  updatedAt      DateTime @updatedAt
-  order          Order    @relation(fields: [orderId], references: [id])
-  user           User     @relation(fields: [userId], references: [id])
+  id          String    @id @default(cuid())
+  refundNo    String    @unique
+  orderId     String    @unique
+  userId      String
+  status      String    @default("CREATED")
+  reason      String?
+  note        String?
+  createdAt   DateTime  @default(now())
+  processedAt DateTime?
+  updatedAt   DateTime  @updatedAt
+  order       Order     @relation(fields: [orderId], references: [id])
+  user        User      @relation(fields: [userId], references: [id])
 
   @@index([userId, status, createdAt])
 }
 
 model Entitlement {
-  id        String   @id @default(cuid())
-  userId    String
-  productId String
-  sourceType String  @default("PURCHASE")
-  sourceId  String?
-  grantedAt DateTime @default(now())
-  expiresAt DateTime?
-  user      User     @relation(fields: [userId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  id         String    @id @default(cuid())
+  userId     String
+  productId  String
+  sourceType String    @default("PURCHASE")
+  sourceId   String?
+  grantedAt  DateTime  @default(now())
+  expiresAt  DateTime?
+  user       User      @relation(fields: [userId], references: [id])
+  product    Product   @relation(fields: [productId], references: [id])
 
   @@unique([userId, productId])
   @@index([userId, expiresAt])
@@ -971,60 +1073,60 @@ model Entitlement {
 }
 
 model Camp {
-  id           String   @id @default(cuid())
-  slug         String   @unique
-  title        String
-  summary      String?
-  description  String?
-  coverImage   String?
-  suitableFor  String?
-  difficulty   String?
-  status       String   @default("draft")
-  visibility   String   @default("public")
-  accessLevel  String   @default("purchase")
-  sortOrder    Int      @default(0)
-  highlights   Json?
-  metadata     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  skus         CampSku[]
-  classes      CampClass[]
-  enrollments  CampEnrollment[]
-  tasks        CampTask[]
+  id            String             @id @default(cuid())
+  slug          String             @unique
+  title         String
+  summary       String?
+  description   String?
+  coverImage    String?
+  suitableFor   String?
+  difficulty    String?
+  status        String             @default("draft")
+  visibility    String             @default("public")
+  accessLevel   String             @default("purchase")
+  sortOrder     Int                @default(0)
+  highlights    Json?
+  metadata      Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+  skus          CampSku[]
+  classes       CampClass[]
+  enrollments   CampEnrollment[]
+  tasks         CampTask[]
   rankSnapshots CampRankSnapshot[]
-  checkins     CampCheckin[]
+  checkins      CampCheckin[]
 
   @@index([status, sortOrder])
   @@index([visibility, status, sortOrder])
 }
 
 model CampClass {
-  id            String   @id @default(cuid())
-  campId        String
+  id              String             @id @default(cuid())
+  campId          String
   teachingGroupId String?
-  slug          String   @unique
-  title         String
-  summary       String?
-  coachName     String?
-  status        String   @default("draft")
-  visibility    String   @default("public")
-  accessLevel   String   @default("purchase")
-  enrollStartAt DateTime?
-  enrollEndAt   DateTime?
-  startAt       DateTime
-  endAt         DateTime
-  capacity      Int?
-  sortOrder     Int      @default(0)
-  metadata      Json?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  camp          Camp     @relation(fields: [campId], references: [id])
-  teachingGroup TeachingGroup? @relation(fields: [teachingGroupId], references: [id])
-  skus          CampSku[]
-  enrollments   CampEnrollment[]
-  tasks         CampTask[]
-  rankSnapshots CampRankSnapshot[]
-  checkins      CampCheckin[]
+  slug            String             @unique
+  title           String
+  summary         String?
+  coachName       String?
+  status          String             @default("draft")
+  visibility      String             @default("public")
+  accessLevel     String             @default("purchase")
+  enrollStartAt   DateTime?
+  enrollEndAt     DateTime?
+  startAt         DateTime
+  endAt           DateTime
+  capacity        Int?
+  sortOrder       Int                @default(0)
+  metadata        Json?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  camp            Camp               @relation(fields: [campId], references: [id])
+  teachingGroup   TeachingGroup?     @relation(fields: [teachingGroupId], references: [id])
+  skus            CampSku[]
+  enrollments     CampEnrollment[]
+  tasks           CampTask[]
+  rankSnapshots   CampRankSnapshot[]
+  checkins        CampCheckin[]
 
   @@index([campId, status, sortOrder])
   @@index([teachingGroupId])
@@ -1032,22 +1134,22 @@ model CampClass {
 }
 
 model CampSku {
-  id           String   @id @default(cuid())
+  id           String           @id @default(cuid())
   campId       String
   classId      String
   productId    String
-  productSkuId String   @unique
+  productSkuId String           @unique
   label        String?
-  status       String   @default("active")
-  isDefault    Boolean  @default(false)
-  sortOrder    Int      @default(0)
+  status       String           @default("active")
+  isDefault    Boolean          @default(false)
+  sortOrder    Int              @default(0)
   metadata     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  camp         Camp     @relation(fields: [campId], references: [id])
-  campClass    CampClass @relation(fields: [classId], references: [id])
-  product      Product  @relation(fields: [productId], references: [id])
-  productSku   ProductSku @relation(fields: [productSkuId], references: [id])
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  camp         Camp             @relation(fields: [campId], references: [id])
+  campClass    CampClass        @relation(fields: [classId], references: [id])
+  product      Product          @relation(fields: [productId], references: [id])
+  productSku   ProductSku       @relation(fields: [productSkuId], references: [id])
   enrollments  CampEnrollment[]
 
   @@index([campId, status, sortOrder])
@@ -1056,29 +1158,29 @@ model CampSku {
 }
 
 model CampEnrollment {
-  id          String   @id @default(cuid())
-  campId      String
-  classId     String
-  campSkuId   String?
-  userId      String
-  orderId     String?  @unique
-  status      String   @default("PENDING_PAYMENT")
-  sourceType  String   @default("PURCHASE")
-  sourceId    String?
-  enrolledAt  DateTime @default(now())
-  activatedAt DateTime?
-  completedAt DateTime?
+  id           String        @id @default(cuid())
+  campId       String
+  classId      String
+  campSkuId    String?
+  userId       String
+  orderId      String?       @unique
+  status       String        @default("PENDING_PAYMENT")
+  sourceType   String        @default("PURCHASE")
+  sourceId     String?
+  enrolledAt   DateTime      @default(now())
+  activatedAt  DateTime?
+  completedAt  DateTime?
   lastActiveAt DateTime?
-  note        String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  camp        Camp     @relation(fields: [campId], references: [id])
-  campClass   CampClass @relation(fields: [classId], references: [id])
-  campSku     CampSku? @relation(fields: [campSkuId], references: [id])
-  user        User     @relation(fields: [userId], references: [id])
-  order       Order?   @relation(fields: [orderId], references: [id])
-  checkins    CampCheckin[]
+  note         String?
+  metadata     Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  camp         Camp          @relation(fields: [campId], references: [id])
+  campClass    CampClass     @relation(fields: [classId], references: [id])
+  campSku      CampSku?      @relation(fields: [campSkuId], references: [id])
+  user         User          @relation(fields: [userId], references: [id])
+  order        Order?        @relation(fields: [orderId], references: [id])
+  checkins     CampCheckin[]
 
   @@unique([classId, userId])
   @@index([campId, status, createdAt])
@@ -1087,28 +1189,28 @@ model CampEnrollment {
 }
 
 model CampTask {
-  id          String   @id @default(cuid())
-  campId      String
-  classId     String
-  title       String
-  summary     String?
-  description String?
-  taskDate    DateTime
-  dayIndex    Int      @default(1)
-  status      String   @default("published")
+  id           String        @id @default(cuid())
+  campId       String
+  classId      String
+  title        String
+  summary      String?
+  description  String?
+  taskDate     DateTime
+  dayIndex     Int           @default(1)
+  status       String        @default("published")
   resourceType String?
-  resourceId  String?
-  problemId   String?
-  points      Int      @default(100)
-  isRequired  Boolean  @default(true)
-  sortOrder   Int      @default(0)
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  camp        Camp     @relation(fields: [campId], references: [id])
-  campClass   CampClass @relation(fields: [classId], references: [id])
-  problem     Problem? @relation(fields: [problemId], references: [id])
-  checkins    CampCheckin[]
+  resourceId   String?
+  problemId    String?
+  points       Int           @default(100)
+  isRequired   Boolean       @default(true)
+  sortOrder    Int           @default(0)
+  metadata     Json?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  camp         Camp          @relation(fields: [campId], references: [id])
+  campClass    CampClass     @relation(fields: [classId], references: [id])
+  problem      Problem?      @relation(fields: [problemId], references: [id])
+  checkins     CampCheckin[]
 
   @@index([campId, taskDate, sortOrder])
   @@index([classId, taskDate, sortOrder])
@@ -1117,23 +1219,23 @@ model CampTask {
 }
 
 model CampCheckin {
-  id           String   @id @default(cuid())
+  id           String         @id @default(cuid())
   campId       String
   classId      String
   taskId       String
   enrollmentId String
   userId       String
-  status       String   @default("checked_in")
+  status       String         @default("checked_in")
   note         String?
   payload      Json?
-  checkinAt    DateTime @default(now())
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  camp         Camp     @relation(fields: [campId], references: [id])
-  campClass    CampClass @relation(fields: [classId], references: [id])
-  task         CampTask @relation(fields: [taskId], references: [id])
+  checkinAt    DateTime       @default(now())
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  camp         Camp           @relation(fields: [campId], references: [id])
+  campClass    CampClass      @relation(fields: [classId], references: [id])
+  task         CampTask       @relation(fields: [taskId], references: [id])
   enrollment   CampEnrollment @relation(fields: [enrollmentId], references: [id])
-  user         User     @relation(fields: [userId], references: [id])
+  user         User           @relation(fields: [userId], references: [id])
 
   @@unique([taskId, userId])
   @@index([classId, userId, checkinAt])
@@ -1141,26 +1243,26 @@ model CampCheckin {
 }
 
 model CampRankSnapshot {
-  id                 String   @id @default(cuid())
+  id                 String    @id @default(cuid())
   campId             String
   classId            String
   userId             String
-  scope              String   @default("overall")
-  scopeKey           String   @default("overall")
+  scope              String    @default("overall")
+  scopeKey           String    @default("overall")
   rank               Int
-  score              Int      @default(0)
-  completedTaskCount Int      @default(0)
-  checkinCount       Int      @default(0)
-  solvedProblemCount Int      @default(0)
-  activeDays         Int      @default(0)
+  score              Int       @default(0)
+  completedTaskCount Int       @default(0)
+  checkinCount       Int       @default(0)
+  solvedProblemCount Int       @default(0)
+  activeDays         Int       @default(0)
   userNameSnapshot   String?
   payload            Json?
-  snapshotAt         DateTime @default(now())
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  camp               Camp     @relation(fields: [campId], references: [id])
+  snapshotAt         DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  camp               Camp      @relation(fields: [campId], references: [id])
   campClass          CampClass @relation(fields: [classId], references: [id])
-  user               User     @relation(fields: [userId], references: [id])
+  user               User      @relation(fields: [userId], references: [id])
 
   @@unique([classId, scope, scopeKey, userId])
   @@index([classId, scope, scopeKey, rank])
@@ -1169,20 +1271,20 @@ model CampRankSnapshot {
 }
 
 model StudyGroup {
-  id          String   @id @default(cuid())
-  slug        String   @unique
+  id          String             @id @default(cuid())
+  slug        String             @unique
   ownerId     String
   name        String
   summary     String?
   description String?
   topic       String?
-  level       String   @default("mixed")
-  visibility  String   @default("public")
-  status      String   @default("active")
+  level       String             @default("mixed")
+  visibility  String             @default("public")
+  status      String             @default("active")
   memberLimit Int?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  owner       User     @relation("StudyGroupOwner", fields: [ownerId], references: [id])
+  createdAt   DateTime           @default(now())
+  updatedAt   DateTime           @updatedAt
+  owner       User               @relation("StudyGroupOwner", fields: [ownerId], references: [id])
   members     StudyGroupMember[]
   posts       Post[]
 
@@ -1191,16 +1293,16 @@ model StudyGroup {
 }
 
 model StudyGroupMember {
-  id        String   @id @default(cuid())
-  groupId    String
-  userId     String
-  role       String   @default("member")
-  status     String   @default("active")
-  joinedAt   DateTime @default(now())
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  group      StudyGroup @relation(fields: [groupId], references: [id])
-  user       User       @relation(fields: [userId], references: [id])
+  id        String     @id @default(cuid())
+  groupId   String
+  userId    String
+  role      String     @default("member")
+  status    String     @default("active")
+  joinedAt  DateTime   @default(now())
+  createdAt DateTime   @default(now())
+  updatedAt DateTime   @updatedAt
+  group     StudyGroup @relation(fields: [groupId], references: [id])
+  user      User       @relation(fields: [userId], references: [id])
 
   @@unique([groupId, userId])
   @@index([userId, status, createdAt])
@@ -1208,54 +1310,54 @@ model StudyGroupMember {
 }
 
 model PointTransaction {
-  id          String   @id @default(cuid())
-  userId      String
-  actionType  String
-  actionKey   String?  @unique
-  pointsDelta Int
+  id           String   @id @default(cuid())
+  userId       String
+  actionType   String
+  actionKey    String?  @unique
+  pointsDelta  Int
   balanceAfter Int
-  relatedType String?
-  relatedId   String?
-  note        String?
-  metadata    Json?
-  createdAt   DateTime @default(now())
-  user        User     @relation(fields: [userId], references: [id])
+  relatedType  String?
+  relatedId    String?
+  note         String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  user         User     @relation(fields: [userId], references: [id])
 
   @@index([userId, createdAt])
   @@index([actionType, createdAt])
 }
 
 model PointRedemption {
-  id          String   @id @default(cuid())
-  userId      String
-  productId   String
-  pointsCost  Int
-  status      String   @default("completed")
-  note        String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  user        User     @relation(fields: [userId], references: [id])
-  product     Product  @relation(fields: [productId], references: [id])
+  id         String   @id @default(cuid())
+  userId     String
+  productId  String
+  pointsCost Int
+  status     String   @default("completed")
+  note       String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+  user       User     @relation(fields: [userId], references: [id])
+  product    Product  @relation(fields: [productId], references: [id])
 
   @@index([userId, createdAt])
   @@index([productId, status, createdAt])
 }
 
 model Post {
-  id        String   @id @default(cuid())
-  userId    String
-  groupId   String?
-  kind      String   @default("discussion")
-  visibility String  @default("public")
-  title     String
-  content   String
-  status    String   @default("pending")
-  metadata  Json?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  user      User     @relation(fields: [userId], references: [id])
-  group     StudyGroup? @relation(fields: [groupId], references: [id])
-  comments  Comment[]
+  id         String      @id @default(cuid())
+  userId     String
+  groupId    String?
+  kind       String      @default("discussion")
+  visibility String      @default("public")
+  title      String
+  content    String
+  status     String      @default("pending")
+  metadata   Json?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+  user       User        @relation(fields: [userId], references: [id])
+  group      StudyGroup? @relation(fields: [groupId], references: [id])
+  comments   Comment[]
 
   @@index([status, createdAt])
   @@index([kind, status, createdAt])
@@ -1276,25 +1378,25 @@ model Comment {
 }
 
 model Solution {
-  id         String   @id @default(cuid())
-  problemId  String
-  versionId  String?
-  type       String   @default("official") // official/ugc
-  title      String
-  summary    String?
-  content    String
-  accessLevel String?
-  isPremium  Boolean  @default(false)
-  videoUrl   String?
+  id           String          @id @default(cuid())
+  problemId    String
+  versionId    String?
+  type         String          @default("official") // official/ugc
+  title        String
+  summary      String?
+  content      String
+  accessLevel  String?
+  isPremium    Boolean         @default(false)
+  videoUrl     String?
   templateType String?
-  status     String   @default("published")
-  authorId   String
-  visibility String   @default("public")
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
-  problem    Problem  @relation(fields: [problemId], references: [id])
-  author     User     @relation(fields: [authorId], references: [id])
-  version    ProblemVersion? @relation(fields: [versionId], references: [id])
+  status       String          @default("published")
+  authorId     String
+  visibility   String          @default("public")
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  problem      Problem         @relation(fields: [problemId], references: [id])
+  author       User            @relation(fields: [authorId], references: [id])
+  version      ProblemVersion? @relation(fields: [versionId], references: [id])
 
   @@index([problemId, createdAt])
   @@index([problemId, accessLevel, createdAt])
@@ -1302,20 +1404,211 @@ model Solution {
   @@index([authorId, createdAt])
 }
 
+model FileAsset {
+  id                      String                   @id @default(cuid())
+  kind                    FileAssetKind
+  storageProvider         FileStorageProvider      @default(LOCAL_FILE)
+  uri                     String                   @unique
+  bucket                  String?
+  objectKey               String?
+  fileName                String
+  extension               String?
+  mimeType                String?
+  byteSize                Int
+  checksumSha256          String?
+  status                  FileAssetStatus          @default(ACTIVE)
+  metadata                Json?
+  createdById             String?
+  createdAt               DateTime                 @default(now())
+  updatedAt               DateTime                 @updatedAt
+  deletedAt               DateTime?
+  createdBy               User?                    @relation("FileAssetCreator", fields: [createdById], references: [id])
+  standardSolutionSources StandardSolution[]       @relation("StandardSolutionSourceAsset")
+  compileStdoutTasks      TestdataGenerationTask[] @relation("TestdataTaskCompileStdoutAsset")
+  compileStderrTasks      TestdataGenerationTask[] @relation("TestdataTaskCompileStderrAsset")
+  packageTasks            TestdataGenerationTask[] @relation("TestdataTaskPackageAsset")
+  inputCases              TestdataCase[]           @relation("TestdataCaseInputAsset")
+  expectedOutputCases     TestdataCase[]           @relation("TestdataCaseExpectedOutputAsset")
+  runtimeStderrCases      TestdataCase[]           @relation("TestdataCaseRuntimeStderrAsset")
+  logStdoutEntries        TestdataGenerationLog[]  @relation("TestdataLogStdoutAsset")
+  logStderrEntries        TestdataGenerationLog[]  @relation("TestdataLogStderrAsset")
+
+  @@index([kind, createdAt])
+  @@index([checksumSha256])
+  @@index([createdById, createdAt])
+  @@index([status, createdAt])
+}
+
+model StandardSolution {
+  id               String                   @id @default(cuid())
+  problemVersionId String
+  label            String
+  language         String
+  sourceAssetId    String
+  sourceHash       String?
+  status           StandardSolutionStatus   @default(ACTIVE)
+  isPrimary        Boolean                  @default(false)
+  compileOptions   Json?
+  runOptions       Json?
+  notes            String?                  @db.Text
+  uploadedById     String
+  lastVerifiedAt   DateTime?
+  createdAt        DateTime                 @default(now())
+  updatedAt        DateTime                 @updatedAt
+  problemVersion   ProblemVersion           @relation(fields: [problemVersionId], references: [id])
+  sourceAsset      FileAsset                @relation("StandardSolutionSourceAsset", fields: [sourceAssetId], references: [id])
+  uploadedBy       User                     @relation("StandardSolutionUploader", fields: [uploadedById], references: [id])
+  tasks            TestdataGenerationTask[]
+
+  @@index([problemVersionId, status, isPrimary])
+  @@index([uploadedById, createdAt])
+  @@index([sourceHash])
+}
+
+model TestdataGenerationTask {
+  id                    String                       @id @default(cuid())
+  problemId             String
+  problemVersionId      String
+  standardSolutionId    String
+  requestedById         String
+  status                TestdataGenerationTaskStatus @default(PENDING)
+  stage                 TestdataGenerationTaskStage  @default(VALIDATE_CONFIG)
+  mode                  TestdataPublishMode          @default(APPEND)
+  queueName             String                       @default("testgen:jobs")
+  workerId              String?
+  batchKey              String?
+  requestFingerprint    String?
+  seed                  String?
+  attemptNo             Int                          @default(1)
+  retriedFromTaskId     String?
+  configSnapshot        Json
+  solutionSnapshot      Json
+  plannedCaseCount      Int                          @default(0)
+  generatedCaseCount    Int                          @default(0)
+  succeededCaseCount    Int                          @default(0)
+  failedCaseCount       Int                          @default(0)
+  persistedCaseCount    Int                          @default(0)
+  replacedTestcaseCount Int                          @default(0)
+  compileExitCode       Int?
+  compileDurationMs     Int?
+  compileStdoutAssetId  String?
+  compileStderrAssetId  String?
+  packageAssetId        String?
+  errorCode             String?
+  errorMessage          String?                      @db.Text
+  resultSummary         Json?
+  startedAt             DateTime?
+  finishedAt            DateTime?
+  createdAt             DateTime                     @default(now())
+  updatedAt             DateTime                     @updatedAt
+  problem               Problem                      @relation(fields: [problemId], references: [id])
+  problemVersion        ProblemVersion               @relation(fields: [problemVersionId], references: [id])
+  standardSolution      StandardSolution             @relation(fields: [standardSolutionId], references: [id])
+  requestedBy           User                         @relation("TestdataGenerationRequester", fields: [requestedById], references: [id])
+  retriedFromTask       TestdataGenerationTask?      @relation("TestdataTaskRetryChain", fields: [retriedFromTaskId], references: [id])
+  retries               TestdataGenerationTask[]     @relation("TestdataTaskRetryChain")
+  compileStdoutAsset    FileAsset?                   @relation("TestdataTaskCompileStdoutAsset", fields: [compileStdoutAssetId], references: [id])
+  compileStderrAsset    FileAsset?                   @relation("TestdataTaskCompileStderrAsset", fields: [compileStderrAssetId], references: [id])
+  packageAsset          FileAsset?                   @relation("TestdataTaskPackageAsset", fields: [packageAssetId], references: [id])
+  cases                 TestdataCase[]
+  logs                  TestdataGenerationLog[]
+  publishedTestcases    Testcase[]                   @relation("GeneratedTestcases")
+
+  @@index([problemId, createdAt])
+  @@index([problemVersionId, createdAt])
+  @@index([standardSolutionId, createdAt])
+  @@index([requestedById, createdAt])
+  @@index([status, createdAt])
+  @@index([stage, createdAt])
+  @@index([batchKey, createdAt])
+  @@index([retriedFromTaskId])
+  @@index([queueName, status, createdAt])
+  @@index([requestFingerprint])
+}
+
+model TestdataCase {
+  id                    String                  @id @default(cuid())
+  taskId                String
+  ordinal               Int
+  groupKey              String?
+  title                 String?
+  score                 Int                     @default(0)
+  isSample              Boolean                 @default(false)
+  isPretest             Boolean                 @default(false)
+  visible               Boolean                 @default(false)
+  caseType              Int                     @default(1)
+  subtaskId             Int?
+  groupId               String?
+  orderIndex            Int?
+  caseSeed              String?
+  generatorInput        Json?
+  inputAssetId          String?
+  expectedOutputAssetId String?
+  runtimeStderrAssetId  String?
+  status                TestdataCaseStatus      @default(PENDING)
+  executionStatus       ProgramExecutionStatus  @default(NOT_STARTED)
+  executionDurationMs   Int?
+  executionMemoryKb     Int?
+  exitCode              Int?
+  errorCode             String?
+  errorMessage          String?                 @db.Text
+  metadata              Json?
+  createdAt             DateTime                @default(now())
+  updatedAt             DateTime                @updatedAt
+  task                  TestdataGenerationTask  @relation(fields: [taskId], references: [id])
+  inputAsset            FileAsset?              @relation("TestdataCaseInputAsset", fields: [inputAssetId], references: [id])
+  expectedOutputAsset   FileAsset?              @relation("TestdataCaseExpectedOutputAsset", fields: [expectedOutputAssetId], references: [id])
+  runtimeStderrAsset    FileAsset?              @relation("TestdataCaseRuntimeStderrAsset", fields: [runtimeStderrAssetId], references: [id])
+  logs                  TestdataGenerationLog[]
+
+  @@unique([taskId, ordinal])
+  @@index([taskId, status, ordinal])
+  @@index([taskId, groupKey, ordinal])
+  @@index([taskId, executionStatus])
+  @@index([inputAssetId])
+  @@index([expectedOutputAssetId])
+}
+
+model TestdataGenerationLog {
+  id            String                      @id @default(cuid())
+  taskId        String
+  caseId        String?
+  sequenceNo    Int
+  level         GenerationLogLevel
+  stage         TestdataGenerationTaskStage
+  code          String?
+  message       String                      @db.Text
+  detail        Json?
+  stdoutAssetId String?
+  stderrAssetId String?
+  workerId      String?
+  createdAt     DateTime                    @default(now())
+  task          TestdataGenerationTask      @relation(fields: [taskId], references: [id])
+  case          TestdataCase?               @relation(fields: [caseId], references: [id])
+  stdoutAsset   FileAsset?                  @relation("TestdataLogStdoutAsset", fields: [stdoutAssetId], references: [id])
+  stderrAsset   FileAsset?                  @relation("TestdataLogStderrAsset", fields: [stderrAssetId], references: [id])
+
+  @@unique([taskId, sequenceNo])
+  @@index([taskId, createdAt])
+  @@index([caseId, createdAt])
+  @@index([taskId, level, createdAt])
+  @@index([taskId, stage, createdAt])
+}
+
 model ProblemSet {
-  id          String   @id @default(cuid())
-  slug        String?  @unique
-  title       String
-  summary     String?
-  description String?
-  kind        String   @default("training_path")
-  status      String   @default("published")
-  visibility  String   @default("public")
-  ownerId     String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  owner       User     @relation(fields: [ownerId], references: [id])
-  items       ProblemSetItem[]
+  id               String                              @id @default(cuid())
+  slug             String?                             @unique
+  title            String
+  summary          String?
+  description      String?
+  kind             String                              @default("training_path")
+  status           String                              @default("published")
+  visibility       String                              @default("public")
+  ownerId          String
+  createdAt        DateTime                            @default(now())
+  updatedAt        DateTime                            @updatedAt
+  owner            User                                @relation(fields: [ownerId], references: [id])
+  items            ProblemSetItem[]
   classAssignments TeachingGroupProblemSetAssignment[]
 
   @@index([kind, status, createdAt])
@@ -1323,25 +1616,25 @@ model ProblemSet {
 }
 
 model ProblemSetItem {
-  setId     String
-  problemId String
+  setId      String
+  problemId  String
   orderIndex Int
-  set       ProblemSet @relation(fields: [setId], references: [id])
-  problem   Problem    @relation(fields: [problemId], references: [id])
+  set        ProblemSet @relation(fields: [setId], references: [id])
+  problem    Problem    @relation(fields: [problemId], references: [id])
 
   @@id([setId, problemId])
   @@index([setId, orderIndex])
 }
 
 model ProblemStat {
-  problemId          String  @id
-  totalSubmissions   Int     @default(0)
-  acceptedSubmissions Int    @default(0)
-  passRate           Float   @default(0)
-  avgTimeMs          Int     @default(0)
-  avgMemoryMb        Int     @default(0)
-  updatedAt          DateTime @default(now())
-  problem            Problem @relation(fields: [problemId], references: [id])
+  problemId           String   @id
+  totalSubmissions    Int      @default(0)
+  acceptedSubmissions Int      @default(0)
+  passRate            Float    @default(0)
+  avgTimeMs           Int      @default(0)
+  avgMemoryMb         Int      @default(0)
+  updatedAt           DateTime @default(now())
+  problem             Problem  @relation(fields: [problemId], references: [id])
 }
 
 model ModerationLog {
@@ -1376,18 +1669,18 @@ model AdminProblemBulkOperationLog {
 }
 
 model UserProblemProgress {
-  userId          String
-  problemId       String
-  status          Int      @default(0)
-  attempts        Int      @default(0)
-  bestScore       Int      @default(0)
-  lastStatus      String?
-  solvedAt        DateTime?
+  userId           String
+  problemId        String
+  status           Int       @default(0)
+  attempts         Int       @default(0)
+  bestScore        Int       @default(0)
+  lastStatus       String?
+  solvedAt         DateTime?
   lastSubmissionId String?
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  user            User     @relation(fields: [userId], references: [id])
-  problem         Problem  @relation(fields: [problemId], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  user             User      @relation(fields: [userId], references: [id])
+  problem          Problem   @relation(fields: [problemId], references: [id])
 
   @@id([userId, problemId])
   @@index([userId, updatedAt])
