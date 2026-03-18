@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { Prisma } from "@prisma/client"
 import { withAuth } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { createStoredFileAsset } from "@/lib/file-assets"
@@ -49,7 +50,8 @@ export const POST = withAuth(async (_req, { params }, user) => {
 
   const seed = resolveTaskSeed(sourceTask.seed ? `${sourceTask.seed}-retry-${sourceTask.attemptNo + 1}` : undefined)
   const { config, plans } = validateAndPlanTestdataConfig(sourceTask.configSnapshot, seed)
-  const configSnapshot = toInputJsonValue(config)
+  const configSnapshot = config as Prisma.JsonValue
+  const configInputSnapshot = toInputJsonValue(config)
   const requestFingerprint = buildTestdataRequestFingerprint({
     versionId: sourceTask.problemVersionId,
     standardSolutionId: sourceTask.standardSolutionId,
@@ -93,7 +95,7 @@ export const POST = withAuth(async (_req, { params }, user) => {
         attemptNo: sourceTask.attemptNo + 1,
         retriedFromTaskId: sourceTask.id,
         requestFingerprint,
-        configSnapshot,
+        configSnapshot: configInputSnapshot,
         solutionSnapshot: toInputJsonValue(sourceTask.solutionSnapshot),
         plannedCaseCount: plans.length,
         generatedCaseCount: generatedInputs.length,

@@ -1,9 +1,9 @@
 import { createHash, randomUUID } from "crypto"
 import { readFile, unlink } from "fs/promises"
-import * as dbModule from "../src/lib/db.ts"
-import * as fileAssetsModule from "../src/lib/file-assets.ts"
-import * as testdataGenModule from "../src/lib/testdata-gen/index.ts"
-import * as taskUtilsModule from "../src/lib/testdata-gen/task-utils.ts"
+import * as dbModule from "../src/lib/db"
+import * as fileAssetsModule from "../src/lib/file-assets"
+import * as testdataGenModule from "../src/lib/testdata-gen"
+import * as taskUtilsModule from "../src/lib/testdata-gen/task-utils"
 
 const dbExports = (dbModule as Record<string, unknown>).default as Record<string, unknown> | undefined
 const fileAssetExports = (fileAssetsModule as Record<string, unknown>).default as Record<string, unknown> | undefined
@@ -11,15 +11,15 @@ const testdataGenExports = (testdataGenModule as Record<string, unknown>).defaul
 const taskUtilsExports = (taskUtilsModule as Record<string, unknown>).default as Record<string, unknown> | undefined
 
 const { db } = (dbExports ?? (dbModule as Record<string, unknown>)) as {
-  db: typeof import("../src/lib/db.ts").db
+  db: typeof import("../src/lib/db").db
 }
 const { createStoredFileAsset } = (fileAssetExports ?? (fileAssetsModule as Record<string, unknown>)) as {
-  createStoredFileAsset: typeof import("../src/lib/file-assets.ts").createStoredFileAsset
+  createStoredFileAsset: typeof import("../src/lib/file-assets").createStoredFileAsset
 }
 const { generatePlannedCase, validateAndPlanTestdataConfig } = (testdataGenExports ??
   (testdataGenModule as Record<string, unknown>)) as {
-  generatePlannedCase: typeof import("../src/lib/testdata-gen/index.ts").generatePlannedCase
-  validateAndPlanTestdataConfig: typeof import("../src/lib/testdata-gen/index.ts").validateAndPlanTestdataConfig
+  generatePlannedCase: typeof import("../src/lib/testdata-gen").generatePlannedCase
+  validateAndPlanTestdataConfig: typeof import("../src/lib/testdata-gen").validateAndPlanTestdataConfig
 }
 const {
   buildSolutionSnapshot,
@@ -29,12 +29,12 @@ const {
   TESTDATA_QUEUE_NAME,
   toInputJsonValue,
 } = (taskUtilsExports ?? (taskUtilsModule as Record<string, unknown>)) as {
-  buildSolutionSnapshot: typeof import("../src/lib/testdata-gen/task-utils.ts").buildSolutionSnapshot
-  buildTestdataRequestFingerprint: typeof import("../src/lib/testdata-gen/task-utils.ts").buildTestdataRequestFingerprint
-  resolveTaskSeed: typeof import("../src/lib/testdata-gen/task-utils.ts").resolveTaskSeed
-  summarizeTaskForQueue: typeof import("../src/lib/testdata-gen/task-utils.ts").summarizeTaskForQueue
-  TESTDATA_QUEUE_NAME: typeof import("../src/lib/testdata-gen/task-utils.ts").TESTDATA_QUEUE_NAME
-  toInputJsonValue: typeof import("../src/lib/testdata-gen/task-utils.ts").toInputJsonValue
+  buildSolutionSnapshot: typeof import("../src/lib/testdata-gen/task-utils").buildSolutionSnapshot
+  buildTestdataRequestFingerprint: typeof import("../src/lib/testdata-gen/task-utils").buildTestdataRequestFingerprint
+  resolveTaskSeed: typeof import("../src/lib/testdata-gen/task-utils").resolveTaskSeed
+  summarizeTaskForQueue: typeof import("../src/lib/testdata-gen/task-utils").summarizeTaskForQueue
+  TESTDATA_QUEUE_NAME: typeof import("../src/lib/testdata-gen/task-utils").TESTDATA_QUEUE_NAME
+  toInputJsonValue: typeof import("../src/lib/testdata-gen/task-utils").toInputJsonValue
 }
 
 type RunnerMode = "host" | "docker"
@@ -90,7 +90,7 @@ async function main() {
     process.env.TESTDATA_RUNNER_IMAGE = "codemaster-testdata-runner:latest"
   }
 
-  const { handleTestdataGenerationJob } = await import("../../../services/judge-agent/src/jobs/testdata-generation.ts")
+  const { handleTestdataGenerationJob } = await import("../../../services/judge-agent/src/jobs/testdata-generation")
 
   const createdFileUris: string[] = []
   let createdUserId: string | null = null

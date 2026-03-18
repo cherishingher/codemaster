@@ -588,7 +588,9 @@ function buildAutoCaseDraft(
   const root = draft as { version?: unknown; groups?: Array<Record<string, unknown>> }
   const sourceGroups = Array.isArray(root.groups) ? root.groups : []
   const hiddenGroups = sourceGroups.filter((group) => group.isSample !== true)
-  const groups = hiddenGroups.length > 0 ? hiddenGroups : sourceGroups
+  const groups: Array<Record<string, unknown> & { key: string }> =
+    (hiddenGroups.length > 0 ? hiddenGroups : sourceGroups)
+      .filter((group): group is Record<string, unknown> & { key: string } => typeof group.key === "string")
   const selectedGroups = getAutoCaseGroups(groups, testcaseCount)
   const effectiveGroups = selectedGroups.length > 0 ? selectedGroups : groups.slice(0, Math.min(testcaseCount, groups.length))
   const groupKeys = effectiveGroups.map((group) => String(group.key ?? "group"))
