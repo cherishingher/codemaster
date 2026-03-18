@@ -27,8 +27,9 @@ JUDGE_ID = os.environ.get("JUDGE_ID", "judge-dispatch")
 
 STREAM_KEY = "judge:jobs"
 GROUP = "judge-agents"
+# 固定 consumer 名，确保重启后能恢复上次未 ack 的 pending 消息
+CONSUMER_NAME = JUDGE_ID
 
-# codemaster language → (judge_worker language, g++ -std flag)
 LANG_MAP = {
     "cpp11": ("cpp", "c++11"),
     "cpp14": ("cpp", "c++14"),
@@ -37,7 +38,6 @@ LANG_MAP = {
     "c": ("c", None),
 }
 
-# judge_worker verdict → codemaster status
 STATUS_MAP = {
     "AC":  "ACCEPTED",
     "WA":  "WRONG_ANSWER",
@@ -51,7 +51,7 @@ STATUS_MAP = {
 rdb: aioredis.Redis = None
 task_queue: asyncio.Queue = None
 judge_workers: dict = {}
-pending_results: dict = {}  # task_id → asyncio.Future
+pending_results: dict = {}
 stats = {"total_dispatched": 0, "total_completed": 0, "started_at": None}
 
 
@@ -68,7 +68,7 @@ async def lifespan(app: FastAPI):
     print(f"[+] Judge Dispatch started")
     print(f"    Redis:    {REDIS_URL}")
     print(f"    Callback: {API_BASE_URL}/api/judge/callback")
-    print(f"    Stream:   {STREAM_KEY} / group={GROUP}")
+    print(f"    Consumer: {CONSUMER_NAME} in group {GROUP}")
     yield
 
     consumer_task.cancel()
@@ -82,8 +82,9 @@ app = FastAPI(title="Judge Dispatch", lifespan=lifespan)
 
 
 async def _ensure_consumer_group():
+    """与 judge-agent 一致，用 $ 表示只消费新消息"""
     try:
-        await rdb.xgroup_create(STREAM_KEY, GROUP, "0", mkstream=True)
+        await rdb.xgroup_create(STREAM_KEY, GROUP, "$", mkstream=True)
     except Exception as e:
         if "BUSYGROUP" not in str(e):
             raise
@@ -91,32 +92,39 @@ async def _ensure_consumer_group():
 
 async def _redis_consumer_loop():
     """持续读取 Redis Stream 中的判题任务"""
-    consumer_name = JUDGE_ID + "-" + uuid.uuid4().hex[:6]
-    print(f"[i] Redis consumer: {consumer_name}")
+    print(f"[i] Redis consumer: {CONSUMER_NAME}")
 
-    # 先处理上次未 ack 的 pending 消息
+    # 用 XAUTOCLAIM 领回所有 consumer group 中超过 60 秒未 ack 的孤儿消息
+    # 不限于本 consumer，任何崩溃的 consumer 遗留的消息都能被回收
     try:
-        pending = await rdb.xreadgroup(
-            GROUP, consumer_name,
-            {STREAM_KEY: "0"},
-            count=100,
-        )
-        if pending:
-            for stream_name, messages in pending:
-                for msg_id, fields in messages:
-                    if not fields:
-                        await rdb.xack(STREAM_KEY, GROUP, msg_id)
-                        continue
-                    payload_raw = fields.get("payload", "{}")
-                    asyncio.create_task(_safe_handle_job(payload_raw, msg_id))
-            print(f"[i] Recovered {sum(len(m) for _, m in pending)} pending messages")
+        recovered = 0
+        cursor = "0-0"
+        while True:
+            result = await rdb.xautoclaim(
+                STREAM_KEY, GROUP, CONSUMER_NAME,
+                min_idle_time=60000,  # 60 秒未 ack 视为孤儿
+                start_id=cursor, count=50,
+            )
+            next_cursor, messages, _ = result
+            for msg_id, fields in messages:
+                if not fields:
+                    await rdb.xack(STREAM_KEY, GROUP, msg_id)
+                    continue
+                payload_raw = fields.get("payload", "{}")
+                asyncio.create_task(_safe_handle_job(payload_raw, msg_id))
+                recovered += 1
+            if next_cursor == "0-0" or not messages:
+                break
+            cursor = next_cursor
+        if recovered:
+            print(f"[i] Recovered {recovered} orphaned messages via XAUTOCLAIM")
     except Exception as e:
-        print(f"[!] Pending recovery error: {e}")
+        print(f"[!] Orphan recovery error: {e}")
 
     while True:
         try:
             results = await rdb.xreadgroup(
-                GROUP, consumer_name,
+                GROUP, CONSUMER_NAME,
                 {STREAM_KEY: ">"},
                 count=10, block=2000,
             )
@@ -139,7 +147,6 @@ async def _redis_consumer_loop():
 
 
 async def _safe_handle_job(payload_raw: str, msg_id: str):
-    """安全地处理单个 job，不影响其他 job"""
     try:
         payload = json.loads(payload_raw)
         await _handle_redis_job(payload, msg_id)
@@ -170,17 +177,14 @@ async def _read_file_uri(uri: str) -> str:
 
 
 async def _handle_redis_job(payload: dict, msg_id: str):
-    """将 Redis 任务转换为 judge-worker 格式并分发"""
     submission_id = payload["submissionId"]
     language_key = payload.get("language", "cpp17")
     lang, cpp_std = LANG_MAP.get(language_key, ("cpp", "c++17"))
 
-    # 读取源代码
     code = payload.get("code", "")
     if not code and payload.get("codeUri"):
         code = await _read_file_uri(payload["codeUri"])
 
-    # 读取测试点文件内容
     testcases_meta = payload.get("testcases", [])
     test_cases_for_worker = []
     for tc in testcases_meta:
@@ -205,7 +209,6 @@ async def _handle_redis_job(payload: dict, msg_id: str):
     if cpp_std:
         task["cpp_std"] = cpp_std
 
-    # 创建 Future 等待结果
     future = asyncio.get_event_loop().create_future()
     pending_results[task_id] = {
         "future": future,
@@ -217,7 +220,6 @@ async def _handle_redis_job(payload: dict, msg_id: str):
     stats["total_dispatched"] += 1
     print(f"[>] Dispatched {task_id} ({language_key}, {len(testcases_meta)} cases)")
 
-    # 等待判题完成（超时 5 分钟）
     try:
         result = await asyncio.wait_for(future, timeout=300)
         await _process_result(task_id, result)
@@ -229,7 +231,6 @@ async def _handle_redis_job(payload: dict, msg_id: str):
 
 
 async def _process_result(task_id: str, result: dict):
-    """将 judge-worker 结果映射为 codemaster 格式并回调"""
     meta = pending_results.get(task_id)
     if not meta:
         return
@@ -271,7 +272,6 @@ async def _process_result(task_id: str, result: dict):
 
 
 async def _report_callback(submission_id: str, status: str, score: int, cases: list):
-    """POST 结果到 Next.js /api/judge/callback"""
     try:
         async with httpx.AsyncClient() as client:
             resp = await client.post(
@@ -311,6 +311,7 @@ async def judge_endpoint(websocket: WebSocket):
     judge_workers[wid] = worker_info
     print(f"[+] Judge worker {wid} connected (total: {len(judge_workers)})")
 
+    background_tasks: list[asyncio.Task] = []
     try:
         reg_msg = await asyncio.wait_for(websocket.receive_json(), timeout=10)
         if reg_msg.get("type") == "register":
@@ -348,17 +349,31 @@ async def judge_endpoint(websocket: WebSocket):
                 worker_info["active_tasks"].pop(task_id, None)
                 worker_info["slots"].release()
 
-        await asyncio.gather(fetch_tasks(), send_loop(), receive_results())
+        t_fetch = asyncio.create_task(fetch_tasks())
+        t_send = asyncio.create_task(send_loop())
+        t_recv = asyncio.create_task(receive_results())
+        background_tasks = [t_fetch, t_send, t_recv]
+
+        # 任意一个协程异常退出则全部停止
+        done, _ = await asyncio.wait(
+            background_tasks, return_when=asyncio.FIRST_EXCEPTION,
+        )
+        for t in done:
+            if t.exception():
+                raise t.exception()
 
     except WebSocketDisconnect:
         print(f"[-] Judge worker {wid} disconnected")
     except Exception as e:
         print(f"[!] Judge worker {wid} error: {e}")
     finally:
+        # 确保所有后台协程被取消，防止继续从 task_queue 取任务
+        for t in background_tasks:
+            t.cancel()
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+
         for tid, task in worker_info["active_tasks"].items():
             await task_queue.put(task)
-            if tid in pending_results:
-                pending_results[tid].get("future")  # will timeout naturally
             print(f"[↻] Task {tid} re-queued")
         judge_workers.pop(wid, None)
 
