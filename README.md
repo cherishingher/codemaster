@@ -263,10 +263,13 @@ cp .env.example .env
 | `SANDBOX_IMAGE` | 沙箱 Docker 镜像名 | `codemaster-sandbox` |
 | `SANDBOX_MEMORY` | 沙箱内存限制 | `256m` |
 | `SANDBOX_CPUS` | 沙箱 CPU 限制 | `1` |
+| `SANDBOX_PIDS` | 沙箱进程数限制 | `32` |
+| `SANDBOX_TMPFS_SIZE` | 沙箱可写临时目录大小 | `32m` |
 | `ENABLE_LOCAL_RUNNER` | 是否启用本地运行接口 | `true/false` |
 | `CPP_COMPILER` | 本地运行 C++ 编译器 | `g++` |
 | `API_BASE_URL` | Judge Agent 回调 Web 地址 | `http://127.0.0.1:3001` |
 | `JUDGE_ID` | Judge 实例 ID | `judge-local` |
+| `HUSTOJ_MYSQL_SSL` | HUSTOJ MySQL 启用 SSL | `true/false` |
 | `ALIYUN_*` | 阿里云 SMS/DirectMail 配置 | 见 `.env.example` |
 | `HUSTOJ_*` | HUSTOJ MySQL/数据目录连接配置 | 见 `.env.example` |
 
@@ -406,16 +409,68 @@ pm2 save
 
 ## 安全特性
 
-项目内置了多层安全防护：
+项目内置了多层纵深安全防护，覆盖认证、执行、传输、部署全链路。
 
-- **认证安全**：bcrypt 密码哈希、验证码 HMAC 签名、Session 过期自动清理、登录速率限制
-- **密码策略**：最少 8 位，必须包含字母和数字
-- **代码执行沙箱**：Docker 容器隔离（`--network none`、`--read-only`、内存/CPU/PID 限制），fallback 到 ulimit
-- **API 防护**：Judge 回调常量时间比较、管理路由 middleware 保护、请求频率限制
-- **传输安全**：HTTPS 强制重定向、HSTS preload、TLS 1.2+
-- **安全响应头**：X-Content-Type-Options、X-Frame-Options、Referrer-Policy、Permissions-Policy
-- **部署安全**：端口绑定 127.0.0.1、Redis 密码认证、启动时环境变量校验、非 root 检查
-- **路径安全**：文件 URI 白名单目录校验，防止路径遍历
+### 认证与会话
+
+| 防护项 | 说明 |
+| ---- | ---- |
+| 密码哈希 | bcrypt（salt=10）|
+| 密码策略 | 8-128 位，必须包含字母和数字（`lib/password-policy.ts`） |
+| 验证码签名 | HMAC-SHA256，密钥通过 `AUTH_CODE_SECRET` 配置，缺失时拒绝启动 |
+| 验证码生成 | `crypto.randomInt()`（非 `Math.random()`） |
+| 登录限流 | 按账号 10 次 / 15 分钟，按 IP 30 次 / 15 分钟（`lib/rate-limit.ts`） |
+| 验证码限流 | 按 target 60 秒冷却，按 IP 20 次 / 小时 |
+| Session 管理 | 7 天过期、访问时主动删除过期记录、概率性批量清理 |
+| 用户枚举防护 | 注册/重置密码的验证码请求接口返回统一响应 |
+| DEBUG 保护 | `DEBUG_AUTH_CODES` 仅在 `NODE_ENV !== "production"` 时生效，日志不打印验证码明文 |
+
+### 代码执行沙箱
+
+| 防护项 | 说明 |
+| ---- | ---- |
+| Docker 容器隔离 | `--network none`（禁止网络）、`--read-only`（只读文件系统）、非 root 用户（uid 65534） |
+| 资源限制 | `--memory 256m`、`--cpus 1`、`--pids-limit 32`、可写 tmpfs 上限 32MB |
+| ulimit fallback | 未启用 Docker 时自动降级为 ulimit（CPU/文件/虚拟内存/进程数限制） |
+| 代码大小限制 | 提交 ≤ 64KB，run 端点 ≤ 64KB |
+| 提交频率限制 | 每用户 10 次 / 分钟 |
+| 路径遍历防护 | `file://` URI 白名单目录校验（judge-agent + hustoj.ts），null byte 检测 |
+| 沙箱镜像 | `infra/sandbox/Dockerfile`：最小化 Ubuntu，仅含 g++ 和 python3 |
+
+### API 与传输
+
+| 防护项 | 说明 |
+| ---- | ---- |
+| 全局速率限制 | 所有 API 120 请求 / 分钟 / IP，响应附带 `X-RateLimit-*` 头 |
+| Judge 回调鉴权 | `crypto.timingSafeEqual` 常量时间比较，防止时序攻击 |
+| 管理路由保护 | Middleware 对 `/admin/*` 和 `/api/admin/*` 强制 session 校验 |
+| HTTPS 强制 | Middleware 层 HTTP → HTTPS 301 重定向（生产环境） |
+| 错误信息脱敏 | HUSTOJ 等内部错误不返回给客户端，仅写日志 |
+| 日志安全 | `lib/logger.ts` 自动脱敏 password/token/secret/cookie 等字段 |
+
+### 安全响应头
+
+| 头 | 值 |
+| ---- | ---- |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; frame-ancestors 'none'; upgrade-insecure-requests` |
+| `Strict-Transport-Security` | `max-age=63072000; includeSubDomains; preload` |
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | `camera=(), microphone=(), geolocation()` |
+
+### 部署与基础设施
+
+| 防护项 | 说明 |
+| ---- | ---- |
+| 端口绑定 | PostgreSQL / Redis 仅监听 `127.0.0.1` |
+| Redis 认证 | `requirepass` 强制密码 |
+| 环境变量校验 | 启动时检查必需密钥，生产环境警告弱密钥（`lib/env-check.ts`） |
+| 非 root 检查 | 部署脚本默认禁止 root 运行，需 `ALLOW_ROOT=true` 显式覆盖 |
+| .env 审查 | 部署脚本自动检测危险配置（`DEBUG_AUTH_CODES=true`、`ENABLE_LOCAL_RUNNER=true`） |
+| Nginx 安全 | TLS 1.2+、OCSP stapling、拦截 `.env/.git/.sql/.log` 等敏感文件 |
+| HUSTOJ MySQL SSL | 支持 `HUSTOJ_MYSQL_SSL=true` 启用加密连接 |
+| 默认密钥清空 | `.env.example` 所有密钥默认留空，强制用户填写 |
 
 ## 未来改进
 
