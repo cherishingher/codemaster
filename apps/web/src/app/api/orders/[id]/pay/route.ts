@@ -3,130 +3,66 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 
-const PayOrderSchema = z.object({
-  channel: z.string().min(1).max(64).optional(),
+const PaySchema = z.object({
+  channel: z.enum(["wechat", "alipay", "manual"]),
+  transactionId: z.string().optional(),
 });
 
-function addDays(base: Date, days: number) {
-  const next = new Date(base);
-  next.setDate(next.getDate() + days);
-  return next;
-}
+export const POST = withAuth(async (req, { params }, user) => {
+  const { id } = params;
+  const data = PaySchema.parse(await req.json());
 
-export const POST = withAuth(async (req, ctx, user) => {
-  const existingOrder = await db.order.findUnique({
-    where: { id: ctx.params.id },
-    include: {
-      product: true,
-    },
+  const order = await db.order.findUnique({
+    where: { id },
+    include: { product: true },
   });
 
-  if (!existingOrder || existingOrder.userId !== user.id) {
-    return NextResponse.json({ error: "not_found", message: "订单不存在" }, { status: 404 });
+  if (!order) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+  if (order.userId !== user.id && !user.roles.includes("admin")) {
+    return NextResponse.json({ error: "forbidden" }, { status: 403 });
+  }
+  if (order.status === "paid") {
+    return NextResponse.json({ error: "already_paid" }, { status: 409 });
   }
 
-  let rawPayload: unknown = {};
-  try {
-    rawPayload = await req.json();
-  } catch {
-    rawPayload = {};
-  }
-
-  const parsed = PayOrderSchema.safeParse(rawPayload);
-  if (!parsed.success) {
-    return NextResponse.json({ error: "invalid_payload", message: "支付参数不合法" }, { status: 400 });
-  }
-
-  const channel = parsed.data.channel?.trim() || "mock-local";
-  const paidAt = new Date();
-  const wasAlreadyPaid = existingOrder.status === "paid";
-
-  const order =
-    wasAlreadyPaid
-      ? existingOrder
-      : await db.order.update({
-          where: { id: existingOrder.id },
-          data: { status: "paid" },
-          include: {
-            product: true,
-          },
-        });
-
-  const existingPayment = await db.payment.findFirst({
-    where: { orderId: existingOrder.id },
-  });
-
-  if (existingPayment) {
-    await db.payment.update({
-      where: { id: existingPayment.id },
+  await db.$transaction(async (tx) => {
+    await tx.payment.create({
       data: {
-        channel,
+        orderId: order.id,
+        channel: data.channel,
         status: "paid",
-        paidAt,
-      },
-    });
-  } else {
-    await db.payment.create({
-      data: {
-        orderId: existingOrder.id,
-        channel,
-        status: "paid",
-        paidAt,
-      },
-    });
-  }
-
-  if (!wasAlreadyPaid && order.productId && order.product) {
-    const currentEntitlement = await db.entitlement.findUnique({
-      where: {
-        userId_productId: {
-          userId: user.id,
-          productId: order.productId,
-        },
+        paidAt: new Date(),
       },
     });
 
-    const expiresAt =
-      order.product.validDays && order.product.validDays > 0
-        ? addDays(
-            currentEntitlement?.expiresAt && currentEntitlement.expiresAt > paidAt
-              ? currentEntitlement.expiresAt
-              : paidAt,
-            order.product.validDays,
-          )
+    await tx.order.update({
+      where: { id: order.id },
+      data: { status: "paid" },
+    });
+
+    if (order.product) {
+      const expiresAt = order.product.validDays
+        ? new Date(Date.now() + order.product.validDays * 86400000)
         : null;
 
-    await db.entitlement.upsert({
-      where: {
-        userId_productId: {
-          userId: user.id,
-          productId: order.productId,
+      await tx.entitlement.upsert({
+        where: {
+          userId_productId: { userId: order.userId, productId: order.product.id },
         },
-      },
-      update: {
-        grantedAt: paidAt,
-        expiresAt,
-      },
-      create: {
-        userId: user.id,
-        productId: order.productId,
-        grantedAt: paidAt,
-        expiresAt,
-      },
-    });
-  }
-
-  return NextResponse.json({
-    data: {
-      id: order.id,
-      productId: order.productId,
-      productName: order.product?.name ?? null,
-      productType: order.product?.type ?? null,
-      amountCents: order.amountCents,
-      status: "paid",
-      createdAt: order.createdAt,
-      paidAt,
-      channel,
-    },
+        create: {
+          userId: order.userId,
+          productId: order.product.id,
+          expiresAt,
+        },
+        update: {
+          expiresAt,
+          grantedAt: new Date(),
+        },
+      });
+    }
   });
+
+  return NextResponse.json({ ok: true, message: "支付成功，权益已发放" });
 });

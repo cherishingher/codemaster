@@ -1,72 +1,143 @@
+"use client"
+
 import Link from "next/link"
-import { ArrowRight, Flag, Timer, Trophy } from "lucide-react"
-import { SectionHeading } from "@/components/patterns/section-heading"
+import useSWR from "swr"
+import { useState } from "react"
+import { Calendar, Clock, Trophy, Users, ArrowRight } from "lucide-react"
+import { api } from "@/lib/api-client"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 
-const contestCards = [
-  {
-    title: "周赛热身场",
-    desc: "按周赛节奏刷中等题，建议计时 90 分钟。",
-    icon: Timer,
-    actionHref: "/tracks/weekly-warmup",
-    actionLabel: "进入热身专题",
-  },
-  {
-    title: "图论专项赛前练",
-    desc: "集中处理最短路、拓扑排序和图搜索题。",
-    icon: Flag,
-    actionHref: "/tracks/graph-advanced",
-    actionLabel: "进入图论专题",
-  },
-  {
-    title: "提交复盘看板",
-    desc: "查看近期提交，快速定位高频失分点。",
-    icon: Trophy,
-    actionHref: "/submissions",
-    actionLabel: "查看提交记录",
-  },
-]
+type ContestItem = {
+  id: string
+  name: string
+  rule: string
+  startAt: string
+  endAt: string
+  phase: string
+  participantCount: number
+  problemCount: number
+}
+
+type ContestListResponse = {
+  items: ContestItem[]
+  total: number
+  page: number
+  totalPages: number
+}
+
+const phaseLabel: Record<string, { text: string; color: string }> = {
+  upcoming: { text: "即将开始", color: "bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200" },
+  running: { text: "进行中", color: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200" },
+  frozen: { text: "已封榜", color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200" },
+  ended: { text: "已结束", color: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300" },
+}
+
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleString("zh-CN", {
+    month: "short", day: "numeric", hour: "2-digit", minute: "2-digit",
+  })
+}
+
+function durationText(start: string, end: string) {
+  const ms = new Date(end).getTime() - new Date(start).getTime()
+  const h = Math.floor(ms / 3600000)
+  const m = Math.floor((ms % 3600000) / 60000)
+  return h > 0 ? `${h}h${m > 0 ? `${m}m` : ""}` : `${m}m`
+}
 
 export default function ContestsPage() {
-  return (
-    <div className="page-wrap py-10 md:py-14">
-      <SectionHeading
-        eyebrow="Contest"
-        title="竞赛训练入口"
-        description="该页为前端导航入口，帮助你从首页导航直接进入竞赛相关训练流程。"
-      />
+  const [tab, setTab] = useState<string>("all")
+  const params: Record<string, string> = {}
+  if (tab !== "all") params.status = tab
 
-      <div className="mt-8 grid gap-5 md:grid-cols-3">
-        {contestCards.map((card) => {
-          const Icon = card.icon
-          return (
-            <Card key={card.title} className="bg-background">
-              <CardContent className="space-y-4 p-6">
-                <div className="flex size-12 items-center justify-center rounded-xl bg-secondary">
-                  <Icon className="size-6 text-foreground" />
-                </div>
-                <h2 className="text-2xl font-semibold tracking-tight text-foreground">{card.title}</h2>
-                <p className="text-sm leading-7 text-muted-foreground">{card.desc}</p>
-                <Button asChild size="sm" variant="secondary">
-                  <Link href={card.actionHref}>
-                    {card.actionLabel}
-                    <ArrowRight className="size-4" />
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
-          )
-        })}
+  const { data, isLoading } = useSWR(
+    ["contests", tab],
+    () => api.contests.list<ContestListResponse>(params),
+  )
+
+  const tabs = [
+    { key: "all", label: "全部" },
+    { key: "running", label: "进行中" },
+    { key: "upcoming", label: "即将开始" },
+    { key: "ended", label: "已结束" },
+  ]
+
+  return (
+    <div className="max-w-4xl mx-auto py-8 px-4">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold">比赛</h1>
+          <p className="text-muted-foreground mt-1">参加算法竞赛，检验你的编程实力</p>
+        </div>
+        <Trophy className="h-8 w-8 text-muted-foreground" />
       </div>
 
-      <div className="mt-8 flex flex-wrap gap-3">
-        <Button asChild>
-          <Link href="/problems">去题库选题</Link>
-        </Button>
-        <Button asChild variant="secondary">
-          <Link href="/tracks">查看全部专题</Link>
-        </Button>
+      <div className="flex gap-2 mb-6">
+        {tabs.map((t) => (
+          <button
+            key={t.key}
+            onClick={() => setTab(t.key)}
+            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+              tab === t.key
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-muted-foreground hover:bg-muted/80"
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {isLoading && (
+        <div className="text-center py-12 text-muted-foreground">加载中...</div>
+      )}
+
+      {data && data.items.length === 0 && (
+        <div className="text-center py-12 text-muted-foreground">暂无比赛</div>
+      )}
+
+      <div className="space-y-3">
+        {data?.items.map((c) => {
+          const phase = phaseLabel[c.phase] ?? phaseLabel.ended
+          return (
+            <Link key={c.id} href={`/contests/${c.id}`}>
+              <Card className="hover:shadow-md transition-shadow cursor-pointer">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 mb-1">
+                        <h3 className="font-semibold text-lg">{c.name}</h3>
+                        <span className={`px-2 py-0.5 rounded text-xs font-medium ${phase.color}`}>
+                          {phase.text}
+                        </span>
+                        <span className="px-2 py-0.5 rounded text-xs bg-muted text-muted-foreground">
+                          {c.rule}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
+                        <span className="flex items-center gap-1">
+                          <Calendar className="h-3.5 w-3.5" />
+                          {formatTime(c.startAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="h-3.5 w-3.5" />
+                          {durationText(c.startAt, c.endAt)}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <Users className="h-3.5 w-3.5" />
+                          {c.participantCount} 人
+                        </span>
+                        <span>{c.problemCount} 题</span>
+                      </div>
+                    </div>
+                    <ArrowRight className="h-5 w-5 text-muted-foreground mt-2" />
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
+          )
+        })}
       </div>
     </div>
   )

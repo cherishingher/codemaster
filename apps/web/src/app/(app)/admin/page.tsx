@@ -78,7 +78,13 @@ export default function AdminToolsPage() {
               <Link href="/admin/problems">题库管理</Link>
             </Button>
             <Button asChild variant="secondary">
+              <Link href="/admin/contests">比赛管理</Link>
+            </Button>
+            <Button asChild variant="secondary">
               <Link href="/admin/problem-sets">题单管理</Link>
+            </Button>
+            <Button asChild variant="secondary">
+              <Link href="/admin/users">用户管理</Link>
             </Button>
             <Button asChild variant="secondary">
               <Link href="/admin/import-export">导入导出</Link>

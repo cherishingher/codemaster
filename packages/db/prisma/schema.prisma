@@ -32,6 +32,8 @@ model User {
   problemSets ProblemSet[]
   problemProgress UserProblemProgress[]
   entitlements Entitlement[]
+  teacherClassrooms Classroom[] @relation("ClassroomTeacher")
+  classroomMemberships ClassroomMember[] @relation("ClassroomMembership")
 }
 
 model VerificationCode {
@@ -512,6 +514,7 @@ model ProblemSet {
   createdAt   DateTime @default(now())
   owner       User     @relation(fields: [ownerId], references: [id])
   items       ProblemSetItem[]
+  assignments ClassroomAssignment[]
 }
 
 model ProblemSetItem {
@@ -585,4 +588,45 @@ model UserProblemProgress {
   @@index([userId, updatedAt])
   @@index([userId, status, updatedAt])
   @@index([problemId])
+}
+
+model Classroom {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  inviteCode  String    @unique
+  teacherId   String
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  teacher     User      @relation("ClassroomTeacher", fields: [teacherId], references: [id])
+  members     ClassroomMember[]
+  assignments ClassroomAssignment[]
+
+  @@index([teacherId])
+  @@index([inviteCode])
+}
+
+model ClassroomMember {
+  classroomId String
+  userId      String
+  role        String   @default("student")
+  joinedAt    DateTime @default(now())
+  classroom   Classroom @relation(fields: [classroomId], references: [id])
+  user        User      @relation("ClassroomMembership", fields: [userId], references: [id])
+
+  @@id([classroomId, userId])
+  @@index([userId])
+}
+
+model ClassroomAssignment {
+  id            String   @id @default(cuid())
+  classroomId   String
+  problemSetId  String
+  title         String
+  dueAt         DateTime?
+  createdAt     DateTime @default(now())
+  classroom     Classroom   @relation(fields: [classroomId], references: [id])
+  problemSet    ProblemSet  @relation(fields: [problemSetId], references: [id])
+
+  @@index([classroomId, createdAt])
 }
