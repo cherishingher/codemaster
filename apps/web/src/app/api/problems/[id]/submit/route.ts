@@ -20,9 +20,11 @@ import {
 
 export const runtime = "nodejs";
 
+const MAX_CODE_LENGTH = 65536;
+
 const SubmitSchema = z.object({
   language: z.string().min(1),
-  code: z.string().min(1),
+  code: z.string().min(1).max(MAX_CODE_LENGTH, "代码长度超过限制"),
 });
 
 export const POST = withAuth(async (req, { params }, user) => {

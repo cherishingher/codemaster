@@ -153,10 +153,27 @@ function normalizeOutput(out: string) {
   return out.trim().replace(/\r\n/g, "\n");
 }
 
+const ALLOWED_DATA_DIRS = [
+  process.env.HUSTOJ_DATA_DIR ?? "/home/judge/data",
+  process.env.LOCAL_STORAGE_DIR ?? "/tmp",
+];
+
+function assertSafePath(filepath: string) {
+  const resolved = path.resolve(filepath);
+  const isSafe = ALLOWED_DATA_DIRS.some((dir) => resolved.startsWith(path.resolve(dir)));
+  if (!isSafe) {
+    throw new Error(`path outside allowed directories: ${resolved}`);
+  }
+  if (resolved.includes("\0")) {
+    throw new Error("null byte in path");
+  }
+  return resolved;
+}
+
 async function loadCode(job: z.infer<typeof JobSchema>) {
   if (job.code) return job.code;
   if (job.codeUri?.startsWith("file://")) {
-    const filepath = job.codeUri.replace("file://", "");
+    const filepath = assertSafePath(job.codeUri.replace("file://", ""));
     return readFile(filepath, "utf8");
   }
   throw new Error("code is missing or codeUri unsupported");
@@ -166,7 +183,8 @@ async function readInput(uri: string) {
   if (!uri.startsWith("file://")) {
     throw new Error("only file:// testcases supported in judge-agent");
   }
-  return readFile(uri.replace("file://", ""), "utf8");
+  const filepath = assertSafePath(uri.replace("file://", ""));
+  return readFile(filepath, "utf8");
 }
 
 async function handleJob(payload: unknown) {
