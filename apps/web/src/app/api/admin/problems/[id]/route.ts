@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { normalizeProblemAlias, replaceProblemAliases } from "@/lib/problem-aliases";
 import {
   buildProblemLifecycleData,
   generateUniqueProblemSlug,
@@ -13,12 +14,23 @@ const UpdateProblemSchema = z.object({
   difficulty: z.number().int().min(1).max(10).optional(),
   visibility: z.enum(["public", "private", "hidden", "contest"]).optional(),
   source: z.string().optional().nullable(),
+  aliases: z.array(z.string().min(1)).optional(),
   tags: z.array(z.string().min(1)).optional(),
 });
 
 function buildProblemWhere(idOrSlug: string) {
   return {
-    OR: [{ id: idOrSlug }, { slug: idOrSlug }],
+    OR: [
+      { id: idOrSlug },
+      { slug: idOrSlug },
+      {
+        aliases: {
+          some: {
+            normalizedValue: normalizeProblemAlias(idOrSlug),
+          },
+        },
+      },
+    ],
   }
 }
 
@@ -26,6 +38,10 @@ export const GET = withAuth(async (_req, { params }) => {
   const problem = await db.problem.findFirst({
     where: buildProblemWhere(params.id),
     include: {
+      aliases: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { value: true },
+      },
       tags: { include: { tag: true } },
       versions: { orderBy: { version: "desc" }, take: 1 },
       stats: true,
@@ -46,6 +62,7 @@ export const GET = withAuth(async (_req, { params }) => {
     defunct: problem.defunct,
     visibility: problem.visibility,
     source: problem.source,
+    aliases: problem.aliases.map((item) => item.value),
     publishedAt: problem.publishedAt,
     currentVersionId: problem.currentVersionId,
     tags: problem.tags.map((t) => t.tag.name),
@@ -105,6 +122,18 @@ export const PATCH = withAuth(async (req, { params }) => {
           data: { problemId: problem.id, tagId: tag.id },
         });
       }
+    }
+
+    if (payload.aliases || payload.source !== undefined) {
+      await replaceProblemAliases(tx, problem.id, {
+        source:
+          payload.source === undefined
+            ? problem.source
+            : payload.source?.trim()
+              ? payload.source.trim()
+              : null,
+        aliases: payload.aliases,
+      });
     }
 
     return problem;

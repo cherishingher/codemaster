@@ -75,6 +75,7 @@ type ProblemMeta = {
   id: string
   slug: string
   title: string
+  aliases?: string[]
   difficulty: number
   status: number
   visible: boolean
@@ -416,6 +417,7 @@ export default function AdminProblemDetailPage() {
   const [problem, setProblem] = React.useState<ProblemMeta | null>(null)
   const [title, setTitle] = React.useState("")
   const [slug, setSlug] = React.useState("")
+  const [aliasesText, setAliasesText] = React.useState("")
   const [difficulty, setDifficulty] = React.useState("3")
   const [visibility, setVisibility] = React.useState<ProblemMeta["visibility"]>("public")
   const [source, setSource] = React.useState("")
@@ -570,6 +572,7 @@ export default function AdminProblemDetailPage() {
       setProblem(pData)
       setTitle(pData.title ?? "")
       setSlug(pData.slug ?? "")
+      setAliasesText(Array.isArray(pData.aliases) ? pData.aliases.join(", ") : "")
       setDifficulty(String(pData.difficulty ?? 3))
       setVisibility(pData.visibility ?? "public")
       setSource(pData.source ?? "")
@@ -799,6 +802,10 @@ export default function AdminProblemDetailPage() {
       body: JSON.stringify({
         title,
         slug,
+        aliases: aliasesText
+          .split(/[,\n]/)
+          .map((item) => item.trim())
+          .filter(Boolean),
         difficulty: Number(difficulty || 3),
         visibility,
         source: source || undefined,
@@ -1559,6 +1566,12 @@ export default function AdminProblemDetailPage() {
               onChange={(e) => setSlug(e.target.value)}
             />
           </div>
+
+          <Input
+            placeholder="题号别名，逗号分隔，如：P1001, luogu1"
+            value={aliasesText}
+            onChange={(e) => setAliasesText(e.target.value)}
+          />
 
           <div className="grid gap-3 md:grid-cols-3">
             <Input

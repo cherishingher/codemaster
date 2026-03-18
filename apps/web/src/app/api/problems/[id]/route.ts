@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { getAuthUser, hasRole } from "@/lib/authz";
 import { getDefaultJudgeConfigs, ProblemLifecycleStatus } from "@/lib/oj";
+import { buildProblemIdentifierWhere } from "@/lib/problem-identifiers";
 
 export async function GET(
   req: NextRequest,
@@ -12,10 +13,12 @@ export async function GET(
   const versionQuery = searchParams.get("version");
 
   const problem = await db.problem.findFirst({
-    where: {
-      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-    },
+    where: buildProblemIdentifierWhere(idOrSlug),
     include: {
+      aliases: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { value: true },
+      },
       tags: { include: { tag: true } },
       currentVersion: {
         include: {
@@ -105,6 +108,7 @@ export async function GET(
     status: problem.status,
     visibility: problem.visibility,
     source: problem.source,
+    aliases: problem.aliases.map((item) => item.value),
     publishedAt: problem.publishedAt,
     tags: problem.tags.map((item) => item.tag.name),
     version: resolvedVersion.version,

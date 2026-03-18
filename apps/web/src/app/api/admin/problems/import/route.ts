@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { replaceProblemAliases } from "@/lib/problem-aliases";
 import { storeTextAsset } from "@/lib/storage";
 import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
 import {
@@ -59,6 +60,7 @@ const ProblemSchema = z.object({
   difficulty: z.number().int().min(1).max(10),
   visibility: z.enum(["public", "private", "hidden", "contest"]).optional(),
   source: z.string().optional(),
+  aliases: z.array(z.string().min(1)).optional(),
   tags: z.array(z.string()).optional(),
   versions: z.array(VersionSchema).optional(),
   solutions: z.array(SolutionSchema).optional(),
@@ -78,6 +80,7 @@ function parseCsv(text: string) {
     difficulty: idx("difficulty"),
     visibility: idx("visibility"),
     source: idx("source"),
+    aliases: idx("aliases"),
     tags: idx("tags"),
   };
 
@@ -115,12 +118,17 @@ function parseCsv(text: string) {
       const tagsRaw = cells[col.tags] ?? "";
       const title = titleRaw ? JSON.parse(titleRaw) : "";
       const source = sourceRaw ? JSON.parse(sourceRaw) : undefined;
+      const aliasesRaw = col.aliases >= 0 ? cells[col.aliases] ?? "" : "";
+      const aliases = aliasesRaw
+        ? JSON.parse(aliasesRaw).split("|").filter(Boolean)
+        : undefined;
       const tags = tagsRaw ? JSON.parse(tagsRaw).split("|").filter(Boolean) : undefined;
       return {
         title,
         difficulty: Number(cells[col.difficulty] ?? 1),
         visibility: (cells[col.visibility] ?? "public") as "public" | "private" | "hidden" | "contest",
         source,
+        aliases,
         tags,
       };
     })
@@ -153,6 +161,11 @@ export const POST = withAuth(async (req, _ctx, user) => {
           source: item.source,
           publishedAt: lifecycle.publishedAt,
         },
+      });
+
+      await replaceProblemAliases(tx, problem.id, {
+        source: item.source,
+        aliases: item.aliases,
       });
 
       if (item.tags?.length) {

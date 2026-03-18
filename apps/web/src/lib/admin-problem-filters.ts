@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { normalizeProblemAlias } from "@/lib/problem-aliases";
 
 export type AdminProblemFilters = {
   q?: string | null;
@@ -9,6 +10,7 @@ export type AdminProblemFilters = {
 
 export function buildAdminProblemWhere(filters: AdminProblemFilters): Prisma.ProblemWhereInput {
   const q = filters.q?.trim();
+  const normalizedQuery = q ? normalizeProblemAlias(q) : "";
   const visibility = filters.visibility?.trim();
 
   return {
@@ -18,6 +20,17 @@ export function buildAdminProblemWhere(filters: AdminProblemFilters): Prisma.Pro
             { title: { contains: q, mode: "insensitive" } },
             { slug: { contains: q, mode: "insensitive" } },
             { source: { contains: q, mode: "insensitive" } },
+            ...(normalizedQuery
+              ? [
+                  {
+                    aliases: {
+                      some: {
+                        normalizedValue: { contains: normalizedQuery },
+                      },
+                    },
+                  } as Prisma.ProblemWhereInput,
+                ]
+              : []),
             {
               tags: {
                 some: {

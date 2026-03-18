@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 import { buildAdminProblemWhere } from "@/lib/admin-problem-filters";
+import { replaceProblemAliases } from "@/lib/problem-aliases";
 import { buildProblemLifecycleData } from "@/lib/problem-admin";
 import { ProblemLifecycleStatus } from "@/lib/oj";
 
@@ -310,11 +311,16 @@ export const POST = withAuth(async (req, _ctx, user) => {
       }
     } else if (payload.action === "set_source") {
       const normalizedSource = payload.source?.trim() ? payload.source.trim() : null;
-      const updateResult = await tx.problem.updateMany({
-        where: { id: { in: existingProblems.map((problem) => problem.id) } },
-        data: { source: normalizedSource },
-      });
-      resultPayload = { ...resultPayload, updatedProblems: updateResult.count };
+      for (const problem of existingProblems) {
+        await tx.problem.update({
+          where: { id: problem.id },
+          data: { source: normalizedSource },
+        });
+        await replaceProblemAliases(tx, problem.id, {
+          source: normalizedSource,
+        });
+      }
+      resultPayload = { ...resultPayload, updatedProblems: existingProblems.length };
     } else {
       const tagMap = new Map<string, string>();
       if (tags.length > 0) {

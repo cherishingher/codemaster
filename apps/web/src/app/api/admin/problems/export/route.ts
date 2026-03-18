@@ -9,6 +9,10 @@ export const GET = withAuth(async (req: NextRequest) => {
   const problems = await db.problem.findMany({
     orderBy: { createdAt: "desc" },
     include: {
+      aliases: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { value: true },
+      },
       tags: { include: { tag: true } },
       versions: {
         orderBy: { version: "asc" },
@@ -28,12 +32,14 @@ export const GET = withAuth(async (req: NextRequest) => {
       "difficulty",
       "visibility",
       "source",
+      "aliases",
       "tags",
       "latestVersion",
       "createdAt",
     ].join(",");
     const rows = problems.map((p) => {
       const tags = p.tags.map((t) => t.tag.name).join("|");
+      const aliases = p.aliases.map((item) => item.value).join("|");
       const latestVersion = p.versions.at(-1)?.version ?? "";
       return [
         p.id,
@@ -41,6 +47,7 @@ export const GET = withAuth(async (req: NextRequest) => {
         p.difficulty,
         p.visibility,
         JSON.stringify(p.source ?? ""),
+        JSON.stringify(aliases),
         JSON.stringify(tags),
         latestVersion,
         p.createdAt.toISOString(),
@@ -61,6 +68,7 @@ export const GET = withAuth(async (req: NextRequest) => {
     difficulty: p.difficulty,
     visibility: p.visibility,
     source: p.source,
+    aliases: p.aliases.map((item) => item.value),
     tags: p.tags.map((t) => t.tag.name),
     versions: p.versions.map((v) => ({
       version: v.version,

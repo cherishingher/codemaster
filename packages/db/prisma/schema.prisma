@@ -212,6 +212,7 @@ model Problem {
   currentVersionId        String?                  @unique
   createdAt               DateTime                 @default(now())
   updatedAt               DateTime                 @updatedAt
+  aliases                 ProblemAlias[]
   tags                    ProblemTag[]
   versions                ProblemVersion[]         @relation("ProblemVersions")
   currentVersion          ProblemVersion?          @relation("ProblemCurrentVersion", fields: [currentVersionId], references: [id], onDelete: SetNull, onUpdate: Cascade)
@@ -228,6 +229,19 @@ model Problem {
   @@index([difficulty])
   @@index([status, visible, defunct, publishedAt])
   @@index([createdAt])
+}
+
+model ProblemAlias {
+  id              String   @id @default(cuid())
+  problemId       String
+  value           String
+  normalizedValue String   @unique
+  sortOrder       Int      @default(0)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  problem         Problem  @relation(fields: [problemId], references: [id], onDelete: Cascade)
+
+  @@index([problemId, sortOrder])
 }
 
 model ProblemVersion {

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
 import { buildAdminProblemWhere } from "@/lib/admin-problem-filters";
+import { replaceProblemAliases } from "@/lib/problem-aliases";
 import {
   buildJudgeConfigCreateManyInput,
   buildProblemLifecycleData,
@@ -17,6 +18,7 @@ const CreateProblemSchema = z.object({
   difficulty: z.number().int().min(1).max(10),
   visibility: z.enum(["public", "private", "hidden", "contest"]).default("public"),
   source: z.string().min(1).optional(),
+  aliases: z.array(z.string().min(1)).optional(),
   tags: z.array(z.string().min(1)).optional(),
   statement: z.string().min(1).optional(),
   statementMd: z.string().min(1).optional(),
@@ -68,6 +70,10 @@ export const GET = withAuth(async (req: NextRequest) => {
     take: pageSize,
     include: {
       tags: { include: { tag: true } },
+      aliases: {
+        orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+        select: { value: true },
+      },
       currentVersion: {
         select: { id: true, version: true },
       },
@@ -86,6 +92,7 @@ export const GET = withAuth(async (req: NextRequest) => {
       defunct: p.defunct,
       visibility: p.visibility,
       source: p.source,
+      aliases: p.aliases.map((item) => item.value),
       tags: p.tags.map((t) => t.tag.name),
       version: p.currentVersion?.version ?? null,
       stats: p.stats,
@@ -130,6 +137,13 @@ export const POST = withAuth(async (req) => {
           data: { problemId: problem.id, tagId: tag.id },
         });
       }
+    }
+
+    if (payload.aliases || payload.source) {
+      await replaceProblemAliases(tx, problem.id, {
+        source: payload.source,
+        aliases: payload.aliases,
+      })
     }
 
     if (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { getAuthUser } from "@/lib/authz"
+import { resolveProblemId } from "@/lib/problem-identifiers"
 import { listProblemSolutions } from "@/server/modules/solution-center/service"
 
 export async function GET(
@@ -8,6 +9,7 @@ export async function GET(
 ) {
   const { id } = await Promise.resolve(ctx.params)
   const user = await getAuthUser(req)
-  const data = await listProblemSolutions(id, user ?? undefined)
+  const problemId = (await resolveProblemId(id)) ?? id
+  const data = await listProblemSolutions(problemId, user ?? undefined)
   return NextResponse.json({ data })
 }

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { buildProblemIdentifierWhere } from "@/lib/problem-identifiers";
 import { ensureHustojUser, submitToHustoj } from "@/lib/hustoj";
 import { applyJudgeResult } from "@/lib/judge-stats";
 import { pushJudgeJob } from "@/lib/queue";
@@ -52,9 +53,7 @@ export const POST = withAuth(async (req, { params }, user) => {
   }
 
   const problem = await db.problem.findFirst({
-    where: {
-      OR: [{ id: idOrSlug }, { slug: idOrSlug }],
-    },
+    where: buildProblemIdentifierWhere(idOrSlug),
     include: {
       currentVersion: {
         include: { testcases: true },

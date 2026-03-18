@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { getAuthUser, hasRole } from "@/lib/authz";
+import { normalizeProblemAlias } from "@/lib/problem-aliases";
 import { ProblemLifecycleStatus, UserProblemStatus } from "@/lib/oj";
 
 function parseIntParam(value: string | null, fallback: number, max?: number) {
@@ -67,6 +68,7 @@ function parseProblemStatusFilter(raw: string | null) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const keyword = searchParams.get("keyword")?.trim() || searchParams.get("q")?.trim() || "";
+  const normalizedKeyword = keyword ? normalizeProblemAlias(keyword) : "";
   const tagQuery = searchParams.get("tagQuery")?.trim() || "";
   const tags = parseCsvParams(searchParams, "tags");
   const singleTag = searchParams.get("tag")?.trim();
@@ -100,6 +102,17 @@ export async function GET(req: NextRequest) {
     where.OR = [
       { title: { contains: keyword, mode: "insensitive" } },
       { slug: { contains: keyword, mode: "insensitive" } },
+      ...(normalizedKeyword
+        ? [
+            {
+              aliases: {
+                some: {
+                  normalizedValue: { contains: normalizedKeyword },
+                },
+              },
+            } satisfies Prisma.ProblemWhereInput,
+          ]
+        : []),
       {
         tags: {
           some: {
@@ -195,6 +208,10 @@ export async function GET(req: NextRequest) {
         tags: {
           include: { tag: true },
         },
+        aliases: {
+          orderBy: [{ sortOrder: "asc" }, { createdAt: "asc" }],
+          select: { value: true },
+        },
         ...(user
           ? {
               progress: {
@@ -231,6 +248,7 @@ export async function GET(req: NextRequest) {
         publishedAt: problem.publishedAt,
         version: latestVersion?.version ?? null,
         tags: problem.tags.map((item) => item.tag.name),
+        aliases: problem.aliases.map((item) => item.value),
         totalSubmissions: problem.totalSubmissions,
         acceptedSubmissions: problem.acceptedSubmissions,
         passRate: problem.passRate,

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
+import { replaceProblemAliases } from "@/lib/problem-aliases";
 import { storeTextAsset } from "@/lib/storage";
 import { readZipEntries } from "@/lib/zip";
 import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
@@ -57,6 +58,7 @@ const ProblemSchema = z.object({
   difficulty: z.number().int().min(1).max(10),
   visibility: z.enum(["public", "private", "hidden", "contest"]).optional(),
   source: z.string().optional(),
+  aliases: z.array(z.string().min(1)).optional(),
   tags: z.array(z.string()).optional(),
   versions: z.array(VersionSchema).optional(),
 });
@@ -109,6 +111,11 @@ export const POST = withAuth(async (req) => {
           source: item.source,
           publishedAt: lifecycle.publishedAt,
         },
+      });
+
+      await replaceProblemAliases(tx, problem.id, {
+        source: item.source,
+        aliases: item.aliases,
       });
 
       if (item.tags?.length) {
