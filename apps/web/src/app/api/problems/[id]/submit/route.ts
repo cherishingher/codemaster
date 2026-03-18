@@ -157,7 +157,7 @@ export const POST = withAuth(async (req, { params }, user) => {
       language: payload.language,
     });
   } catch (err) {
-    const detail = String(err);
+    console.error("[submit] hustoj submission failed", err);
     await db.submission.update({
       where: { id: submission.id },
       data: {
@@ -169,18 +169,18 @@ export const POST = withAuth(async (req, { params }, user) => {
     await db.runtimeInfo.upsert({
       where: { submissionId: submission.id },
       update: {
-        stderrPreview: detail,
+        stderrPreview: String(err),
         checkerMessage: "hustoj_submit_failed",
       },
       create: {
         submissionId: submission.id,
-        stderrPreview: detail,
+        stderrPreview: String(err),
         checkerMessage: "hustoj_submit_failed",
       },
     });
     return NextResponse.json(
-      { error: "hustoj_submit_failed", detail },
-      { status: 400 }
+      { error: "judge_submit_failed", message: "提交到评测系统失败，请稍后重试" },
+      { status: 502 }
     );
   }
 

@@ -2,6 +2,7 @@ import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 
 const SESSION_TTL_DAYS = 7;
+const CLEANUP_PROBABILITY = 0.01;
 
 export function createSessionToken() {
   return randomBytes(32).toString("base64url");
@@ -19,14 +20,28 @@ export async function createSession(userId: string) {
   await db.session.create({
     data: { userId, token, expiresAt },
   });
+
+  if (Math.random() < CLEANUP_PROBABILITY) {
+    db.session
+      .deleteMany({ where: { expiresAt: { lt: new Date() } } })
+      .catch(() => {});
+  }
+
   return { token, expiresAt };
 }
 
 export async function getSessionByToken(token: string) {
-  return db.session.findUnique({
+  const session = await db.session.findUnique({
     where: { token },
     include: { user: true },
   });
+
+  if (session && session.expiresAt < new Date()) {
+    db.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
+
+  return session;
 }
 
 export async function deleteSession(token: string) {

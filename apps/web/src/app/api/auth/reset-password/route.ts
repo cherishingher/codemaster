@@ -4,17 +4,22 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { createSession } from "@/lib/session";
 import { hashVerificationCode, normalizeIdentifier } from "@/lib/verification";
+import { PasswordSchema } from "@/lib/password-policy";
 
 const ResetPasswordSchema = z.object({
   identifier: z.string().min(3),
   code: z.string().min(4),
-  password: z.string().min(8),
+  password: PasswordSchema,
 });
 
 export async function POST(req: NextRequest) {
   const payload = ResetPasswordSchema.safeParse(await req.json());
   if (!payload.success) {
-    return NextResponse.json({ error: "invalid_payload", message: "参数不完整" }, { status: 400 });
+    const firstIssue = payload.error.issues[0];
+    return NextResponse.json(
+      { error: "invalid_payload", message: firstIssue?.message ?? "参数不完整" },
+      { status: 400 }
+    );
   }
 
   const normalized = normalizeIdentifier(payload.data.identifier);

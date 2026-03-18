@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
+import { randomInt } from "crypto"
 import { db } from "@/lib/db"
 import { hashVerificationCode, normalizeIdentifier } from "@/lib/verification"
 
@@ -12,6 +13,7 @@ const RequestSchema = z.object({
 
 const CODE_TTL_MINUTES = 10
 const RATE_LIMIT_SECONDS = 60
+const IP_RATE_LIMIT_PER_HOUR = 20
 
 type AliyunSendResult = {
   ok: boolean
@@ -108,7 +110,7 @@ async function sendAliyunEmail(email: string, code: string): Promise<AliyunSendR
     params.RegionId = process.env.ALIYUN_REGION_ID
   }
   params.Subject = process.env.ALIYUN_DM_SUBJECT ?? "验证码"
-  params.HtmlBody = `<div style="font-size:14px">您的验证码是 <strong>${code}</strong>，10 分钟内有效。</div>`
+  params.HtmlBody = `<p>您的验证码是 <strong>${code}</strong> ，10 分钟内有效。</p>`
 
   const result = await client.request("SingleSendMail", params, { method: "POST" })
   const responseCode = getResponseString(result, "Code", "ResponseCode")
@@ -158,10 +160,23 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const code = Math.floor(100000 + Math.random() * 900000).toString()
-  const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
-  const debug = process.env.DEBUG_AUTH_CODES === "true"
+  if (ip) {
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000)
+    const ipCount = await db.verificationCode.count({
+      where: { ip, createdAt: { gt: oneHourAgo } },
+    })
+    if (ipCount >= IP_RATE_LIMIT_PER_HOUR) {
+      return NextResponse.json(
+        { error: "too_many_requests", message: "请求过于频繁，请稍后再试" },
+        { status: 429 }
+      )
+    }
+  }
+
+  const code = randomInt(100000, 999999).toString()
+  const expiresAt = new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000)
+  const debug = process.env.NODE_ENV !== "production" && process.env.DEBUG_AUTH_CODES === "true"
 
   let delivery: AliyunSendResult | null = null
   try {
