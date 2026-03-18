@@ -140,10 +140,10 @@ export async function POST(req: NextRequest) {
     select: { id: true },
   })
   if (purpose === "register" && existing) {
-    return NextResponse.json({ error: "user_exists", message: "账号已存在" }, { status: 409 })
+    return NextResponse.json({ error: "request_accepted", ok: true, target, type, expiresAt: new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000), delivery: null })
   }
   if (purpose === "reset_password" && !existing) {
-    return NextResponse.json({ error: "user_not_found", message: "账号不存在" }, { status: 404 })
+    return NextResponse.json({ error: "request_accepted", ok: true, target, type, expiresAt: new Date(Date.now() + CODE_TTL_MINUTES * 60 * 1000), delivery: null })
   }
 
   const latest = await db.verificationCode.findFirst({

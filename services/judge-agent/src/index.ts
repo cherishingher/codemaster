@@ -84,6 +84,12 @@ async function reportResult(
   }
 }
 
+const MAX_OUTPUT_BYTES = 256 * 1024;
+const RLIMIT_CPU_SEC = 15;
+const RLIMIT_FSIZE_KB = 32768;
+const RLIMIT_AS_KB = 524288;
+const RLIMIT_NPROC = 32;
+
 function runCommand(
   command: string,
   args: string[],
@@ -91,10 +97,26 @@ function runCommand(
     cwd: string;
     input?: string;
     timeoutMs: number;
+    sandbox?: boolean;
   }
 ): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: options.cwd });
+    let child;
+    if (options.sandbox !== false) {
+      const limits = [
+        `ulimit -t ${RLIMIT_CPU_SEC}`,
+        `ulimit -f ${RLIMIT_FSIZE_KB}`,
+        `ulimit -v ${RLIMIT_AS_KB}`,
+        `ulimit -u ${RLIMIT_NPROC}`,
+      ].join(" && ");
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+      child = spawn("sh", ["-c", `${limits} && exec ${command} ${escapedArgs}`], {
+        cwd: options.cwd,
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: "/tmp", LANG: "C.UTF-8" },
+      });
+    } else {
+      child = spawn(command, args, { cwd: options.cwd });
+    }
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -105,10 +127,14 @@ function runCommand(
     child.stdin.end();
 
     child.stdout.on("data", (d) => {
-      stdout += d.toString();
+      if (Buffer.byteLength(stdout) < MAX_OUTPUT_BYTES) {
+        stdout += d.toString();
+      }
     });
     child.stderr.on("data", (d) => {
-      stderr += d.toString();
+      if (Buffer.byteLength(stderr) < MAX_OUTPUT_BYTES) {
+        stderr += d.toString();
+      }
     });
 
     const timer = setTimeout(() => {
@@ -175,6 +201,7 @@ async function handleJob(payload: unknown) {
         {
           cwd: workDir,
           timeoutMs: 10000,
+          sandbox: false,
         }
       );
 
@@ -197,11 +224,13 @@ async function handleJob(payload: unknown) {
             cwd: workDir,
             input,
             timeoutMs: timeLimit,
+            sandbox: true,
           })
         : await runCommand("python3", [sourcePath], {
             cwd: workDir,
             input,
             timeoutMs: timeLimit,
+            sandbox: true,
           });
       const timeMs = Date.now() - start;
 

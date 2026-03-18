@@ -7,6 +7,7 @@ import { spawn } from "child_process"
 
 export const runtime = "nodejs"
 
+const MAX_CODE_BYTES = 64 * 1024
 const MAX_INPUT_BYTES = 256 * 1024
 const MAX_OUTPUT_BYTES = 256 * 1024
 const COMPILE_TIMEOUT_MS = 8000
@@ -33,14 +34,34 @@ type RunResult = {
   durationMs: number
 }
 
+const RLIMIT_CPU_SEC = 10
+const RLIMIT_FSIZE_KB = 32768
+const RLIMIT_AS_KB = 524288
+const RLIMIT_NPROC = 32
+
 function runCommand(
   cmd: string,
   args: string[],
-  options: { cwd: string; input?: string; timeoutMs: number }
+  options: { cwd: string; input?: string; timeoutMs: number; sandbox?: boolean }
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const start = Date.now()
-    const child = spawn(cmd, args, { cwd: options.cwd })
+    let child
+    if (options.sandbox !== false) {
+      const limits = [
+        `ulimit -t ${RLIMIT_CPU_SEC}`,
+        `ulimit -f ${RLIMIT_FSIZE_KB}`,
+        `ulimit -v ${RLIMIT_AS_KB}`,
+        `ulimit -u ${RLIMIT_NPROC}`,
+      ].join(" && ")
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ")
+      child = spawn("sh", ["-c", `${limits} && exec ${cmd} ${escapedArgs}`], {
+        cwd: options.cwd,
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: "/tmp", LANG: "C.UTF-8" },
+      })
+    } else {
+      child = spawn(cmd, args, { cwd: options.cwd })
+    }
     let stdout = ""
     let stderr = ""
     let timedOut = false
@@ -100,6 +121,9 @@ const handler = async (req: Request) => {
 
   if (!code.trim()) {
     return NextResponse.json({ error: "code_required" }, { status: 400 })
+  }
+  if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) {
+    return NextResponse.json({ error: "code_too_large" }, { status: 400 })
   }
   if (normalizedLanguage.startsWith("scratch") || normalizedLanguage === "sb3") {
     return NextResponse.json({ error: "scratch_run_not_supported" }, { status: 400 })
@@ -172,6 +196,7 @@ const handler = async (req: Request) => {
         cwd: workDir,
         input,
         timeoutMs: RUN_TIMEOUT_MS,
+        sandbox: true,
       })
 
       return NextResponse.json({
@@ -188,6 +213,7 @@ const handler = async (req: Request) => {
       cwd: workDir,
       input,
       timeoutMs: RUN_TIMEOUT_MS,
+      sandbox: true,
     })
 
     return NextResponse.json({
