@@ -221,7 +221,7 @@ export async function POST(req: NextRequest) {
   })
 
   if (debug) {
-    console.log(`[auth] verification code for ${type}:${target} -> ${code}`)
+    console.log(`[auth] DEBUG verification code sent to ${type}:${target}`)
   }
 
   return NextResponse.json({

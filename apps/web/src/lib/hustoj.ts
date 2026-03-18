@@ -60,6 +60,9 @@ function getPool() {
       database: cfg.database,
       connectionLimit: 5,
       charset: "utf8mb4",
+      ssl: process.env.HUSTOJ_MYSQL_SSL === "true"
+        ? { rejectUnauthorized: process.env.HUSTOJ_MYSQL_SSL_REJECT_UNAUTHORIZED !== "false" }
+        : undefined,
     });
   }
   return pool;

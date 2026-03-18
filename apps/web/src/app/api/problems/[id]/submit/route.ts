@@ -17,10 +17,13 @@ import {
   ProblemLifecycleStatus,
   toSubmissionJudgeResult,
 } from "@/lib/oj";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
 const MAX_CODE_LENGTH = 65536;
+const SUBMIT_MAX_PER_MINUTE = 10;
+const SUBMIT_WINDOW_MS = 60_000;
 
 const SubmitSchema = z.object({
   language: z.string().min(1),
@@ -28,6 +31,14 @@ const SubmitSchema = z.object({
 });
 
 export const POST = withAuth(async (req, { params }, user) => {
+  const submitLimit = rateLimit(`submit:${user.id}`, SUBMIT_MAX_PER_MINUTE, SUBMIT_WINDOW_MS);
+  if (!submitLimit.ok) {
+    return NextResponse.json(
+      { error: "too_many_submissions", message: "提交过于频繁，请稍后再试" },
+      { status: 429 }
+    );
+  }
+
   const payload = SubmitSchema.parse(await req.json());
   const resolvedParams = await Promise.resolve(params);
   const rawId = (resolvedParams as { id?: string | string[] } | undefined)?.id;
