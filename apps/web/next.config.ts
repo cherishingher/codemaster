@@ -36,7 +36,6 @@ const nextConfig: NextConfig = {
   turbopack: {
     root: path.resolve(configDir, "../.."),
   },
-  poweredBy: false,
   async headers() {
     return [
       {

@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3 \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -m -s /bin/false -u 65534 sandbox
+RUN useradd -m -s /bin/false sandbox
 
 RUN mkdir -p /sandbox/work && chown sandbox:sandbox /sandbox/work
 
