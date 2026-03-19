@@ -95,17 +95,9 @@ export async function POST(req: NextRequest) {
       data: { userId: user.id, roleId: studentRole.id },
     });
 
-    const bootstrapAdmin = process.env.BOOTSTRAP_ADMIN_EMAIL;
-    if (bootstrapAdmin && bootstrapAdmin === user.email) {
-      const adminRole = await db.role.upsert({
-        where: { name: "admin" },
-        create: { name: "admin" },
-        update: {},
-      });
-      await db.userRole.create({
-        data: { userId: user.id, roleId: adminRole.id },
-      });
-    }
+    // Admin accounts should be created via: node scripts/create-admin.mjs
+    // BOOTSTRAP_ADMIN_EMAIL removed for security — it allowed anyone who
+    // knew the configured email to gain admin access by registering first.
 
     const session = await createSession(user.id);
     const res = NextResponse.json({ user });
