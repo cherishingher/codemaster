@@ -245,7 +245,10 @@ NODE_ENV=production \
 
 pm2 save
 
-# 8. 配置 HTTPS（见下方说明）
+# 8. 创建管理员账号
+node scripts/create-admin.mjs --email admin@your-domain.com
+
+# 9. 配置 HTTPS（见下方说明）
 ```
 
 ### 配置 HTTPS（生产必需）
@@ -270,6 +273,26 @@ nginx -t && systemctl reload nginx
 Nginx 配置包含：TLS 1.2+、HSTS preload、OCSP stapling、安全响应头、敏感文件拦截（.env/.git/.sql）。
 
 详见 `infra/nginx/README.md`。
+
+### 创建管理员账号
+
+项目提供安全的 CLI 脚本直接写库创建管理员，不经过 Web 注册流程，避免凭据泄露和抢注风险。
+
+```bash
+# 自动生成强密码（推荐）
+node scripts/create-admin.mjs --email admin@your-domain.com
+
+# 指定密码和姓名
+node scripts/create-admin.mjs --email admin@your-domain.com --password 'MyStr0ngP@ss' --name '管理员'
+
+# 用手机号创建
+node scripts/create-admin.mjs --phone +8613800138000
+
+# 将已注册的普通用户提升为管理员（脚本自动检测并仅授予角色）
+node scripts/create-admin.mjs --email existing-user@example.com
+```
+
+> 省略 `--password` 时脚本自动生成 24 字符随机密码并打印到终端，请立即记录。首次登录后建议修改密码。
 
 ## 环境变量配置
 
