@@ -58,7 +58,7 @@ function runCommand(
       const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ")
       child = spawn("sh", ["-c", `${limits} && exec ${cmd} ${escapedArgs}`], {
         cwd: options.cwd,
-        env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: "/tmp", LANG: "C.UTF-8" },
+        env: { ...process.env, HOME: "/tmp", LANG: "C.UTF-8" },
       })
     } else {
       child = spawn(cmd, args, { cwd: options.cwd })
