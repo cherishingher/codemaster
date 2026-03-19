@@ -66,9 +66,38 @@ restart_judge_pm2() {
     pm2 start npm --name "$JUDGE_PM2_APP" --cwd "$APP_DIR" -- --prefix services/judge-agent run start
 }
 
+check_security() {
+  if [ "$(id -u)" -eq 0 ]; then
+    log "⚠ 警告：当前以 root 用户运行，生产环境建议使用专用非 root 用户"
+    log "  可使用: useradd -m -s /bin/bash codemaster && chown -R codemaster:codemaster $APP_DIR"
+    if [ "${ALLOW_ROOT:-false}" != "true" ]; then
+      fail "以 root 运行已被阻止。设置 ALLOW_ROOT=true 以跳过此检查"
+    fi
+  fi
+
+  if [ -f "$APP_DIR/.env" ]; then
+    local env_file="$APP_DIR/.env"
+    if grep -qE '^AUTH_CODE_SECRET\s*=\s*"?$' "$env_file" 2>/dev/null; then
+      fail "AUTH_CODE_SECRET 不能为空"
+    fi
+    if grep -qE '^JUDGE_CALLBACK_SECRET\s*=\s*"?$' "$env_file" 2>/dev/null; then
+      fail "JUDGE_CALLBACK_SECRET 不能为空"
+    fi
+    if grep -qE '^DEBUG_AUTH_CODES\s*=\s*"?true' "$env_file" 2>/dev/null; then
+      log "⚠ 警告：DEBUG_AUTH_CODES=true 已启用，生产环境请关闭"
+    fi
+    if grep -qE '^ENABLE_LOCAL_RUNNER\s*=\s*"?true' "$env_file" 2>/dev/null; then
+      log "⚠ 警告：ENABLE_LOCAL_RUNNER=true 已启用，存在安全风险"
+    fi
+  fi
+}
+
 main() {
   cd "$APP_DIR"
   detect_compose
+
+  log "安全检查"
+  check_security
 
   log "检查工作区"
   ensure_clean_git

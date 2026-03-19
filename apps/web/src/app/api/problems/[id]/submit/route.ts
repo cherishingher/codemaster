@@ -17,15 +17,28 @@ import {
   ProblemLifecycleStatus,
   toSubmissionJudgeResult,
 } from "@/lib/oj";
+import { rateLimit } from "@/lib/rate-limit";
 
 export const runtime = "nodejs";
 
+const MAX_CODE_LENGTH = 65536;
+const SUBMIT_MAX_PER_MINUTE = 10;
+const SUBMIT_WINDOW_MS = 60_000;
+
 const SubmitSchema = z.object({
   language: z.string().min(1),
-  code: z.string().min(1),
+  code: z.string().min(1).max(MAX_CODE_LENGTH, "代码长度超过限制"),
 });
 
 export const POST = withAuth(async (req, { params }, user) => {
+  const submitLimit = rateLimit(`submit:${user.id}`, SUBMIT_MAX_PER_MINUTE, SUBMIT_WINDOW_MS);
+  if (!submitLimit.ok) {
+    return NextResponse.json(
+      { error: "too_many_submissions", message: "提交过于频繁，请稍后再试" },
+      { status: 429 }
+    );
+  }
+
   const payload = SubmitSchema.parse(await req.json());
   const resolvedParams = await Promise.resolve(params);
   const rawId = (resolvedParams as { id?: string | string[] } | undefined)?.id;
@@ -157,7 +170,7 @@ export const POST = withAuth(async (req, { params }, user) => {
       language: payload.language,
     });
   } catch (err) {
-    const detail = String(err);
+    console.error("[submit] hustoj submission failed", err);
     await db.submission.update({
       where: { id: submission.id },
       data: {
@@ -169,18 +182,18 @@ export const POST = withAuth(async (req, { params }, user) => {
     await db.runtimeInfo.upsert({
       where: { submissionId: submission.id },
       update: {
-        stderrPreview: detail,
+        stderrPreview: String(err),
         checkerMessage: "hustoj_submit_failed",
       },
       create: {
         submissionId: submission.id,
-        stderrPreview: detail,
+        stderrPreview: String(err),
         checkerMessage: "hustoj_submit_failed",
       },
     });
     return NextResponse.json(
-      { error: "hustoj_submit_failed", detail },
-      { status: 400 }
+      { error: "judge_submit_failed", message: "提交到评测系统失败，请稍后重试" },
+      { status: 502 }
     );
   }
 

@@ -4,9 +4,11 @@ import { mkdtemp, rm, writeFile } from "fs/promises"
 import { tmpdir } from "os"
 import path from "path"
 import { spawn } from "child_process"
+import { isSandboxAvailable, runInSandbox, compileInSandbox, type SandboxResult } from "@/lib/sandbox"
 
 export const runtime = "nodejs"
 
+const MAX_CODE_BYTES = 64 * 1024
 const MAX_INPUT_BYTES = 256 * 1024
 const MAX_OUTPUT_BYTES = 256 * 1024
 const COMPILE_TIMEOUT_MS = 8000
@@ -33,14 +35,34 @@ type RunResult = {
   durationMs: number
 }
 
+const RLIMIT_CPU_SEC = 10
+const RLIMIT_FSIZE_KB = 32768
+const RLIMIT_AS_KB = 524288
+const RLIMIT_NPROC = 32
+
 function runCommand(
   cmd: string,
   args: string[],
-  options: { cwd: string; input?: string; timeoutMs: number }
+  options: { cwd: string; input?: string; timeoutMs: number; sandbox?: boolean }
 ): Promise<RunResult> {
   return new Promise((resolve, reject) => {
     const start = Date.now()
-    const child = spawn(cmd, args, { cwd: options.cwd })
+    let child
+    if (options.sandbox !== false) {
+      const limits = [
+        `ulimit -t ${RLIMIT_CPU_SEC}`,
+        `ulimit -f ${RLIMIT_FSIZE_KB}`,
+        `ulimit -v ${RLIMIT_AS_KB}`,
+        `ulimit -u ${RLIMIT_NPROC}`,
+      ].join(" && ")
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ")
+      child = spawn("sh", ["-c", `${limits} && exec ${cmd} ${escapedArgs}`], {
+        cwd: options.cwd,
+        env: { ...process.env, HOME: "/tmp", LANG: "C.UTF-8" },
+      })
+    } else {
+      child = spawn(cmd, args, { cwd: options.cwd })
+    }
     let stdout = ""
     let stderr = ""
     let timedOut = false
@@ -101,6 +123,9 @@ const handler = async (req: Request) => {
   if (!code.trim()) {
     return NextResponse.json({ error: "code_required" }, { status: 400 })
   }
+  if (Buffer.byteLength(code, "utf8") > MAX_CODE_BYTES) {
+    return NextResponse.json({ error: "code_too_large" }, { status: 400 })
+  }
   if (normalizedLanguage.startsWith("scratch") || normalizedLanguage === "sb3") {
     return NextResponse.json({ error: "scratch_run_not_supported" }, { status: 400 })
   }
@@ -119,6 +144,8 @@ const handler = async (req: Request) => {
     warning = "已在本地运行中自动替换 <bits/stdc++.h> 为标准头文件"
   }
 
+  const useDocker = isSandboxAvailable()
+
   try {
   if (normalizedLanguage.startsWith("cpp")) {
       const sourcePath = path.join(workDir, "main.cpp")
@@ -132,24 +159,35 @@ const handler = async (req: Request) => {
           ? "c++14"
           : "c++17"
 
-      let compileResult: RunResult
+      let compileResult: RunResult | SandboxResult
       try {
-        const preferredCompiler = process.env.CPP_COMPILER ?? "g++"
-        try {
-          compileResult = await runCommand(
-            preferredCompiler,
-            ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
-            { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
-          )
-        } catch (err) {
-          if (preferredCompiler !== "clang++") {
+        if (useDocker) {
+          compileResult = await compileInSandbox({
+            workDir,
+            sourceName: "main.cpp",
+            outputName: "main",
+            compiler: "g++",
+            compilerArgs: [`-std=${stdFlag}`, "-O2"],
+            timeoutMs: COMPILE_TIMEOUT_MS,
+          })
+        } else {
+          const preferredCompiler = process.env.CPP_COMPILER ?? "g++"
+          try {
             compileResult = await runCommand(
-              "clang++",
+              preferredCompiler,
               ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
               { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
             )
-          } else {
-            throw err
+          } catch (err) {
+            if (preferredCompiler !== "clang++") {
+              compileResult = await runCommand(
+                "clang++",
+                ["-std=" + stdFlag, "-O2", sourcePath, "-o", binPath],
+                { cwd: workDir, timeoutMs: COMPILE_TIMEOUT_MS }
+              )
+            } else {
+              throw err
+            }
           }
         }
       } catch (err) {
@@ -168,32 +206,51 @@ const handler = async (req: Request) => {
         })
       }
 
-      const runResult = await runCommand(binPath, [], {
-        cwd: workDir,
-        input,
-        timeoutMs: RUN_TIMEOUT_MS,
-      })
+      const runResult = useDocker
+        ? await runInSandbox({
+            workDir,
+            command: "./main",
+            input,
+            timeoutMs: RUN_TIMEOUT_MS,
+          })
+        : await runCommand(binPath, [], {
+            cwd: workDir,
+            input,
+            timeoutMs: RUN_TIMEOUT_MS,
+            sandbox: true,
+          })
 
       return NextResponse.json({
         ok: true,
         phase: "run",
         warning,
+        sandbox: useDocker ? "docker" : "ulimit",
         ...runResult,
       })
     }
 
     const sourcePath = path.join(workDir, "main.py")
     await writeFile(sourcePath, normalizedCode, "utf8")
-    const runResult = await runCommand("python3", [sourcePath], {
-      cwd: workDir,
-      input,
-      timeoutMs: RUN_TIMEOUT_MS,
-    })
+    const runResult = useDocker
+      ? await runInSandbox({
+          workDir,
+          command: "python3",
+          args: ["/sandbox/work/main.py"],
+          input,
+          timeoutMs: RUN_TIMEOUT_MS,
+        })
+      : await runCommand("python3", [sourcePath], {
+          cwd: workDir,
+          input,
+          timeoutMs: RUN_TIMEOUT_MS,
+          sandbox: true,
+        })
 
     return NextResponse.json({
       ok: true,
       phase: "run",
       warning,
+      sandbox: useDocker ? "docker" : "ulimit",
       ...runResult,
     })
   } finally {

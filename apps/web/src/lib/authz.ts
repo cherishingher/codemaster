@@ -26,7 +26,11 @@ export async function getAuthUser(req: NextRequest): Promise<AuthUser | null> {
     },
   });
 
-  if (!session || session.expiresAt < new Date()) return null;
+  if (!session) return null;
+  if (session.expiresAt < new Date()) {
+    db.session.delete({ where: { id: session.id } }).catch(() => {});
+    return null;
+  }
 
   const roles = session.user.roles.map((r) => r.role.name);
   return {

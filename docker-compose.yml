@@ -3,17 +3,30 @@ services:
   db:
     image: postgres:15
     environment:
-      POSTGRES_PASSWORD: pass
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change_me_in_production}
       POSTGRES_DB: oj
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
 
   redis:
     image: redis:7
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD:-change_me_in_production}
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru
     ports:
-      - "6379:6379"
+      - "127.0.0.1:6379:6379"
+
+  sandbox:
+    build:
+      context: .
+      dockerfile: infra/sandbox/Dockerfile
+    image: codemaster-sandbox
+    profiles:
+      - build-only
 
 volumes:
   pgdata:

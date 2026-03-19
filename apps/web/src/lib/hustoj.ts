@@ -60,20 +60,35 @@ function getPool() {
       database: cfg.database,
       connectionLimit: 5,
       charset: "utf8mb4",
+      ssl: process.env.HUSTOJ_MYSQL_SSL === "true"
+        ? { rejectUnauthorized: process.env.HUSTOJ_MYSQL_SSL_REJECT_UNAUTHORIZED !== "false" }
+        : undefined,
     });
   }
   return pool;
 }
 
 function toFilePath(uri: string) {
+  let raw: string;
   if (uri.startsWith("file://")) {
     try {
-      return decodeURIComponent(new URL(uri).pathname);
+      raw = decodeURIComponent(new URL(uri).pathname);
     } catch {
-      return uri.replace("file://", "");
+      raw = uri.replace("file://", "");
     }
+  } else {
+    raw = uri;
   }
-  return uri;
+  const resolved = path.resolve(raw);
+  if (resolved.includes("\0")) {
+    throw new Error("null byte in file path");
+  }
+  const storageDir = path.resolve(process.env.LOCAL_STORAGE_DIR ?? "./apps/web/storage");
+  const dataDir = path.resolve(getConfig().dataDir);
+  if (!resolved.startsWith(storageDir) && !resolved.startsWith(dataDir)) {
+    throw new Error(`file path outside allowed directories: ${resolved}`);
+  }
+  return resolved;
 }
 
 function getFirstSampleIO(samples: unknown) {

@@ -5,6 +5,102 @@ import { tmpdir } from "os";
 import path from "path";
 import { spawn } from "child_process";
 
+const SANDBOX_IMAGE = process.env.SANDBOX_IMAGE ?? "codemaster-sandbox";
+const SANDBOX_MEMORY = process.env.SANDBOX_MEMORY ?? "256m";
+const SANDBOX_CPUS = process.env.SANDBOX_CPUS ?? "1";
+const SANDBOX_PIDS = process.env.SANDBOX_PIDS ?? "32";
+const SANDBOX_TMPFS_SIZE = process.env.SANDBOX_TMPFS_SIZE ?? "32m";
+const USE_DOCKER_SANDBOX = process.env.ENABLE_DOCKER_SANDBOX === "true";
+
+type SandboxResult = { code: number | null; stdout: string; stderr: string; timedOut: boolean };
+
+function runInDocker(
+  workDir: string,
+  cmd: string,
+  options: { input?: string; timeoutMs: number; memoryMb?: number }
+): Promise<SandboxResult> {
+  const memLimit = options.memoryMb ? `${options.memoryMb}m` : SANDBOX_MEMORY;
+  const dockerArgs = [
+    "run", "--rm",
+    "--network", "none",
+    "--memory", memLimit,
+    "--cpus", SANDBOX_CPUS,
+    "--pids-limit", SANDBOX_PIDS,
+    "--read-only",
+    "--tmpfs", `/sandbox/work:size=${SANDBOX_TMPFS_SIZE},exec`,
+    "--tmpfs", "/tmp:size=8m",
+    "-v", `${path.resolve(workDir)}:/sandbox/input:ro`,
+    "-w", "/sandbox/work",
+    SANDBOX_IMAGE,
+    "sh", "-c", `cp -r /sandbox/input/* /sandbox/work/ 2>/dev/null; ${cmd}`,
+  ];
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", dockerArgs);
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    if (options.input) child.stdin.write(options.input);
+    child.stdin.end();
+
+    child.stdout.on("data", (d) => {
+      if (Buffer.byteLength(stdout) < MAX_OUTPUT_BYTES) stdout += d.toString();
+    });
+    child.stderr.on("data", (d) => {
+      if (Buffer.byteLength(stderr) < MAX_OUTPUT_BYTES) stderr += d.toString();
+    });
+
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, options.timeoutMs + 2000);
+
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (!timedOut && code === 137) timedOut = true;
+      resolve({ code: timedOut ? null : code, stdout, stderr, timedOut });
+    });
+  });
+}
+
+function compileInDocker(
+  workDir: string,
+  sourceName: string,
+  outputName: string,
+  compiler: string,
+  compilerArgs: string[],
+  timeoutMs: number
+): Promise<SandboxResult> {
+  const argsStr = compilerArgs.map(a => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+  const cmd = `cp -r /sandbox/input/* /sandbox/work/ 2>/dev/null; ${compiler} ${argsStr} /sandbox/work/${sourceName} -o /sandbox/work/${outputName} && cp /sandbox/work/${outputName} /sandbox/input/${outputName}`;
+  const dockerArgs = [
+    "run", "--rm",
+    "--network", "none",
+    "--memory", SANDBOX_MEMORY,
+    "--cpus", SANDBOX_CPUS,
+    "--read-only",
+    "--tmpfs", `/sandbox/work:size=${SANDBOX_TMPFS_SIZE},exec`,
+    "--tmpfs", "/tmp:size=8m",
+    "-v", `${path.resolve(workDir)}:/sandbox/input`,
+    "-w", "/sandbox/work",
+    SANDBOX_IMAGE,
+    "sh", "-c", cmd,
+  ];
+
+  return new Promise((resolve, reject) => {
+    const child = spawn("docker", dockerArgs);
+    let stdout = "";
+    let stderr = "";
+    let timedOut = false;
+
+    child.stdin.end();
+    child.stdout.on("data", (d) => { if (Buffer.byteLength(stdout) < MAX_OUTPUT_BYTES) stdout += d.toString(); });
+    child.stderr.on("data", (d) => { if (Buffer.byteLength(stderr) < MAX_OUTPUT_BYTES) stderr += d.toString(); });
+    const timer = setTimeout(() => { timedOut = true; child.kill("SIGKILL"); }, timeoutMs + 2000);
+    child.on("error", (err) => { clearTimeout(timer); reject(err); });
+    child.on("close", (code) => { clearTimeout(timer); resolve({ code, stdout, stderr, timedOut }); });
+  });
+}
+
 const envSchema = z.object({
   REDIS_URL: z.string().url(),
   API_BASE_URL: z.string().url(),
@@ -84,6 +180,12 @@ async function reportResult(
   }
 }
 
+const MAX_OUTPUT_BYTES = 256 * 1024;
+const RLIMIT_CPU_SEC = 15;
+const RLIMIT_FSIZE_KB = 32768;
+const RLIMIT_AS_KB = 524288;
+const RLIMIT_NPROC = 32;
+
 function runCommand(
   command: string,
   args: string[],
@@ -91,10 +193,26 @@ function runCommand(
     cwd: string;
     input?: string;
     timeoutMs: number;
+    sandbox?: boolean;
   }
 ): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve) => {
-    const child = spawn(command, args, { cwd: options.cwd });
+    let child;
+    if (options.sandbox !== false) {
+      const limits = [
+        `ulimit -t ${RLIMIT_CPU_SEC}`,
+        `ulimit -f ${RLIMIT_FSIZE_KB}`,
+        `ulimit -v ${RLIMIT_AS_KB}`,
+        `ulimit -u ${RLIMIT_NPROC}`,
+      ].join(" && ");
+      const escapedArgs = args.map((a) => `'${a.replace(/'/g, "'\\''")}'`).join(" ");
+      child = spawn("sh", ["-c", `${limits} && exec ${command} ${escapedArgs}`], {
+        cwd: options.cwd,
+        env: { PATH: process.env.PATH ?? "/usr/bin:/bin", HOME: "/tmp", LANG: "C.UTF-8" },
+      });
+    } else {
+      child = spawn(command, args, { cwd: options.cwd });
+    }
     let stdout = "";
     let stderr = "";
     let timedOut = false;
@@ -105,10 +223,14 @@ function runCommand(
     child.stdin.end();
 
     child.stdout.on("data", (d) => {
-      stdout += d.toString();
+      if (Buffer.byteLength(stdout) < MAX_OUTPUT_BYTES) {
+        stdout += d.toString();
+      }
     });
     child.stderr.on("data", (d) => {
-      stderr += d.toString();
+      if (Buffer.byteLength(stderr) < MAX_OUTPUT_BYTES) {
+        stderr += d.toString();
+      }
     });
 
     const timer = setTimeout(() => {
@@ -127,10 +249,27 @@ function normalizeOutput(out: string) {
   return out.trim().replace(/\r\n/g, "\n");
 }
 
+const ALLOWED_DATA_DIRS = [
+  process.env.HUSTOJ_DATA_DIR ?? "/home/judge/data",
+  process.env.LOCAL_STORAGE_DIR ?? "/tmp",
+];
+
+function assertSafePath(filepath: string) {
+  const resolved = path.resolve(filepath);
+  const isSafe = ALLOWED_DATA_DIRS.some((dir) => resolved.startsWith(path.resolve(dir)));
+  if (!isSafe) {
+    throw new Error(`path outside allowed directories: ${resolved}`);
+  }
+  if (resolved.includes("\0")) {
+    throw new Error("null byte in path");
+  }
+  return resolved;
+}
+
 async function loadCode(job: z.infer<typeof JobSchema>) {
   if (job.code) return job.code;
   if (job.codeUri?.startsWith("file://")) {
-    const filepath = job.codeUri.replace("file://", "");
+    const filepath = assertSafePath(job.codeUri.replace("file://", ""));
     return readFile(filepath, "utf8");
   }
   throw new Error("code is missing or codeUri unsupported");
@@ -140,7 +279,8 @@ async function readInput(uri: string) {
   if (!uri.startsWith("file://")) {
     throw new Error("only file:// testcases supported in judge-agent");
   }
-  return readFile(uri.replace("file://", ""), "utf8");
+  const filepath = assertSafePath(uri.replace("file://", ""));
+  return readFile(filepath, "utf8");
 }
 
 async function handleJob(payload: unknown) {
@@ -169,14 +309,9 @@ async function handleJob(payload: unknown) {
 
     if (isCpp) {
       const std = cppStdMap[job.language];
-      const compile = await runCommand(
-        "g++",
-        ["-O2", `-std=${std}`, sourcePath, "-o", binPath],
-        {
-          cwd: workDir,
-          timeoutMs: 10000,
-        }
-      );
+      const compile = USE_DOCKER_SANDBOX
+        ? await compileInDocker(workDir, "main.cpp", "main.out", "g++", ["-O2", `-std=${std}`], 10000)
+        : await runCommand("g++", ["-O2", `-std=${std}`, sourcePath, "-o", binPath], { cwd: workDir, timeoutMs: 10000, sandbox: false });
 
       if (compile.timedOut || compile.code !== 0) {
         await reportResult(job.submissionId, "COMPILE_ERROR", 0, []);
@@ -192,17 +327,15 @@ async function handleJob(payload: unknown) {
       const input = await readInput(tc.inputUri);
       const expected = await readInput(tc.outputUri);
       const start = Date.now();
-      const result = isCpp
-        ? await runCommand(binPath, [], {
-            cwd: workDir,
-            input,
-            timeoutMs: timeLimit,
-          })
-        : await runCommand("python3", [sourcePath], {
-            cwd: workDir,
-            input,
-            timeoutMs: timeLimit,
-          });
+      let result;
+      if (USE_DOCKER_SANDBOX) {
+        const cmd = isCpp ? "./main.out" : "python3 /sandbox/work/main.cpp";
+        result = await runInDocker(workDir, cmd, { input, timeoutMs: timeLimit, memoryMb: job.memoryLimitMb });
+      } else {
+        result = isCpp
+          ? await runCommand(binPath, [], { cwd: workDir, input, timeoutMs: timeLimit, sandbox: true })
+          : await runCommand("python3", [sourcePath], { cwd: workDir, input, timeoutMs: timeLimit, sandbox: true });
+      }
       const timeMs = Date.now() - start;
 
       if (result.timedOut) {

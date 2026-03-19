@@ -5,19 +5,24 @@ import { db } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { createSession } from "@/lib/session";
 import { hashVerificationCode, normalizeIdentifier } from "@/lib/verification";
+import { PasswordSchema } from "@/lib/password-policy";
 
 const RegisterSchema = z
   .object({
     identifier: z.string().min(3),
     code: z.string().min(4),
-    password: z.string().min(8),
+    password: PasswordSchema,
     name: z.string().min(1).optional(),
   });
 
 export async function POST(req: NextRequest) {
   const payload = RegisterSchema.safeParse(await req.json());
   if (!payload.success) {
-    return NextResponse.json({ error: "invalid_payload", message: "参数不完整" }, { status: 400 });
+    const firstIssue = payload.error.issues[0];
+    return NextResponse.json(
+      { error: "invalid_payload", message: firstIssue?.message ?? "参数不完整" },
+      { status: 400 }
+    );
   }
 
   const data = payload.data;
@@ -90,17 +95,9 @@ export async function POST(req: NextRequest) {
       data: { userId: user.id, roleId: studentRole.id },
     });
 
-    const bootstrapAdmin = process.env.BOOTSTRAP_ADMIN_EMAIL;
-    if (bootstrapAdmin && bootstrapAdmin === user.email) {
-      const adminRole = await db.role.upsert({
-        where: { name: "admin" },
-        create: { name: "admin" },
-        update: {},
-      });
-      await db.userRole.create({
-        data: { userId: user.id, roleId: adminRole.id },
-      });
-    }
+    // Admin accounts should be created via: node scripts/create-admin.mjs
+    // BOOTSTRAP_ADMIN_EMAIL removed for security — it allowed anyone who
+    // knew the configured email to gain admin access by registering first.
 
     const session = await createSession(user.id);
     const res = NextResponse.json({ user });

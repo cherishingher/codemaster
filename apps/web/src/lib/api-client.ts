@@ -91,5 +91,33 @@ export const api = {
   },
   progress: {
     list: <T = unknown>() => client<T>('/progress'),
-  }
+  },
+  contests: {
+    list: <T = unknown>(params?: Record<string, string>) => client<T>('/contests', { params }),
+    get: <T = unknown>(id: string) => client<T>(`/contests/${id}`),
+    register: <T = unknown>(id: string) => client<T>(`/contests/${id}/register`, { method: 'POST' }),
+    standings: <T = unknown>(id: string) => client<T>(`/contests/${id}/standings`),
+    submit: <T = unknown>(id: string, problemId: string, code: string, language: string) =>
+      client<T>(`/contests/${id}/submit`, { method: 'POST', body: JSON.stringify({ problemId, code, language }) }),
+  },
+  posts: {
+    list: <T = unknown>(params?: Record<string, string>) => client<T>('/posts', { params }),
+    get: <T = unknown>(id: string) => client<T>(`/posts/${id}`),
+    create: <T = unknown>(body: { title: string; content: string }) =>
+      client<T>('/posts', { method: 'POST', body: JSON.stringify(body) }),
+    comments: <T = unknown>(id: string, params?: Record<string, string>) =>
+      client<T>(`/posts/${id}/comments`, { params }),
+    addComment: <T = unknown>(id: string, body: { content: string }) =>
+      client<T>(`/posts/${id}/comments`, { method: 'POST', body: JSON.stringify(body) }),
+  },
+  problemSets: {
+    list: <T = unknown>(params?: Record<string, string>) => client<T>('/problem-sets', { params }),
+    get: <T = unknown>(id: string) => client<T>(`/problem-sets/${id}`),
+  },
+  search: <T = unknown>(q: string) => client<T>('/search', { params: { q } }),
+  classrooms: {
+    list: <T = unknown>() => client<T>('/classrooms'),
+    create: <T = unknown>(body: { name: string; description?: string }) =>
+      client<T>('/classrooms', { method: 'POST', body: JSON.stringify(body) }),
+  },
 };
