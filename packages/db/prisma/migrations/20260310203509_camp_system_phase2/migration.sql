@@ -1,24 +1,31 @@
 -- DropForeignKey
-ALTER TABLE "ProductBenefit" DROP CONSTRAINT "ProductBenefit_productId_fkey";
+ALTER TABLE IF EXISTS "ProductBenefit" DROP CONSTRAINT IF EXISTS "ProductBenefit_productId_fkey";
 
 -- DropForeignKey
-ALTER TABLE "ProductSku" DROP CONSTRAINT "ProductSku_productId_fkey";
+ALTER TABLE IF EXISTS "ProductSku" DROP CONSTRAINT IF EXISTS "ProductSku_productId_fkey";
 
--- DropIndex
-DROP INDEX "Lesson_sectionId_idx";
+-- DropIndex (IF EXISTS: these indexes may be created in a later migration)
+DROP INDEX IF EXISTS "Lesson_sectionId_idx";
+DROP INDEX IF EXISTS "Section_courseId_idx";
 
--- DropIndex
-DROP INDEX "Section_courseId_idx";
+-- AlterTable: MembershipSubscription is created in a later migration (20260311190000), skip here.
 
--- AlterTable
-ALTER TABLE "MembershipSubscription" ALTER COLUMN "updatedAt" DROP DEFAULT;
+-- AlterTable Order: add productId; only DROP DEFAULT on updatedAt if column exists (added in 20260311103000).
+ALTER TABLE "Order" ADD COLUMN IF NOT EXISTS "productId" TEXT;
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Order' AND column_name = 'updatedAt') THEN
+    ALTER TABLE "Order" ALTER COLUMN "updatedAt" DROP DEFAULT;
+  END IF;
+END $$;
 
--- AlterTable
-ALTER TABLE "Order" ADD COLUMN     "productId" TEXT,
-ALTER COLUMN "updatedAt" DROP DEFAULT;
-
--- AlterTable
-ALTER TABLE "Payment" ALTER COLUMN "updatedAt" DROP DEFAULT;
+-- AlterTable: only DROP DEFAULT when column exists (Payment.updatedAt added in 20260311103000).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'Payment' AND column_name = 'updatedAt') THEN
+    ALTER TABLE "Payment" ALTER COLUMN "updatedAt" DROP DEFAULT;
+  END IF;
+END $$;
 
 -- AlterTable
 ALTER TABLE "Product" ALTER COLUMN "updatedAt" DROP DEFAULT;
@@ -29,8 +36,13 @@ ALTER TABLE "ProductBenefit" ALTER COLUMN "updatedAt" DROP DEFAULT;
 -- AlterTable
 ALTER TABLE "ProductSku" ALTER COLUMN "updatedAt" DROP DEFAULT;
 
--- AlterTable
-ALTER TABLE "RefundRequest" ALTER COLUMN "updatedAt" DROP DEFAULT;
+-- AlterTable RefundRequest: only if table and column exist.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema = 'public' AND table_name = 'RefundRequest' AND column_name = 'updatedAt') THEN
+    ALTER TABLE "RefundRequest" ALTER COLUMN "updatedAt" DROP DEFAULT;
+  END IF;
+END $$;
 
 -- CreateTable
 CREATE TABLE "Camp" (
