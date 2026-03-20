@@ -212,6 +212,43 @@ export const api = {
         }),
     },
     moderation: {
+      posts: {
+        list: <T = unknown>(params?: Record<string, string>) =>
+          client<T>("/discussions/moderation/posts", { params }),
+        audit: <T = unknown>(id: string, body: unknown) =>
+          client<T>(`/discussions/moderation/posts/${id}/audit`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          }),
+        action: <T = unknown>(id: string, body: unknown) =>
+          client<T>(`/discussions/moderation/posts/${id}/actions`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          }),
+      },
+      comments: {
+        list: <T = unknown>(params?: Record<string, string>) =>
+          client<T>("/discussions/moderation/comments", { params }),
+        audit: <T = unknown>(id: string, body: unknown) =>
+          client<T>(`/discussions/moderation/comments/${id}/audit`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          }),
+        action: <T = unknown>(id: string, body: unknown) =>
+          client<T>(`/discussions/moderation/comments/${id}/actions`, {
+            method: "POST",
+            body: JSON.stringify(body),
+          }),
+      },
+      reports: {
+        list: <T = unknown>(params?: Record<string, string>) =>
+          client<T>("/discussions/moderation/reports", { params }),
+        resolve: <T = unknown>(id: string, body: unknown) =>
+          client<T>(`/discussions/moderation/reports/${id}`, {
+            method: "PATCH",
+            body: JSON.stringify(body),
+          }),
+      },
       setBestComment: <T = unknown>(postId: string, commentId: string) =>
         client<T>(`/discussions/moderation/posts/${postId}/best-comment`, {
           method: "POST",

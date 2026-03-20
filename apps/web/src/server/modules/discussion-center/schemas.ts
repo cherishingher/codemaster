@@ -1,9 +1,11 @@
 import { z } from "zod"
 import {
   DiscussionAuditStatus,
+  DiscussionDisplayStatus,
   DiscussionModerationActionType,
   DiscussionPostType,
   DiscussionReportReasonCode,
+  DiscussionReportStatus,
   DiscussionTargetType,
 } from "@prisma/client"
 
@@ -72,4 +74,34 @@ export const SetDiscussionBestCommentSchema = z.object({
 
 export const MarkDiscussionSolvedSchema = z.object({
   isSolved: z.boolean(),
+})
+
+export const DiscussionModerationPostsQuerySchema = z.object({
+  keyword: z.string().trim().max(100).optional(),
+  postType: z.nativeEnum(DiscussionPostType).optional(),
+  auditStatus: z.nativeEnum(DiscussionAuditStatus).optional(),
+  displayStatus: z.nativeEnum(DiscussionDisplayStatus).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+export const DiscussionModerationCommentsQuerySchema = z.object({
+  keyword: z.string().trim().max(100).optional(),
+  auditStatus: z.nativeEnum(DiscussionAuditStatus).optional(),
+  displayStatus: z.nativeEnum(DiscussionDisplayStatus).optional(),
+  postId: z.string().trim().max(64).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+export const DiscussionModerationReportsQuerySchema = z.object({
+  status: z.nativeEnum(DiscussionReportStatus).optional(),
+  targetType: z.nativeEnum(DiscussionTargetType).optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+  pageSize: z.coerce.number().int().min(1).max(50).default(20),
+})
+
+export const ResolveDiscussionReportSchema = z.object({
+  status: z.nativeEnum(DiscussionReportStatus),
+  resultNote: z.string().trim().max(500).optional(),
 })

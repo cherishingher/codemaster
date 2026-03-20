@@ -2,14 +2,17 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import useSWR from "swr"
-import { ArrowLeft, CheckCircle2, Heart, MessageSquare, Send, Star, Trophy } from "lucide-react"
+import { AlertTriangle, ArrowLeft, CheckCircle2, Heart, MessageSquare, Pencil, Send, ShieldAlert, Star, Trash2, Trophy } from "lucide-react"
 import { ApiError, api } from "@/lib/api-client"
 import {
   type DiscussionComment,
   type DiscussionCommentListResponse,
   type DiscussionMutationResponse,
   type DiscussionPostDetailResponse,
+  type DiscussionReportReasonCode,
+  DISCUSSION_REPORT_REASON_OPTIONS,
   formatDiscussionDateTime,
   getDiscussionCommentPlaceholder,
   getDiscussionComposerHint,
@@ -23,6 +26,8 @@ import { PaginationBar } from "@/components/patterns/pagination-bar"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 type DiscussionTopicPageProps = {
   topicId: string
@@ -34,13 +39,23 @@ type ReplyTarget = {
   label: string
 }
 
+type ReportDraft = {
+  targetType: "post" | "comment"
+  targetId: string
+  reasonCode: DiscussionReportReasonCode
+  reasonText: string
+}
+
 const COMMENT_PAGE_SIZE = 20
+const EDITOR_TEXTAREA_CLASS =
+  "min-h-[180px] w-full rounded-[1.2rem] border-[3px] border-border bg-white px-4 py-3 text-sm shadow-[6px_6px_0_hsl(var(--border))] outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
 
 function isModerator(roles?: string[]) {
   return Boolean(roles?.includes("admin") || roles?.includes("moderator"))
 }
 
 export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
+  const router = useRouter()
   const { user, loggedIn } = useAuth()
   const [message, setMessage] = React.useState("")
   const [errorMessage, setErrorMessage] = React.useState("")
@@ -54,6 +69,15 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
   const [postFavorited, setPostFavorited] = React.useState(false)
   const [postLikeCount, setPostLikeCount] = React.useState(0)
   const [postFavoriteCount, setPostFavoriteCount] = React.useState(0)
+  const [editingPost, setEditingPost] = React.useState(false)
+  const [editingPostTitle, setEditingPostTitle] = React.useState("")
+  const [editingPostContent, setEditingPostContent] = React.useState("")
+  const [savingPost, setSavingPost] = React.useState(false)
+  const [editingCommentId, setEditingCommentId] = React.useState<string | null>(null)
+  const [editingCommentValue, setEditingCommentValue] = React.useState("")
+  const [savingCommentId, setSavingCommentId] = React.useState<string | null>(null)
+  const [reportDraft, setReportDraft] = React.useState<ReportDraft | null>(null)
+  const [submittingReport, setSubmittingReport] = React.useState(false)
 
   const { data: postData, isLoading: postLoading, mutate: mutatePost } = useSWR<DiscussionPostDetailResponse>(
     topicId ? `/discussions/posts/${topicId}` : null,
@@ -91,6 +115,8 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
     setPostFavorited(Boolean(post.viewerState?.favorited))
     setPostLikeCount(post.likeCount)
     setPostFavoriteCount(post.favoriteCount)
+    setEditingPostTitle(post.title)
+    setEditingPostContent(post.contentMarkdown)
   }, [post])
 
   const commentsPaginationItems = buildPaginationItems(commentsMeta.page, commentsMeta.totalPages)
@@ -105,6 +131,12 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
     Boolean(post) &&
     post?.postType === "question" &&
     Boolean(user && (user.id === post.author.id || isModerator(user.roles)))
+
+  const canManagePost = Boolean(post && user && (user.id === post.author.id || isModerator(user.roles)))
+  const canManageComment = React.useCallback(
+    (comment: DiscussionComment) => Boolean(user && (user.id === comment.authorId || isModerator(user.roles))),
+    [user],
+  )
 
   const togglePostLike = React.useCallback(async () => {
     if (!loggedIn || !post) {
@@ -222,6 +254,120 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
     }
   }, [mutatePost, post])
 
+  const savePostEdit = React.useCallback(async () => {
+    if (!post) return
+
+    if (editingPostTitle.trim().length < 2 || editingPostContent.trim().length < 2) {
+      setErrorMessage("标题和正文都需要至少 2 个字。")
+      return
+    }
+
+    setSavingPost(true)
+    try {
+      await api.discussions.posts.update<DiscussionPostDetailResponse>(post.id, {
+        title: editingPostTitle.trim(),
+        contentMarkdown: editingPostContent.trim(),
+      })
+      setEditingPost(false)
+      setMessage("帖子已更新")
+      setErrorMessage("")
+      await mutatePost()
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : "更新帖子失败")
+    } finally {
+      setSavingPost(false)
+    }
+  }, [editingPostContent, editingPostTitle, mutatePost, post])
+
+  const deletePost = React.useCallback(async () => {
+    if (!post) return
+    if (!window.confirm("确认删除这条讨论吗？删除后会从公开列表中移除。")) return
+
+    try {
+      await api.discussions.posts.delete<DiscussionMutationResponse>(post.id)
+      router.push("/discuss")
+      router.refresh()
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : "删除帖子失败")
+    }
+  }, [post, router])
+
+  const startEditComment = React.useCallback((comment: DiscussionComment) => {
+    setEditingCommentId(comment.id)
+    setEditingCommentValue(comment.contentMarkdown)
+    setReplyTarget(null)
+  }, [])
+
+  const saveCommentEdit = React.useCallback(
+    async (commentId: string) => {
+      if (!editingCommentValue.trim()) {
+        setErrorMessage("评论内容不能为空。")
+        return
+      }
+
+      setSavingCommentId(commentId)
+      try {
+        await api.discussions.comments.update<DiscussionMutationResponse>(commentId, {
+          contentMarkdown: editingCommentValue.trim(),
+        })
+        setEditingCommentId(null)
+        setEditingCommentValue("")
+        setMessage("评论已更新")
+        setErrorMessage("")
+        await mutateComments()
+      } catch (error) {
+        setErrorMessage(error instanceof ApiError ? error.message : "更新评论失败")
+      } finally {
+        setSavingCommentId(null)
+      }
+    },
+    [editingCommentValue, mutateComments],
+  )
+
+  const deleteComment = React.useCallback(
+    async (commentId: string) => {
+      if (!window.confirm("确认删除这条评论吗？")) return
+
+      try {
+        await api.discussions.comments.delete<DiscussionMutationResponse>(commentId)
+        setMessage("评论已删除")
+        setErrorMessage("")
+        if (editingCommentId === commentId) {
+          setEditingCommentId(null)
+          setEditingCommentValue("")
+        }
+        await Promise.all([mutateComments(), mutatePost()])
+      } catch (error) {
+        setErrorMessage(error instanceof ApiError ? error.message : "删除评论失败")
+      }
+    },
+    [editingCommentId, mutateComments, mutatePost],
+  )
+
+  const submitReport = React.useCallback(async () => {
+    if (!loggedIn || !reportDraft) {
+      setErrorMessage("登录后才能举报内容")
+      return
+    }
+
+    setSubmittingReport(true)
+    try {
+      await api.discussions.reports.create<DiscussionMutationResponse>({
+        targetType: reportDraft.targetType,
+        targetId: reportDraft.targetId,
+        reasonCode: reportDraft.reasonCode,
+        reasonText: reportDraft.reasonText.trim() || undefined,
+      })
+      setReportDraft(null)
+      setMessage("举报已提交，管理员会尽快处理。")
+      setErrorMessage("")
+    } catch (error) {
+      setErrorMessage(error instanceof ApiError ? error.message : "举报提交失败")
+    } finally {
+      setSubmittingReport(false)
+    }
+  }, [loggedIn, reportDraft])
+
   if (postLoading) {
     return (
       <div className="page-wrap py-10 md:py-14">
@@ -300,6 +446,38 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
             </div>
 
             <div className="flex flex-wrap gap-2">
+              {canManagePost ? (
+                <>
+                  <Button variant="outline" size="sm" onClick={() => setEditingPost((current) => !current)}>
+                    <Pencil className="size-4" />
+                    {editingPost ? "取消编辑" : "编辑帖子"}
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={deletePost}>
+                    <Trash2 className="size-4" />
+                    删除帖子
+                  </Button>
+                </>
+              ) : null}
+              {loggedIn ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() =>
+                    setReportDraft({
+                      targetType: "post",
+                      targetId: post.id,
+                      reasonCode: "spoiler",
+                      reasonText: "",
+                    })
+                  }
+                >
+                  <ShieldAlert className="size-4" />
+                  举报帖子
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="flex flex-wrap gap-2">
               {post.tags.map((tag) => (
                 <Badge key={tag.id} variant="outline">
                   {tag.tagName}
@@ -307,9 +485,40 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
               ))}
             </div>
 
-            <div className="rounded-[1.3rem] border-[2px] border-border bg-card px-5 py-5">
-              <ProblemRichText content={post.contentMarkdown} mode="markdown" className="max-w-none" />
-            </div>
+            {editingPost ? (
+              <div className="space-y-4 rounded-[1.3rem] border-[2px] border-primary/25 bg-card px-5 py-5">
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-post-title">标题</Label>
+                  <Input
+                    id="discussion-post-title"
+                    value={editingPostTitle}
+                    onChange={(event) => setEditingPostTitle(event.target.value)}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-post-content">正文 Markdown</Label>
+                  <textarea
+                    id="discussion-post-content"
+                    className={EDITOR_TEXTAREA_CLASS}
+                    value={editingPostContent}
+                    onChange={(event) => setEditingPostContent(event.target.value)}
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={savePostEdit} disabled={savingPost}>
+                    <Pencil className="size-4" />
+                    {savingPost ? "保存中..." : "保存帖子"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setEditingPost(false)}>
+                    取消
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-[1.3rem] border-[2px] border-border bg-card px-5 py-5">
+                <ProblemRichText content={post.contentMarkdown} mode="markdown" className="max-w-none" />
+              </div>
+            )}
           </CardContent>
         </Card>
 
@@ -343,6 +552,73 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
               </div>
             </CardContent>
           </Card>
+
+          {reportDraft ? (
+            <Card className="bg-background">
+              <CardContent className="space-y-4 p-6">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="size-4 text-primary" />
+                  <h2 className="text-xl font-semibold text-foreground">举报内容</h2>
+                </div>
+                <div className="rounded-[1.2rem] border-[2px] border-border/70 bg-card px-4 py-3 text-sm text-muted-foreground">
+                  当前举报对象：
+                  {reportDraft.targetType === "post" ? " 帖子正文" : " 评论内容"}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-report-reason">举报原因</Label>
+                  <select
+                    id="discussion-report-reason"
+                    className="h-11 w-full rounded-[1.2rem] border-[3px] border-border bg-white px-3 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
+                    value={reportDraft.reasonCode}
+                    onChange={(event) =>
+                      setReportDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              reasonCode: event.target.value as DiscussionReportReasonCode,
+                            }
+                          : current,
+                      )
+                    }
+                  >
+                    {DISCUSSION_REPORT_REASON_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-report-detail">补充说明（选填）</Label>
+                  <textarea
+                    id="discussion-report-detail"
+                    className={EDITOR_TEXTAREA_CLASS}
+                    value={reportDraft.reasonText}
+                    onChange={(event) =>
+                      setReportDraft((current) =>
+                        current
+                          ? {
+                              ...current,
+                              reasonText: event.target.value,
+                            }
+                          : current,
+                      )
+                    }
+                    placeholder="例如：赛中贴出关键做法、直接泄露正解、广告引流或辱骂攻击。"
+                  />
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={submitReport} disabled={submittingReport}>
+                    <ShieldAlert className="size-4" />
+                    {submittingReport ? "提交中..." : "提交举报"}
+                  </Button>
+                  <Button variant="outline" onClick={() => setReportDraft(null)} disabled={submittingReport}>
+                    取消
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="bg-background">
             <CardContent className="space-y-4 p-6">
@@ -411,7 +687,32 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
                 <div className="text-xs text-muted-foreground">{formatDiscussionDateTime(comment.createdAt)}</div>
                 {post.bestCommentId === comment.id ? <Badge variant="secondary">最佳回复</Badge> : null}
               </div>
-              <ProblemRichText content={comment.contentMarkdown} mode="markdown" className="max-w-none" />
+              {editingCommentId === comment.id ? (
+                <div className="space-y-3 rounded-[1.2rem] border-[2px] border-primary/25 bg-card px-4 py-4">
+                  <textarea
+                    className={EDITOR_TEXTAREA_CLASS}
+                    value={editingCommentValue}
+                    onChange={(event) => setEditingCommentValue(event.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-2">
+                    <Button onClick={() => saveCommentEdit(comment.id)} disabled={savingCommentId === comment.id}>
+                      <Pencil className="size-4" />
+                      {savingCommentId === comment.id ? "保存中..." : "保存评论"}
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditingCommentId(null)
+                        setEditingCommentValue("")
+                      }}
+                    >
+                      取消
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <ProblemRichText content={comment.contentMarkdown} mode="markdown" className="max-w-none" />
+              )}
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={() => toggleCommentLike(comment)}>
                   <Heart className="size-4" />
@@ -437,6 +738,35 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
                     设为最佳
                   </Button>
                 ) : null}
+                {canManageComment(comment) ? (
+                  <>
+                    <Button variant="outline" size="sm" onClick={() => startEditComment(comment)}>
+                      <Pencil className="size-4" />
+                      编辑
+                    </Button>
+                    <Button variant="outline" size="sm" onClick={() => deleteComment(comment.id)}>
+                      <Trash2 className="size-4" />
+                      删除
+                    </Button>
+                  </>
+                ) : null}
+                {loggedIn ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() =>
+                      setReportDraft({
+                        targetType: "comment",
+                        targetId: comment.id,
+                        reasonCode: "spoiler",
+                        reasonText: "",
+                      })
+                    }
+                  >
+                    <ShieldAlert className="size-4" />
+                    举报
+                  </Button>
+                ) : null}
               </div>
 
               {comment.replies?.length ? (
@@ -448,7 +778,32 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
                         <div className="text-xs text-muted-foreground">{formatDiscussionDateTime(reply.createdAt)}</div>
                         {post.bestCommentId === reply.id ? <Badge variant="secondary">最佳回复</Badge> : null}
                       </div>
-                      <ProblemRichText content={reply.contentMarkdown} mode="markdown" className="max-w-none" />
+                      {editingCommentId === reply.id ? (
+                        <div className="space-y-3 rounded-[1.2rem] border-[2px] border-primary/25 bg-card px-4 py-4">
+                          <textarea
+                            className={EDITOR_TEXTAREA_CLASS}
+                            value={editingCommentValue}
+                            onChange={(event) => setEditingCommentValue(event.target.value)}
+                          />
+                          <div className="flex flex-wrap gap-2">
+                            <Button onClick={() => saveCommentEdit(reply.id)} disabled={savingCommentId === reply.id}>
+                              <Pencil className="size-4" />
+                              {savingCommentId === reply.id ? "保存中..." : "保存评论"}
+                            </Button>
+                            <Button
+                              variant="outline"
+                              onClick={() => {
+                                setEditingCommentId(null)
+                                setEditingCommentValue("")
+                              }}
+                            >
+                              取消
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <ProblemRichText content={reply.contentMarkdown} mode="markdown" className="max-w-none" />
+                      )}
                       <div className="mt-3 flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" onClick={() => toggleCommentLike(reply)}>
                           <Heart className="size-4" />
@@ -472,6 +827,35 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
                           <Button variant="outline" size="sm" onClick={() => setBestComment(reply.id)}>
                             <CheckCircle2 className="size-4" />
                             设为最佳
+                          </Button>
+                        ) : null}
+                        {canManageComment(reply) ? (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => startEditComment(reply)}>
+                              <Pencil className="size-4" />
+                              编辑
+                            </Button>
+                            <Button variant="outline" size="sm" onClick={() => deleteComment(reply.id)}>
+                              <Trash2 className="size-4" />
+                              删除
+                            </Button>
+                          </>
+                        ) : null}
+                        {loggedIn ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setReportDraft({
+                                targetType: "comment",
+                                targetId: reply.id,
+                                reasonCode: "spoiler",
+                                reasonText: "",
+                              })
+                            }
+                          >
+                            <ShieldAlert className="size-4" />
+                            举报
                           </Button>
                         ) : null}
                       </div>

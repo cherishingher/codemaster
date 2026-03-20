@@ -20,9 +20,13 @@ import {
 import {
   auditDiscussionComment,
   auditDiscussionPost,
+  listDiscussionCommentsForModeration,
+  listDiscussionPostsForModeration,
+  listDiscussionReportsForModeration,
   markDiscussionPostSolved,
   moderateDiscussionComment,
   moderateDiscussionPost,
+  resolveDiscussionReport,
   setDiscussionBestComment,
 } from "@/server/modules/discussion-center/moderation.service"
 import {
@@ -37,10 +41,14 @@ import {
   CreateDiscussionCommentSchema,
   CreateDiscussionPostSchema,
   CreateDiscussionReportSchema,
+  DiscussionModerationCommentsQuerySchema,
+  DiscussionModerationPostsQuerySchema,
+  DiscussionModerationReportsQuerySchema,
   DiscussionPostCommentsQuerySchema,
   DiscussionPostListQuerySchema,
   MarkDiscussionSolvedSchema,
   ModerateDiscussionTargetSchema,
+  ResolveDiscussionReportSchema,
   SetDiscussionBestCommentSchema,
   UpdateDiscussionCommentSchema,
   UpdateDiscussionPostSchema,
@@ -289,6 +297,60 @@ export async function handleMarkDiscussionSolved(req: NextRequest, id: string, u
   try {
     const body = MarkDiscussionSolvedSchema.parse(await req.json())
     return jsonData(await markDiscussionPostSolved(user, id, body))
+  } catch (error) {
+    return mapErrorToResponse(error)
+  }
+}
+
+export async function handleListDiscussionModerationPosts(req: NextRequest, user: AuthUser) {
+  try {
+    const query = DiscussionModerationPostsQuerySchema.parse(searchParamsToObject(new URL(req.url).searchParams))
+    const result = await listDiscussionPostsForModeration(user, query)
+    return jsonList(result.items, {
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages,
+    })
+  } catch (error) {
+    return mapErrorToResponse(error)
+  }
+}
+
+export async function handleListDiscussionModerationComments(req: NextRequest, user: AuthUser) {
+  try {
+    const query = DiscussionModerationCommentsQuerySchema.parse(searchParamsToObject(new URL(req.url).searchParams))
+    const result = await listDiscussionCommentsForModeration(user, query)
+    return jsonList(result.items, {
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages,
+    })
+  } catch (error) {
+    return mapErrorToResponse(error)
+  }
+}
+
+export async function handleListDiscussionModerationReports(req: NextRequest, user: AuthUser) {
+  try {
+    const query = DiscussionModerationReportsQuerySchema.parse(searchParamsToObject(new URL(req.url).searchParams))
+    const result = await listDiscussionReportsForModeration(user, query)
+    return jsonList(result.items, {
+      total: result.total,
+      page: result.page,
+      pageSize: result.pageSize,
+      totalPages: result.totalPages,
+    })
+  } catch (error) {
+    return mapErrorToResponse(error)
+  }
+}
+
+export async function handleResolveDiscussionReport(req: NextRequest, id: string, user: AuthUser) {
+  try {
+    const body = ResolveDiscussionReportSchema.parse(await req.json())
+    return jsonData(await resolveDiscussionReport(user, id, body))
   } catch (error) {
     return mapErrorToResponse(error)
   }

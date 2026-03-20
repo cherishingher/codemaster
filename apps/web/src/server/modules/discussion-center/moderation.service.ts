@@ -1,5 +1,7 @@
 import {
   type DiscussionAuditStatus,
+  type DiscussionDisplayStatus,
+  type DiscussionReportStatus,
   DiscussionModerationActionType,
   DiscussionPostType,
   Prisma,
@@ -11,6 +13,121 @@ import {
   assertDiscussionModerator,
   ensureDiscussionOwnerOrModerator,
 } from "@/server/modules/discussion-center/shared"
+
+const moderationPostArgs = Prisma.validator<Prisma.DiscussionPostDefaultArgs>()({
+  include: {
+    author: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    problem: {
+      select: {
+        id: true,
+        title: true,
+        slug: true,
+      },
+    },
+    contest: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    tags: {
+      include: {
+        tag: {
+          select: {
+            id: true,
+            tagName: true,
+            tagSlug: true,
+            tagType: true,
+          },
+        },
+      },
+    },
+  },
+})
+
+const moderationCommentArgs = Prisma.validator<Prisma.DiscussionCommentDefaultArgs>()({
+  include: {
+    author: {
+      select: {
+        id: true,
+        name: true,
+      },
+    },
+    post: {
+      select: {
+        id: true,
+        title: true,
+        postType: true,
+        problemId: true,
+        contestId: true,
+      },
+    },
+  },
+})
+
+type ModerationPostRecord = Prisma.DiscussionPostGetPayload<typeof moderationPostArgs>
+type ModerationCommentRecord = Prisma.DiscussionCommentGetPayload<typeof moderationCommentArgs>
+
+function mapModerationPost(post: ModerationPostRecord) {
+  return {
+    id: post.id,
+    postType: post.postType,
+    title: post.title,
+    excerpt: post.excerpt,
+    auditStatus: post.auditStatus,
+    displayStatus: post.displayStatus,
+    publishStatus: post.publishStatus,
+    publishAt: post.publishAt?.toISOString() ?? null,
+    isLocked: post.isLocked,
+    isDeleted: post.isDeleted,
+    isPinned: post.isPinned,
+    isFeatured: post.isFeatured,
+    isRecommended: post.isRecommended,
+    isSolved: post.isSolved,
+    bestCommentId: post.bestCommentId,
+    likeCount: post.likeCount,
+    favoriteCount: post.favoriteCount,
+    commentCount: post.commentCount,
+    replyCount: post.replyCount,
+    reportCount: post.reportCount,
+    author: post.author,
+    problem: post.problem,
+    contest: post.contest,
+    tags: post.tags.map((item) => item.tag),
+    createdAt: post.createdAt.toISOString(),
+    updatedAt: post.updatedAt.toISOString(),
+  }
+}
+
+function mapModerationComment(comment: ModerationCommentRecord) {
+  return {
+    id: comment.id,
+    postId: comment.postId,
+    authorId: comment.authorId,
+    rootCommentId: comment.rootCommentId,
+    parentCommentId: comment.parentCommentId,
+    replyToUserId: comment.replyToUserId,
+    contentMarkdown: comment.contentMarkdown,
+    contentPreview: comment.contentPlain?.slice(0, 160) ?? null,
+    depth: comment.depth,
+    floorNo: comment.floorNo,
+    auditStatus: comment.auditStatus,
+    displayStatus: comment.displayStatus,
+    isDeleted: comment.isDeleted,
+    likeCount: comment.likeCount,
+    replyCount: comment.replyCount,
+    reportCount: comment.reportCount,
+    author: comment.author,
+    post: comment.post,
+    createdAt: comment.createdAt.toISOString(),
+    updatedAt: comment.updatedAt.toISOString(),
+  }
+}
 
 export async function auditDiscussionPost(
   user: AuthUser,
@@ -138,6 +255,251 @@ function mapCommentModerationAction(actionType: DiscussionModerationActionType, 
     throw new DiscussionError("unsupported_action", "该评论管理动作暂不支持", 400)
   }
   return data
+}
+
+export async function listDiscussionPostsForModeration(
+  user: AuthUser,
+  query: {
+    keyword?: string
+    postType?: DiscussionPostType
+    auditStatus?: DiscussionAuditStatus
+    displayStatus?: DiscussionDisplayStatus
+    page: number
+    pageSize: number
+  },
+) {
+  assertDiscussionModerator(user)
+
+  const where: Prisma.DiscussionPostWhereInput = {
+    ...(query.postType ? { postType: query.postType } : {}),
+    ...(query.auditStatus ? { auditStatus: query.auditStatus } : {}),
+    ...(query.displayStatus ? { displayStatus: query.displayStatus } : {}),
+    ...(query.keyword
+      ? {
+          OR: [
+            { title: { contains: query.keyword, mode: "insensitive" } },
+            { contentPlain: { contains: query.keyword, mode: "insensitive" } },
+            { excerpt: { contains: query.keyword, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  }
+
+  const [rows, total] = await Promise.all([
+    db.discussionPost.findMany({
+      where,
+      ...moderationPostArgs,
+      orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    db.discussionPost.count({ where }),
+  ])
+
+  return {
+    items: rows.map(mapModerationPost),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+  }
+}
+
+export async function listDiscussionCommentsForModeration(
+  user: AuthUser,
+  query: {
+    keyword?: string
+    auditStatus?: DiscussionAuditStatus
+    displayStatus?: DiscussionDisplayStatus
+    postId?: string
+    page: number
+    pageSize: number
+  },
+) {
+  assertDiscussionModerator(user)
+
+  const where: Prisma.DiscussionCommentWhereInput = {
+    ...(query.auditStatus ? { auditStatus: query.auditStatus } : {}),
+    ...(query.displayStatus ? { displayStatus: query.displayStatus } : {}),
+    ...(query.postId ? { postId: query.postId } : {}),
+    ...(query.keyword
+      ? {
+          OR: [{ contentPlain: { contains: query.keyword, mode: "insensitive" } }],
+        }
+      : {}),
+  }
+
+  const [rows, total] = await Promise.all([
+    db.discussionComment.findMany({
+      where,
+      ...moderationCommentArgs,
+      orderBy: [{ createdAt: "desc" }],
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    db.discussionComment.count({ where }),
+  ])
+
+  return {
+    items: rows.map(mapModerationComment),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+  }
+}
+
+export async function listDiscussionReportsForModeration(
+  user: AuthUser,
+  query: {
+    status?: DiscussionReportStatus
+    targetType?: "post" | "comment"
+    page: number
+    pageSize: number
+  },
+) {
+  assertDiscussionModerator(user)
+
+  const where: Prisma.DiscussionReportWhereInput = {
+    ...(query.status ? { status: query.status } : {}),
+    ...(query.targetType ? { targetType: query.targetType } : {}),
+  }
+
+  const [reports, total] = await Promise.all([
+    db.discussionReport.findMany({
+      where,
+      orderBy: [{ createdAt: "desc" }],
+      skip: (query.page - 1) * query.pageSize,
+      take: query.pageSize,
+    }),
+    db.discussionReport.count({ where }),
+  ])
+
+  const reporterIds = Array.from(new Set(reports.map((item) => item.reporterId)))
+  const postIds = reports.filter((item) => item.targetType === "post").map((item) => item.targetId)
+  const commentIds = reports.filter((item) => item.targetType === "comment").map((item) => item.targetId)
+
+  const [reporters, posts, comments] = await Promise.all([
+    reporterIds.length
+      ? db.user.findMany({
+          where: { id: { in: reporterIds } },
+          select: { id: true, name: true },
+        })
+      : [],
+    postIds.length
+      ? db.discussionPost.findMany({
+          where: { id: { in: postIds } },
+          select: {
+            id: true,
+            title: true,
+            excerpt: true,
+            auditStatus: true,
+            displayStatus: true,
+          },
+        })
+      : [],
+    commentIds.length
+      ? db.discussionComment.findMany({
+          where: { id: { in: commentIds } },
+          select: {
+            id: true,
+            contentPlain: true,
+            auditStatus: true,
+            displayStatus: true,
+            post: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+        })
+      : [],
+  ])
+
+  const reporterMap = new Map(reporters.map((item) => [item.id, item]))
+  const postMap = new Map(posts.map((item) => [item.id, item]))
+  const commentMap = new Map(comments.map((item) => [item.id, item]))
+
+  return {
+    items: reports.map((report) => {
+      const targetPreview =
+        report.targetType === "post"
+          ? (() => {
+              const target = postMap.get(report.targetId)
+              return target
+                ? {
+                    title: target.title,
+                    excerpt: target.excerpt,
+                    auditStatus: target.auditStatus,
+                    displayStatus: target.displayStatus,
+                  }
+                : null
+            })()
+          : (() => {
+              const target = commentMap.get(report.targetId)
+              return target
+                ? {
+                    title: target.post.title,
+                    excerpt: target.contentPlain?.slice(0, 160) ?? null,
+                    auditStatus: target.auditStatus,
+                    displayStatus: target.displayStatus,
+                    postId: target.post.id,
+                  }
+                : null
+            })()
+
+      return {
+        id: report.id,
+        reporter: reporterMap.get(report.reporterId) ?? null,
+        targetType: report.targetType,
+        targetId: report.targetId,
+        reasonCode: report.reasonCode,
+        reasonText: report.reasonText,
+        status: report.status,
+        handledById: report.handledById,
+        handledAt: report.handledAt?.toISOString() ?? null,
+        resultNote: report.resultNote,
+        targetPreview,
+        createdAt: report.createdAt.toISOString(),
+        updatedAt: report.updatedAt.toISOString(),
+      }
+    }),
+    total,
+    page: query.page,
+    pageSize: query.pageSize,
+    totalPages: Math.max(1, Math.ceil(total / query.pageSize)),
+  }
+}
+
+export async function resolveDiscussionReport(
+  user: AuthUser,
+  reportId: string,
+  input: {
+    status: DiscussionReportStatus
+    resultNote?: string | null
+  },
+) {
+  assertDiscussionModerator(user)
+
+  const report = await db.discussionReport.findUnique({
+    where: { id: reportId },
+    select: { id: true },
+  })
+
+  if (!report) {
+    throw new DiscussionError("report_not_found", "举报记录不存在", 404)
+  }
+
+  return db.discussionReport.update({
+    where: { id: reportId },
+    data: {
+      status: input.status,
+      resultNote: input.resultNote ?? null,
+      handledById: user.id,
+      handledAt: new Date(),
+    },
+  })
 }
 
 export async function moderateDiscussionPost(

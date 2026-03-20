@@ -23,6 +23,8 @@ export type DiscussionReportReasonCode =
   | "illegal_content"
   | "other"
 
+export type DiscussionReportStatus = "pending" | "processing" | "accepted" | "rejected" | "closed"
+
 export type DiscussionPostTag = {
   id: string
   tagName: string
@@ -90,6 +92,48 @@ export type DiscussionComment = {
   replies?: DiscussionComment[]
 }
 
+export type DiscussionModerationPost = DiscussionPost & {
+  isDeleted: boolean
+  problem: { id: string; title: string; slug: string | null } | null
+  contest: { id: string; name: string } | null
+}
+
+export type DiscussionModerationComment = DiscussionComment & {
+  auditStatus: string
+  displayStatus: string
+  isDeleted: boolean
+  contentPreview: string | null
+  post: {
+    id: string
+    title: string
+    postType: DiscussionPostType
+    problemId: string | null
+    contestId: string | null
+  }
+}
+
+export type DiscussionModerationReport = {
+  id: string
+  reporter: DiscussionAuthor | null
+  targetType: DiscussionTargetType
+  targetId: string
+  reasonCode: DiscussionReportReasonCode
+  reasonText: string | null
+  status: DiscussionReportStatus
+  handledById: string | null
+  handledAt: string | null
+  resultNote: string | null
+  targetPreview: {
+    title: string
+    excerpt: string | null
+    auditStatus: string
+    displayStatus: string
+    postId?: string
+  } | null
+  createdAt: string
+  updatedAt: string
+}
+
 export type ApiListMeta = {
   total: number
   page: number
@@ -110,6 +154,9 @@ export type DiscussionPostListResponse = ApiListResponse<DiscussionPost>
 export type DiscussionPostDetailResponse = ApiDataResponse<DiscussionPost>
 export type DiscussionCommentListResponse = ApiListResponse<DiscussionComment>
 export type DiscussionCommentDetailResponse = ApiDataResponse<DiscussionComment>
+export type DiscussionModerationPostListResponse = ApiListResponse<DiscussionModerationPost>
+export type DiscussionModerationCommentListResponse = ApiListResponse<DiscussionModerationComment>
+export type DiscussionModerationReportListResponse = ApiListResponse<DiscussionModerationReport>
 
 export type DiscussionMutationResponse = ApiDataResponse<{
   success?: boolean
@@ -172,6 +219,11 @@ export function getDiscussionPostTypeLabel(type: DiscussionPostType) {
 export function getDiscussionSortLabel(sort: DiscussionPostSort) {
   const match = DISCUSSION_SORT_OPTIONS.find((item) => item.value === sort)
   return match?.label ?? sort
+}
+
+export function getDiscussionReportReasonLabel(reasonCode: DiscussionReportReasonCode) {
+  const match = DISCUSSION_REPORT_REASON_OPTIONS.find((item) => item.value === reasonCode)
+  return match?.label ?? reasonCode
 }
 
 export function getDiscussionTitlePlaceholder(type: DiscussionPostType) {

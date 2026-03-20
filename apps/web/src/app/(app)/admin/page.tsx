@@ -89,6 +89,9 @@ export default function AdminToolsPage() {
               <Link href="/admin/content">内容后台</Link>
             </Button>
             <Button asChild variant="secondary">
+              <Link href="/admin/discussions">讨论审核</Link>
+            </Button>
+            <Button asChild variant="secondary">
               <Link href="/admin/organizations">机构后台</Link>
             </Button>
             <Button asChild variant="secondary">
