@@ -274,7 +274,7 @@ export async function getDiscussionPostDetail(id: string, viewer?: AuthUser | nu
                 userId: viewer.id,
               },
             },
-            select: { id: true },
+            select: { postId: true },
           }),
           db.discussionPostFavorite.findUnique({
             where: {
@@ -283,7 +283,7 @@ export async function getDiscussionPostDetail(id: string, viewer?: AuthUser | nu
                 userId: viewer.id,
               },
             },
-            select: { id: true },
+            select: { postId: true },
           }),
         ])
       : [null, null]
