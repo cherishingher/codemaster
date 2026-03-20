@@ -15,7 +15,7 @@ import {
 import { SubmissionResult } from "@/components/problems/submission-result"
 import { useSubmission } from "@/lib/hooks/use-submission"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { Loader2, Play, Send } from "lucide-react"
+import { ChevronLeft, ChevronRight, Loader2, Play, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Breadcrumbs } from "@/components/ui/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
@@ -214,6 +214,14 @@ function buildLanguageOption(config: NonNullable<ProblemDetail["judgeConfigs"]>[
 
 const graphicalUrl =
   process.env.NEXT_PUBLIC_GRAPHICAL_URL || "/graphical/index.html"
+const SCRATCH_WORKSPACE_MIN_WIDTH = 1024
+const SCRATCH_WORKSPACE_HEIGHT = 640
+const SCRATCH_WORKSPACE_MAX_WIDTH = 1800
+
+function isHiddenProblemTag(tag: string) {
+  const normalized = tag.trim().toLowerCase()
+  return normalized === "scratch-必做" || normalized === "scratch-可选"
+}
 
 export default function ProblemDetailPage() {
   const params = useParams()
@@ -244,12 +252,20 @@ export default function ProblemDetailPage() {
     phase?: string
   } | null>(null)
   const [isRunning, setIsRunning] = React.useState(false)
+  const [scratchSidebarCollapsed, setScratchSidebarCollapsed] = React.useState(false)
+  const [scratchViewportHeight, setScratchViewportHeight] = React.useState<number | null>(null)
+  const [scratchScale, setScratchScale] = React.useState(1)
+  const [scratchWorkspaceWidth, setScratchWorkspaceWidth] = React.useState(
+    SCRATCH_WORKSPACE_MIN_WIDTH
+  )
   const [scratchFileName, setScratchFileName] = React.useState("")
   const [showScratchRecentModal, setShowScratchRecentModal] = React.useState(false)
   const [toastPos, setToastPos] = React.useState({ x: 0, y: 0 })
   const [isDraggingToast, setIsDraggingToast] = React.useState(false)
   const dragOffsetRef = React.useRef({ x: 0, y: 0 })
   const problemPaneRef = React.useRef<HTMLDivElement | null>(null)
+  const workspaceViewportRef = React.useRef<HTMLDivElement | null>(null)
+  const scratchViewportRef = React.useRef<HTMLDivElement | null>(null)
 
   const recentSubmissionsKey =
     user && problem?.slug
@@ -497,6 +513,11 @@ export default function ProblemDetailPage() {
 
   const sampleInput = samples[0]?.input ?? ""
   const isScratch = isScratchMode
+  const showProblemPane = !isScratch || !scratchSidebarCollapsed
+  const visibleTags = React.useMemo(
+    () => (problem?.tags ?? []).filter((tag) => !isHiddenProblemTag(tag)),
+    [problem?.tags]
+  )
 
   React.useEffect(() => {
     if (!isScratch) return
@@ -511,8 +532,98 @@ export default function ProblemDetailPage() {
   React.useEffect(() => {
     if (!isScratch) {
       setShowScratchRecentModal(false)
+      setScratchSidebarCollapsed(false)
+      setScratchViewportHeight(null)
+      setScratchScale(1)
+      setScratchWorkspaceWidth(SCRATCH_WORKSPACE_MIN_WIDTH)
     }
   }, [isScratch])
+
+  React.useEffect(() => {
+    if (!isScratch) return
+
+    const body = document.body
+    const html = document.documentElement
+    const previousBodyOverflow = body.style.overflow
+    const previousHtmlOverflow = html.style.overflow
+
+    body.style.overflow = "hidden"
+    html.style.overflow = "hidden"
+
+    return () => {
+      body.style.overflow = previousBodyOverflow
+      html.style.overflow = previousHtmlOverflow
+    }
+  }, [isScratch])
+
+  React.useEffect(() => {
+    if (!isScratch) return
+
+    const updateScratchViewportHeight = () => {
+      const workspace = workspaceViewportRef.current
+      if (!workspace) return
+
+      const top = workspace.getBoundingClientRect().top
+      const nextHeight = Math.max(Math.floor(window.innerHeight - top - 6), 480)
+      setScratchViewportHeight((current) => (current === nextHeight ? current : nextHeight))
+    }
+
+    updateScratchViewportHeight()
+
+    const header = document.querySelector("header")
+    const observer =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateScratchViewportHeight) : null
+
+    if (header && observer) {
+      observer.observe(header)
+    }
+
+    window.addEventListener("resize", updateScratchViewportHeight)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", updateScratchViewportHeight)
+    }
+  }, [isScratch])
+
+  React.useEffect(() => {
+    if (!isScratch) return
+
+    const updateScratchScale = () => {
+      const viewport = scratchViewportRef.current
+      if (!viewport) return
+
+      const nextScale = Math.max(viewport.clientHeight / SCRATCH_WORKSPACE_HEIGHT, 0.1)
+      const preferredWorkspaceWidth = viewport.clientWidth / nextScale
+      const nextWorkspaceWidth = Math.max(
+        SCRATCH_WORKSPACE_MIN_WIDTH,
+        Math.min(Math.round(preferredWorkspaceWidth), SCRATCH_WORKSPACE_MAX_WIDTH)
+      )
+
+      setScratchScale((current) =>
+        Math.abs(current - nextScale) < 0.01 ? current : nextScale
+      )
+      setScratchWorkspaceWidth((current) =>
+        current === nextWorkspaceWidth ? current : nextWorkspaceWidth
+      )
+    }
+
+    updateScratchScale()
+
+    const observer =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(updateScratchScale) : null
+
+    if (scratchViewportRef.current && observer) {
+      observer.observe(scratchViewportRef.current)
+    }
+
+    window.addEventListener("resize", updateScratchScale)
+
+    return () => {
+      observer?.disconnect()
+      window.removeEventListener("resize", updateScratchScale)
+    }
+  }, [isScratch, scratchSidebarCollapsed])
 
   React.useEffect(() => {
     if (!showScratchRecentModal) return
@@ -796,14 +907,33 @@ export default function ProblemDetailPage() {
 
   return (
     <>
-    <div className="page-wrap py-4 md:py-6">
-    <div className="flex min-h-[calc(100vh-8.4rem)] flex-col gap-3 md:h-[calc(100vh-8.4rem)] md:min-h-0 md:flex-row md:overflow-hidden">
+    <div
+      className={cn(
+        isScratch
+          ? "mx-auto w-full max-w-[min(100vw-0.5rem,1920px)] px-1 py-1 md:px-2 md:py-2"
+          : "page-wrap py-4 md:py-6"
+      )}
+    >
+    <div
+      ref={workspaceViewportRef}
+      className={cn(
+        "flex flex-col gap-3 md:min-h-0 md:flex-row md:overflow-hidden",
+        isScratch
+          ? "min-h-0"
+          : "min-h-[calc(100vh-8.4rem)] md:h-[calc(100vh-8.4rem)]"
+      )}
+      style={isScratch && scratchViewportHeight ? { height: `${scratchViewportHeight}px` } : undefined}
+    >
       {/* Problem Description Side */}
+      {showProblemPane ? (
       <div
         ref={problemPaneRef}
-        className={`flex-1 rounded-[1.8rem] border-[3px] border-border bg-card p-4 shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-y-auto md:overscroll-contain md:p-5 ${
-          isScratch ? "md:w-[17rem] md:max-w-[22%]" : "md:w-1/2"
-        }`}
+        className={cn(
+          "flex-1 rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-y-auto md:overscroll-contain",
+          isScratch
+            ? "p-3 md:w-[16rem] md:flex-none md:self-stretch md:px-4 md:py-4 lg:w-[17rem] xl:w-[18rem]"
+            : "p-4 md:w-1/2 md:p-5"
+        )}
       >
         <div className="mb-3">
            <Breadcrumbs items={[
@@ -819,9 +949,9 @@ export default function ProblemDetailPage() {
             </span>
           ) : null}
         </div>
-        {problem?.tags?.length ? (
+        {visibleTags.length ? (
           <div className="mb-3 flex flex-wrap gap-2">
-            {problem.tags.map((tag) => (
+            {visibleTags.map((tag) => (
               <Badge key={`${problem.id}-${tag}`} variant="outline" className={getTagClass(tag)}>
                 {tag}
               </Badge>
@@ -829,34 +959,41 @@ export default function ProblemDetailPage() {
           </div>
         ) : null}
         {limitText ? <div className="mb-3 text-xs text-muted-foreground">{limitText}</div> : null}
-        <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="space-y-1">
-              <div className="text-sm font-semibold text-foreground">操作速览</div>
-              <div className="text-xs text-muted-foreground">
-                先完成提交，再按需要查看题解、视频解析或专题内容包。
+        {!isScratch ? (
+          <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+              <div className="space-y-1">
+                <div className="text-sm font-semibold text-foreground">操作速览</div>
+                <div className="text-xs text-muted-foreground">
+                  先完成提交，再按需要查看题解、视频解析或专题内容包。
+                </div>
               </div>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {problem?.slug ? (
-                <Button asChild size="sm" variant="secondary">
-                  <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
-                    查看该题提交
+              <div className="flex flex-wrap gap-2">
+                {problem?.slug ? (
+                  <Button asChild size="sm" variant="secondary">
+                    <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
+                      查看该题提交
+                    </Link>
+                  </Button>
+                ) : null}
+                <Button asChild size="sm" variant="outline">
+                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>
+                    题目讨论
                   </Link>
                 </Button>
-              ) : null}
-              <Button asChild size="sm" variant="outline">
-                <a href="#problem-solutions">题解与视频</a>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/products?type=membership">开通 VIP</Link>
-              </Button>
-              <Button asChild size="sm" variant="outline">
-                <Link href="/content-packs">内容包专区</Link>
-              </Button>
+                <Button asChild size="sm" variant="outline">
+                  <a href="#problem-solutions">题解与视频</a>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/products?type=membership">开通 VIP</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link href="/content-packs">内容包专区</Link>
+                </Button>
+              </div>
             </div>
           </div>
-        </div>
+        ) : null}
         {error ? (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700">
             题目不存在、未公开，或加载失败。
@@ -865,7 +1002,7 @@ export default function ProblemDetailPage() {
         {isLoading && !problem ? (
           <div className="text-sm text-muted-foreground">加载中...</div>
         ) : null}
-        {statementHeadings.length > 0 ? (
+        {!isScratch && statementHeadings.length > 0 ? (
           <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
             <div className="mb-3 text-sm font-semibold text-foreground">目录</div>
             <div className="space-y-1">
@@ -963,12 +1100,16 @@ export default function ProblemDetailPage() {
             )}
           </div>
         ) : null}
-        <div id="problem-solutions" className="mt-6">
-          <ProblemSolutionsPanel problemId={id} />
-        </div>
-        <div className="mt-6">
-          <AiTutorPanel problemId={id} problemTitle={problem?.title ?? null} compact />
-        </div>
+        {!isScratch ? (
+          <>
+            <div id="problem-solutions" className="mt-6">
+              <ProblemSolutionsPanel problemId={id} />
+            </div>
+            <div className="mt-6">
+              <AiTutorPanel problemId={id} problemTitle={problem?.title ?? null} compact />
+            </div>
+          </>
+        ) : null}
         {!isScratch ? (
           <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
             <div className="mb-3 flex items-center justify-between gap-2">
@@ -989,34 +1130,16 @@ export default function ProblemDetailPage() {
             </div>
             {recentSubmissionsContent}
           </div>
-        ) : (
-          <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-foreground">最近提交</div>
-                <div className="text-xs text-muted-foreground">
-                  不占用当前工作区，点击按钮查看最近提交。
-                </div>
-              </div>
-              <Button size="sm" variant="secondary" onClick={() => setShowScratchRecentModal(true)}>
-                查看
-              </Button>
-            </div>
-            {user && !recentSubmissionsLoading && recentSubmissions.length > 0 ? (
-              <div className="mt-2 text-xs text-muted-foreground">
-                最新：{getSubmissionStatusLabel(recentSubmissions[0].status)} ·{" "}
-                {new Date(recentSubmissions[0].createdAt).toLocaleString()}
-              </div>
-            ) : null}
-          </div>
-        )}
+        ) : null}
       </div>
+      ) : null}
 
       {/* Code Editor Side */}
       <div
-        className={`flex min-w-0 flex-col rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-hidden ${
-          isScratch ? "md:flex-1" : "md:w-1/2"
-        }`}
+        className={cn(
+          "flex min-w-0 flex-col rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-hidden",
+          isScratch ? "md:w-0 md:flex-1" : "md:w-1/2"
+        )}
       >
         <div className="flex items-center justify-between border-b-[3px] border-border bg-background px-4 py-3">
           <div className="flex flex-wrap items-center gap-3">
@@ -1072,9 +1195,33 @@ export default function ProblemDetailPage() {
                   该题提交
                 </Link>
               ) : null}
+              {isScratch ? (
+                <button
+                  type="button"
+                  onClick={() => setShowScratchRecentModal(true)}
+                  className="rounded-md px-2 py-0.5 text-[11px] text-emerald-700 hover:text-emerald-800"
+                >
+                  最近提交
+                </button>
+              ) : null}
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {isScratch ? (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-10 gap-2"
+                onClick={() => setScratchSidebarCollapsed((current) => !current)}
+              >
+                {scratchSidebarCollapsed ? (
+                  <ChevronRight className="h-4 w-4" />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" />
+                )}
+                {scratchSidebarCollapsed ? "展开题面" : "收起题面"}
+              </Button>
+            ) : null}
             <Button
               size="sm"
               variant="ghost"
@@ -1103,49 +1250,70 @@ export default function ProblemDetailPage() {
 
         <div
           className={cn(
-            "flex flex-col gap-4 md:min-h-0 md:flex-1 md:overflow-y-auto md:overscroll-contain",
-            isScratch ? "p-2 md:p-3" : "p-4"
+            "flex flex-col md:min-h-0 md:flex-1 md:overscroll-contain",
+            isScratch ? "gap-0 p-0 md:overflow-hidden" : "gap-4 p-4 md:overflow-y-auto"
           )}
         >
           {isScratch ? (
-            <div className="flex h-[calc(100vh-15.5rem)] min-h-[620px] flex-col gap-2">
-              <div className="flex-1 overflow-hidden rounded-xl border-2 border-border bg-background">
-                <iframe
-                  title="Scratch"
-                  src={graphicalUrl}
-                  className="h-full w-full"
-                />
+            <div className="flex min-h-[68vh] flex-col md:min-h-0 md:flex-1">
+              <div className="flex flex-wrap items-center justify-between gap-2 border-b-[2px] border-border/60 bg-background px-3 py-2 text-xs">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <input
+                    type="file"
+                    accept=".sb3,application/json"
+                    onChange={handleScratchFileChange}
+                    className="max-w-full text-xs"
+                  />
+                  {scratchFileName ? (
+                    <span className="truncate text-foreground">
+                      已选择：{scratchFileName}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">请选择 .sb3 或 project.json</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">上传文件后直接提交评测</span>
+                  {scratchFileName ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setScratchFileName("")
+                        setCode("")
+                        setCodeTouched(false)
+                      }}
+                    >
+                      清除
+                    </Button>
+                  ) : null}
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                <input
-                  type="file"
-                  accept=".sb3,application/json"
-                  onChange={handleScratchFileChange}
-                  className="text-xs"
-                />
-                {scratchFileName ? (
-                  <span className="truncate text-foreground">
-                    已选择：{scratchFileName}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">请选择 .sb3 或 project.json</span>
-                )}
-                {scratchFileName ? (
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => {
-                      setScratchFileName("")
-                      setCode("")
-                      setCodeTouched(false)
+              <div
+                ref={scratchViewportRef}
+                className="min-h-0 flex-1 overflow-hidden bg-background"
+              >
+                <div className="flex h-full w-full items-center justify-center overflow-hidden p-1">
+                  <div
+                    className="shrink-0"
+                    style={{
+                      width: `${scratchWorkspaceWidth * scratchScale}px`,
+                      height: `${SCRATCH_WORKSPACE_HEIGHT * scratchScale}px`,
                     }}
                   >
-                    清除
-                  </Button>
-                ) : null}
-              </div>
-              <div className="text-[11px] text-muted-foreground">
-                提交时会使用你上传的 Scratch 文件作为评测内容。
+                    <iframe
+                      title="Scratch"
+                      src={graphicalUrl}
+                      className="block border-0"
+                      style={{
+                        width: `${scratchWorkspaceWidth}px`,
+                        height: `${SCRATCH_WORKSPACE_HEIGHT}px`,
+                        transform: `scale(${scratchScale})`,
+                        transformOrigin: "top left",
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           ) : (

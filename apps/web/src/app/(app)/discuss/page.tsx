@@ -1,5 +1,5 @@
-import { CommunityHubPage } from "@/components/community/community-hub-page"
+import { DiscussionHubPage } from "@/components/discussions/discussion-hub-page"
 
 export default function DiscussPage() {
-  return <CommunityHubPage />
+  return <DiscussionHubPage />
 }

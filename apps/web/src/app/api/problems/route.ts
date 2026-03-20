@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { getAuthUser, hasRole } from "@/lib/authz";
 import { normalizeProblemAlias } from "@/lib/problem-aliases";
 import { ProblemLifecycleStatus, UserProblemStatus } from "@/lib/oj";
+import { getDifficultyValuesForLuoguBand, isLuoguDifficultyBandId } from "@/lib/problem-difficulty";
 
 function parseIntParam(value: string | null, fallback: number, max?: number) {
   const parsed = Number(value);
@@ -73,7 +74,11 @@ export async function GET(req: NextRequest) {
   const tags = parseCsvParams(searchParams, "tags");
   const singleTag = searchParams.get("tag")?.trim();
   if (singleTag) tags.push(singleTag);
-  const difficulty = parseDifficultyFilter(searchParams);
+  const difficultyBand = searchParams.get("difficultyBand")?.trim().toLowerCase();
+  const difficulty =
+    difficultyBand && isLuoguDifficultyBandId(difficultyBand)
+      ? getDifficultyValuesForLuoguBand(difficultyBand)
+      : parseDifficultyFilter(searchParams);
   const userStatus = parseUserStatusFilter(searchParams.get("userStatus"));
   const problemStatus = parseProblemStatusFilter(searchParams.get("status"));
   const page = parseIntParam(searchParams.get("page"), 1);
@@ -102,6 +107,14 @@ export async function GET(req: NextRequest) {
     where.OR = [
       { title: { contains: keyword, mode: "insensitive" } },
       { slug: { contains: keyword, mode: "insensitive" } },
+      { source: { contains: keyword, mode: "insensitive" } },
+      {
+        aliases: {
+          some: {
+            value: { contains: keyword, mode: "insensitive" },
+          },
+        },
+      },
       ...(normalizedKeyword
         ? [
             {

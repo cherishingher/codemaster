@@ -22,14 +22,10 @@ import { Baby, BarChart3, BrainCircuit, Code2, Crown, Grid2X2, LogOut, User } fr
 
 const navItems = [
   { href: "/problems", label: "题库" },
-  { href: "/training-paths", label: "训练路径" },
   { href: "/contests", label: "比赛" },
-  { href: "/camps", label: "训练营" },
-  { href: "/products", label: "商品" },
   { href: "/learn", label: "视频学习" },
   { href: "/discuss", label: "社区" },
   { href: "/submissions", label: "提交" },
-  { href: "/graphical", label: "图形化" },
 ]
 
 export function Navbar() {
@@ -90,7 +86,7 @@ export function Navbar() {
 
         <nav
           className={cn(
-            "flex min-w-0 flex-1 items-center justify-center gap-2 overflow-x-auto text-sm font-semibold",
+            "grid min-w-0 flex-1 grid-cols-5 items-center gap-2 px-2 text-sm font-semibold",
             isProblemWorkspace ? "pb-0" : "pb-1"
           )}
         >
@@ -101,7 +97,7 @@ export function Navbar() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "focus-ring inline-flex shrink-0 items-center rounded-full transition-all",
+                  "focus-ring inline-flex w-full items-center justify-center rounded-full text-center transition-all",
                   isProblemWorkspace ? "px-4 py-2 text-sm" : "px-4 py-2.5 text-base",
                   active
                     ? "border-2 border-border bg-primary text-primary-foreground shadow-[5px_5px_0_hsl(var(--border))]"

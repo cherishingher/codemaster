@@ -13,3 +13,4 @@ apps/web/.next/
 apps/web/node_modules/
 tmp/
 backups/
+problem-batch-out/

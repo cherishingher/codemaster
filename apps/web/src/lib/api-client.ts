@@ -140,6 +140,90 @@ export const api = {
         }),
     },
   },
+  discussions: {
+    posts: {
+      list: <T = unknown>(params?: Record<string, string>) => client<T>("/discussions/posts", { params }),
+      get: <T = unknown>(id: string) => client<T>(`/discussions/posts/${id}`),
+      create: <T = unknown>(body: unknown) =>
+        client<T>("/discussions/posts", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      update: <T = unknown>(id: string, body: unknown) =>
+        client<T>(`/discussions/posts/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        }),
+      delete: <T = unknown>(id: string) =>
+        client<T>(`/discussions/posts/${id}`, {
+          method: "DELETE",
+        }),
+      comments: <T = unknown>(id: string, params?: Record<string, string>) =>
+        client<T>(`/discussions/posts/${id}/comments`, { params }),
+      createComment: <T = unknown>(id: string, body: unknown) =>
+        client<T>(`/discussions/posts/${id}/comments`, {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      like: <T = unknown>(id: string) =>
+        client<T>(`/discussions/posts/${id}/likes`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        }),
+      unlike: <T = unknown>(id: string) =>
+        client<T>(`/discussions/posts/${id}/likes`, {
+          method: "DELETE",
+        }),
+      favorite: <T = unknown>(id: string) =>
+        client<T>(`/discussions/posts/${id}/favorites`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        }),
+      unfavorite: <T = unknown>(id: string) =>
+        client<T>(`/discussions/posts/${id}/favorites`, {
+          method: "DELETE",
+        }),
+    },
+    comments: {
+      update: <T = unknown>(id: string, body: unknown) =>
+        client<T>(`/discussions/comments/${id}`, {
+          method: "PATCH",
+          body: JSON.stringify(body),
+        }),
+      delete: <T = unknown>(id: string) =>
+        client<T>(`/discussions/comments/${id}`, {
+          method: "DELETE",
+        }),
+      like: <T = unknown>(id: string) =>
+        client<T>(`/discussions/comments/${id}/likes`, {
+          method: "POST",
+          body: JSON.stringify({}),
+        }),
+      unlike: <T = unknown>(id: string) =>
+        client<T>(`/discussions/comments/${id}/likes`, {
+          method: "DELETE",
+        }),
+    },
+    reports: {
+      create: <T = unknown>(body: unknown) =>
+        client<T>("/discussions/reports", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+    },
+    moderation: {
+      setBestComment: <T = unknown>(postId: string, commentId: string) =>
+        client<T>(`/discussions/moderation/posts/${postId}/best-comment`, {
+          method: "POST",
+          body: JSON.stringify({ commentId }),
+        }),
+      markSolved: <T = unknown>(postId: string, isSolved: boolean) =>
+        client<T>(`/discussions/moderation/posts/${postId}/solve`, {
+          method: "POST",
+          body: JSON.stringify({ isSolved }),
+        }),
+    },
+  },
   camps: {
     list: <T = unknown>(params?: Record<string, string>) => client<T>("/camps", { params }),
     get: <T = unknown>(id: string) => client<T>(`/camps/${id}`),

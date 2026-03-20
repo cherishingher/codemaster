@@ -79,6 +79,99 @@ enum FileAssetKind {
   TASK_PACKAGE
 }
 
+enum DiscussionPostType {
+  problem_discussion
+  solution
+  contest_discussion
+  question
+  experience
+  feedback
+  announcement
+  general
+}
+
+enum DiscussionAuditStatus {
+  pending
+  approved
+  rejected
+  manual_review
+}
+
+enum DiscussionDisplayStatus {
+  visible
+  hidden
+  shadow_hidden
+}
+
+enum DiscussionPublishStatus {
+  immediate
+  scheduled
+  delayed_by_contest
+}
+
+enum DiscussionPinScope {
+  none
+  global
+  problem
+  contest
+  category
+}
+
+enum DiscussionTagType {
+  topic
+  algorithm
+  language
+  official
+}
+
+enum DiscussionTagStatus {
+  active
+  disabled
+}
+
+enum DiscussionTargetType {
+  post
+  comment
+}
+
+enum DiscussionReportReasonCode {
+  spoiler
+  advertisement
+  abuse
+  plagiarism
+  flood
+  illegal_content
+  other
+}
+
+enum DiscussionReportStatus {
+  pending
+  processing
+  accepted
+  rejected
+  closed
+}
+
+enum DiscussionModerationActionType {
+  approve
+  reject
+  hide
+  unhide
+  lock
+  unlock
+  pin
+  unpin
+  feature
+  unfeature
+  recommend
+  unrecommend
+  delete
+  restore
+  mark_best_comment
+  mark_solved
+  unmark_solved
+}
+
 enum FileStorageProvider {
   LOCAL_FILE
   S3
@@ -151,6 +244,8 @@ model User {
   standardSolutionsUploaded           StandardSolution[]                  @relation("StandardSolutionUploader")
   testdataGenerationTasksRequested    TestdataGenerationTask[]            @relation("TestdataGenerationRequester")
   fileAssetsCreated                   FileAsset[]                         @relation("FileAssetCreator")
+  discussionPosts                     DiscussionPost[]
+  discussionComments                  DiscussionComment[]
 }
 
 model VerificationCode {
@@ -225,6 +320,7 @@ model Problem {
   hustojMap               HustojProblemMap?
   campTasks               CampTask[]
   testdataGenerationTasks TestdataGenerationTask[]
+  discussionPosts         DiscussionPost[]
 
   @@index([difficulty])
   @@index([status, visible, defunct, publishedAt])
@@ -481,6 +577,7 @@ model Contest {
   registrations       ContestRegistration[]
   reports             ContestReport[]
   unlockRules         ContestUnlockRule[]
+  discussionPosts     DiscussionPost[]
 
   @@index([status, sortOrder])
   @@index([visibility, status, sortOrder])
@@ -1355,6 +1452,211 @@ model PointRedemption {
 
   @@index([userId, createdAt])
   @@index([productId, status, createdAt])
+}
+
+model DiscussionPost {
+  id                String                  @id @default(cuid())
+  authorId          String
+  postType          DiscussionPostType
+  title             String
+  contentMarkdown   String
+  contentHtml       String?
+  contentPlain      String?
+  excerpt           String?
+  problemId         String?
+  contestId         String?
+  bestCommentId     String?
+  acceptedById      String?
+  auditStatus       DiscussionAuditStatus   @default(pending)
+  displayStatus     DiscussionDisplayStatus @default(visible)
+  publishStatus     DiscussionPublishStatus @default(immediate)
+  publishAt         DateTime?
+  isLocked          Boolean                 @default(false)
+  isDeleted         Boolean                 @default(false)
+  deletedAt         DateTime?
+  deletedBy         String?
+  isPinned          Boolean                 @default(false)
+  pinScope          DiscussionPinScope      @default(none)
+  isFeatured        Boolean                 @default(false)
+  isRecommended     Boolean                 @default(false)
+  isOfficial        Boolean                 @default(false)
+  isSolved          Boolean                 @default(false)
+  solvedAt          DateTime?
+  riskLevel         Int                     @default(0)
+  riskFlags         Json?
+  commentCount      Int                     @default(0)
+  replyCount        Int                     @default(0)
+  likeCount         Int                     @default(0)
+  favoriteCount     Int                     @default(0)
+  viewCount         Int                     @default(0)
+  reportCount       Int                     @default(0)
+  hotScore          Decimal                 @default(0) @db.Decimal(18, 6)
+  lastCommentAt     DateTime?
+  lastCommentUserId String?
+  metadata          Json?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  author            User                    @relation(fields: [authorId], references: [id])
+  problem           Problem?                @relation(fields: [problemId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  contest           Contest?                @relation(fields: [contestId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  comments          DiscussionComment[]
+  tags              DiscussionPostTag[]
+  likes             DiscussionPostLike[]
+  favorites         DiscussionPostFavorite[]
+
+  @@index([authorId, createdAt])
+  @@index([problemId, auditStatus, displayStatus, publishAt, createdAt])
+  @@index([contestId, auditStatus, displayStatus, publishAt, createdAt])
+  @@index([postType, auditStatus, displayStatus, publishAt, createdAt])
+  @@index([publishStatus, publishAt])
+  @@index([isPinned, isFeatured, isRecommended, createdAt])
+  @@index([displayStatus, auditStatus, publishAt, hotScore])
+  @@index([postType, isSolved, lastCommentAt, createdAt])
+  @@index([lastCommentAt])
+}
+
+model DiscussionComment {
+  id              String                  @id @default(cuid())
+  postId          String
+  authorId        String
+  rootCommentId   String?
+  parentCommentId String?
+  replyToUserId   String?
+  contentMarkdown String
+  contentHtml     String?
+  contentPlain    String?
+  depth           Int                     @default(1)
+  floorNo         Int                     @default(0)
+  auditStatus     DiscussionAuditStatus   @default(approved)
+  displayStatus   DiscussionDisplayStatus @default(visible)
+  isDeleted       Boolean                 @default(false)
+  deletedAt       DateTime?
+  deletedBy       String?
+  likeCount       Int                     @default(0)
+  replyCount      Int                     @default(0)
+  reportCount     Int                     @default(0)
+  riskLevel       Int                     @default(0)
+  riskFlags       Json?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  post            DiscussionPost          @relation(fields: [postId], references: [id])
+  author          User                    @relation(fields: [authorId], references: [id])
+  likes           DiscussionCommentLike[]
+
+  @@index([postId, rootCommentId, depth, createdAt])
+  @@index([parentCommentId, createdAt])
+  @@index([postId, auditStatus, displayStatus, isDeleted, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model DiscussionTag {
+  id        String              @id @default(cuid())
+  tagName   String              @unique
+  tagSlug   String              @unique
+  tagType   DiscussionTagType   @default(topic)
+  status    DiscussionTagStatus @default(active)
+  postCount Int                 @default(0)
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  posts     DiscussionPostTag[]
+
+  @@index([tagType, postCount])
+  @@index([status, postCount])
+}
+
+model DiscussionPostTag {
+  postId    String
+  tagId     String
+  createdAt DateTime       @default(now())
+  post      DiscussionPost @relation(fields: [postId], references: [id])
+  tag       DiscussionTag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@index([tagId, postId])
+}
+
+model DiscussionPostLike {
+  postId    String
+  userId    String
+  createdAt DateTime       @default(now())
+  post      DiscussionPost @relation(fields: [postId], references: [id])
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@index([postId, createdAt])
+}
+
+model DiscussionCommentLike {
+  commentId String
+  userId    String
+  createdAt DateTime          @default(now())
+  comment   DiscussionComment @relation(fields: [commentId], references: [id])
+
+  @@id([commentId, userId])
+  @@index([userId, createdAt])
+  @@index([commentId, createdAt])
+}
+
+model DiscussionPostFavorite {
+  postId    String
+  userId    String
+  createdAt DateTime       @default(now())
+  post      DiscussionPost @relation(fields: [postId], references: [id])
+
+  @@id([postId, userId])
+  @@index([userId, createdAt])
+  @@index([postId, createdAt])
+}
+
+model DiscussionReport {
+  id           String                     @id @default(cuid())
+  reporterId   String
+  targetType   DiscussionTargetType
+  targetId     String
+  reasonCode   DiscussionReportReasonCode
+  reasonText   String?
+  evidenceJson Json?
+  status       DiscussionReportStatus     @default(pending)
+  handledById  String?
+  handledAt    DateTime?
+  resultNote   String?
+  createdAt    DateTime                   @default(now())
+  updatedAt    DateTime                   @updatedAt
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([targetType, targetId, status, createdAt])
+  @@index([status, createdAt])
+  @@index([reporterId, createdAt])
+}
+
+model DiscussionAuditLog {
+  id           String                @id @default(cuid())
+  targetType   DiscussionTargetType
+  targetId     String
+  auditStatus  DiscussionAuditStatus
+  operatorId   String?
+  reason       String?
+  snapshotJson Json?
+  createdAt    DateTime              @default(now())
+
+  @@index([targetType, targetId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([auditStatus, createdAt])
+}
+
+model DiscussionModerationAction {
+  id         String                         @id @default(cuid())
+  targetType DiscussionTargetType
+  targetId   String
+  actionType DiscussionModerationActionType
+  operatorId String
+  reason     String?
+  extraJson  Json?
+  createdAt  DateTime                       @default(now())
+
+  @@index([targetType, targetId, createdAt])
+  @@index([operatorId, createdAt])
+  @@index([actionType, createdAt])
 }
 
 model Post {
