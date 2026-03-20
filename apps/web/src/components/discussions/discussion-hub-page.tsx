@@ -4,18 +4,25 @@ import * as React from "react"
 import Link from "next/link"
 import { useSearchParams } from "next/navigation"
 import useSWR from "swr"
-import { BookOpen, Filter, Flame, MessageSquare, PenSquare, Search } from "lucide-react"
+import { AlertTriangle, BookOpen, Filter, Flame, MessageSquare, PenSquare, Search } from "lucide-react"
 import { ApiError, api } from "@/lib/api-client"
 import {
+  type DiscussionQuestionHelpMode,
   type DiscussionPostSort,
   type DiscussionPostType,
   type DiscussionPostListResponse,
   type DiscussionPostDetailResponse,
   DISCUSSION_POST_TYPE_OPTIONS,
+  DISCUSSION_QUESTION_HELP_MODE_OPTIONS,
   DISCUSSION_SORT_OPTIONS,
+  buildStructuredQuestionMarkdown,
   formatDiscussionDateTime,
+  getDiscussionBodyPlaceholder,
+  getDiscussionComposerHint,
+  getDiscussionContextBinding,
   getDiscussionPostTypeLabel,
   getDiscussionPostTypeTone,
+  getDiscussionTitlePlaceholder,
 } from "@/lib/discussions"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
 import { useAuth } from "@/lib/hooks/use-auth"
@@ -24,8 +31,21 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 
 const PAGE_SIZE = 12
+const COMPOSER_TEXTAREA_CLASS =
+  "min-h-[220px] w-full rounded-[1.2rem] border-[3px] border-border bg-white px-4 py-3 text-sm shadow-[6px_6px_0_hsl(var(--border))] outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+const STRUCTURED_TEXTAREA_CLASS =
+  "min-h-[120px] w-full rounded-[1.2rem] border-[3px] border-border bg-white px-4 py-3 text-sm shadow-[6px_6px_0_hsl(var(--border))] outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
+
+type QuestionDraft = {
+  helpMode: DiscussionQuestionHelpMode
+  attemptSummary: string
+  stuckPoint: string
+  errorMessage: string
+  extraContext: string
+}
 
 function isDiscussionPostType(value: string | null): value is DiscussionPostType {
   return DISCUSSION_POST_TYPE_OPTIONS.some((item) => item.value === value)
@@ -40,6 +60,16 @@ function resolveInitialPostType(value: string | null, problemId: string, contest
   if (problemId) return "problem_discussion"
   if (contestId) return "contest_discussion"
   return "question"
+}
+
+function createEmptyQuestionDraft(): QuestionDraft {
+  return {
+    helpMode: "hint",
+    attemptSummary: "",
+    stuckPoint: "",
+    errorMessage: "",
+    extraContext: "",
+  }
 }
 
 export function DiscussionHubPage() {
@@ -65,6 +95,7 @@ export function DiscussionHubPage() {
     problemId: "",
     contestId: "",
   })
+  const [questionDraft, setQuestionDraft] = React.useState<QuestionDraft>(createEmptyQuestionDraft())
 
   React.useEffect(() => {
     const keyword = searchParams.get("keyword") ?? ""
@@ -148,11 +179,78 @@ export function DiscussionHubPage() {
     [],
   )
 
+  const composerBinding = React.useMemo(
+    () => getDiscussionContextBinding(postForm.postType),
+    [postForm.postType],
+  )
+
+  const changePostType = React.useCallback((nextType: DiscussionPostType) => {
+    setPostForm((current) => ({
+      ...current,
+      postType: nextType,
+      problemId:
+        nextType === "contest_discussion" ? "" : current.problemId,
+      contestId:
+        nextType === "problem_discussion" || nextType === "solution" ? "" : current.contestId,
+    }))
+  }, [])
+
+  const validateComposer = React.useCallback(() => {
+    const title = postForm.title.trim()
+    if (title.length < 2) {
+      return "标题至少需要 2 个字。"
+    }
+
+    if (composerBinding.requiresProblem && !postForm.problemId.trim()) {
+      return "当前帖子类型必须绑定题目。"
+    }
+
+    if (composerBinding.requiresContest && !postForm.contestId.trim()) {
+      return "当前帖子类型必须绑定比赛。"
+    }
+
+    if (postForm.postType === "question") {
+      if (!questionDraft.attemptSummary.trim()) {
+        return "问答帖需要先写清你已经尝试过什么。"
+      }
+
+      if (!questionDraft.stuckPoint.trim()) {
+        return "问答帖需要写清你具体卡在哪里。"
+      }
+
+      return null
+    }
+
+    if (!postForm.contentMarkdown.trim()) {
+      return "请先填写正文内容。"
+    }
+
+    return null
+  }, [composerBinding.requiresContest, composerBinding.requiresProblem, postForm, questionDraft.attemptSummary, questionDraft.stuckPoint])
+
   const submitPost = React.useCallback(async () => {
     if (!loggedIn) {
       setErrorMessage("登录后才能发布讨论")
       return
     }
+
+    const validationMessage = validateComposer()
+    if (validationMessage) {
+      setErrorMessage(validationMessage)
+      setMessage("")
+      return
+    }
+
+    const contentMarkdown =
+      postForm.postType === "question"
+        ? buildStructuredQuestionMarkdown({
+            helpMode: questionDraft.helpMode,
+            attemptSummary: questionDraft.attemptSummary,
+            stuckPoint: questionDraft.stuckPoint,
+            errorMessage: questionDraft.errorMessage,
+            extraContext: questionDraft.extraContext,
+          })
+        : postForm.contentMarkdown.trim()
 
     setSubmitting(true)
     setMessage("")
@@ -161,7 +259,7 @@ export function DiscussionHubPage() {
       const response = await api.discussions.posts.create<DiscussionPostDetailResponse>({
         postType: postForm.postType,
         title: postForm.title.trim(),
-        contentMarkdown: postForm.contentMarkdown.trim(),
+        contentMarkdown,
         problemId: postForm.problemId.trim() || undefined,
         contestId: postForm.contestId.trim() || undefined,
       })
@@ -179,13 +277,14 @@ export function DiscussionHubPage() {
         title: "",
         contentMarkdown: "",
       }))
+      setQuestionDraft(createEmptyQuestionDraft())
       await mutate()
     } catch (error) {
       setErrorMessage(error instanceof ApiError ? error.message : "发布失败")
     } finally {
       setSubmitting(false)
     }
-  }, [loggedIn, mutate, postForm])
+  }, [loggedIn, mutate, postForm, questionDraft, validateComposer])
 
   return (
     <div className="page-wrap py-10 md:py-14">
@@ -330,15 +429,24 @@ export function DiscussionHubPage() {
                 登录后才能发帖、评论、点赞和收藏。
               </div>
             ) : null}
+            <div className="rounded-[1.3rem] border-[2px] border-primary/20 bg-primary/10 px-4 py-4 text-sm leading-7 text-foreground">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <AlertTriangle className="size-4 text-primary" />
+                发帖规则
+              </div>
+              <p className="mt-2 text-sm text-muted-foreground">{getDiscussionComposerHint(postForm.postType)}</p>
+              <div className="mt-3 flex flex-wrap gap-2">
+                {composerBinding.requiresProblem ? <Badge variant="secondary">必须绑定题目</Badge> : null}
+                {composerBinding.requiresContest ? <Badge variant="secondary">必须绑定比赛</Badge> : null}
+                {postForm.postType === "question" ? <Badge variant="secondary">结构化提问</Badge> : null}
+                {postForm.postType === "solution" ? <Badge variant="secondary">可能延迟公开</Badge> : null}
+                {postForm.postType === "contest_discussion" ? <Badge variant="secondary">比赛期更严格审核</Badge> : null}
+              </div>
+            </div>
             <select
               className="h-11 w-full rounded-[1.2rem] border-[3px] border-border bg-white px-3 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
               value={postForm.postType}
-              onChange={(event) =>
-                setPostForm((current) => ({
-                  ...current,
-                  postType: event.target.value as DiscussionPostType,
-                }))
-              }
+              onChange={(event) => changePostType(event.target.value as DiscussionPostType)}
               disabled={!loggedIn}
             >
               {createOptions.map((option) => (
@@ -348,37 +456,137 @@ export function DiscussionHubPage() {
               ))}
             </select>
             <Input
-              placeholder="标题，例如：这题为什么不能直接二分答案？"
+              placeholder={getDiscussionTitlePlaceholder(postForm.postType)}
               value={postForm.title}
               onChange={(event) => setPostForm((current) => ({ ...current, title: event.target.value }))}
               disabled={!loggedIn}
             />
             <div className="grid gap-3 md:grid-cols-2">
               <Input
-                placeholder="题目 ID（题目讨论/题解建议填写）"
+                placeholder={composerBinding.requiresProblem ? "题目 ID（必填）" : "题目 ID（选填）"}
                 value={postForm.problemId}
                 onChange={(event) => setPostForm((current) => ({ ...current, problemId: event.target.value }))}
-                disabled={!loggedIn}
+                disabled={!loggedIn || postForm.postType === "contest_discussion"}
               />
               <Input
-                placeholder="比赛 ID（比赛讨论建议填写）"
+                placeholder={composerBinding.requiresContest ? "比赛 ID（必填）" : "比赛 ID（选填）"}
                 value={postForm.contestId}
                 onChange={(event) => setPostForm((current) => ({ ...current, contestId: event.target.value }))}
-                disabled={!loggedIn}
+                disabled={!loggedIn || postForm.postType === "problem_discussion" || postForm.postType === "solution"}
               />
             </div>
-            <textarea
-              className="min-h-[220px] w-full rounded-[1.2rem] border-[3px] border-border bg-white px-4 py-3 text-sm shadow-[6px_6px_0_hsl(var(--border))] outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
-              placeholder="支持 Markdown。可以写思路、问题、代码片段、赛后复盘或经验总结。"
-              value={postForm.contentMarkdown}
-              onChange={(event) =>
-                setPostForm((current) => ({
-                  ...current,
-                  contentMarkdown: event.target.value,
-                }))
-              }
-              disabled={!loggedIn}
-            />
+            {postForm.postType === "question" ? (
+              <div className="space-y-4 rounded-[1.3rem] border-[2px] border-border/70 bg-card px-4 py-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="discussion-help-mode">希望得到哪类帮助</Label>
+                    <select
+                      id="discussion-help-mode"
+                      className="h-11 w-full rounded-[1.2rem] border-[3px] border-border bg-white px-3 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
+                      value={questionDraft.helpMode}
+                      onChange={(event) =>
+                        setQuestionDraft((current) => ({
+                          ...current,
+                          helpMode: event.target.value as DiscussionQuestionHelpMode,
+                        }))
+                      }
+                      disabled={!loggedIn}
+                    >
+                      {DISCUSSION_QUESTION_HELP_MODE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label} · {option.description}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="rounded-[1.2rem] border-[2px] border-dashed border-border bg-background px-4 py-3 text-xs leading-6 text-muted-foreground">
+                    问答帖会自动整理成固定模板，便于别人快速看懂你的背景、尝试过程和卡点。
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-attempt-summary">我已经尝试过什么</Label>
+                  <textarea
+                    id="discussion-attempt-summary"
+                    className={STRUCTURED_TEXTAREA_CLASS}
+                    placeholder="写清你已经尝试过的思路、数据结构、写法或调试方向。"
+                    value={questionDraft.attemptSummary}
+                    onChange={(event) =>
+                      setQuestionDraft((current) => ({
+                        ...current,
+                        attemptSummary: event.target.value,
+                      }))
+                    }
+                    disabled={!loggedIn}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="discussion-stuck-point">我具体卡在哪里</Label>
+                  <textarea
+                    id="discussion-stuck-point"
+                    className={STRUCTURED_TEXTAREA_CLASS}
+                    placeholder="描述你不确定的边界、错误原因、复杂度瓶颈或具体疑问。"
+                    value={questionDraft.stuckPoint}
+                    onChange={(event) =>
+                      setQuestionDraft((current) => ({
+                        ...current,
+                        stuckPoint: event.target.value,
+                      }))
+                    }
+                    disabled={!loggedIn}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="discussion-error-message">报错或异常现象（选填）</Label>
+                    <textarea
+                      id="discussion-error-message"
+                      className={STRUCTURED_TEXTAREA_CLASS}
+                      placeholder="例如：第 3 组超时、重复元素时多弹一次、答案在大数据下偏小。"
+                      value={questionDraft.errorMessage}
+                      onChange={(event) =>
+                        setQuestionDraft((current) => ({
+                          ...current,
+                          errorMessage: event.target.value,
+                        }))
+                      }
+                      disabled={!loggedIn}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="discussion-extra-context">补充代码片段 / 样例 / 输入输出（选填）</Label>
+                    <textarea
+                      id="discussion-extra-context"
+                      className={STRUCTURED_TEXTAREA_CLASS}
+                      placeholder="可以贴最小复现代码片段、关键样例、你自己的分析，不建议直接求完整 AC 代码。"
+                      value={questionDraft.extraContext}
+                      onChange={(event) =>
+                        setQuestionDraft((current) => ({
+                          ...current,
+                          extraContext: event.target.value,
+                        }))
+                      }
+                      disabled={!loggedIn}
+                    />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <textarea
+                className={COMPOSER_TEXTAREA_CLASS}
+                placeholder={getDiscussionBodyPlaceholder(postForm.postType)}
+                value={postForm.contentMarkdown}
+                onChange={(event) =>
+                  setPostForm((current) => ({
+                    ...current,
+                    contentMarkdown: event.target.value,
+                  }))
+                }
+                disabled={!loggedIn}
+              />
+            )}
             <Button onClick={submitPost} disabled={!loggedIn || submitting}>
               <MessageSquare className="size-4" />
               {submitting ? "发布中..." : "发布讨论"}

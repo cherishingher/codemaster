@@ -11,6 +11,8 @@ import {
   type DiscussionMutationResponse,
   type DiscussionPostDetailResponse,
   formatDiscussionDateTime,
+  getDiscussionCommentPlaceholder,
+  getDiscussionComposerHint,
   getDiscussionPostTypeLabel,
   getDiscussionPostTypeTone,
 } from "@/lib/discussions"
@@ -336,8 +338,8 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
               ) : null}
               <div className="rounded-[1.2rem] border-[2px] border-border/70 bg-card px-4 py-4 text-sm text-muted-foreground">
                 {post.postType === "question"
-                  ? "问答帖支持最佳回复与已解决状态。"
-                  : "题目讨论、题解和比赛复盘都共享统一的评论区与互动能力。"}
+                  ? "问答帖支持最佳回复与已解决状态。提问时建议优先描述思路和卡点，回复时优先给方向、边界与错因。"
+                  : getDiscussionComposerHint(post.postType)}
               </div>
             </CardContent>
           </Card>
@@ -358,7 +360,9 @@ export function DiscussionTopicPage({ topicId }: DiscussionTopicPageProps) {
               ) : null}
               <textarea
                 className="min-h-[180px] w-full rounded-[1.2rem] border-[3px] border-border bg-white px-4 py-3 text-sm shadow-[6px_6px_0_hsl(var(--border))] outline-none focus-visible:ring-4 focus-visible:ring-primary/15"
-                placeholder={loggedIn ? "支持 Markdown，写下你的补充、疑问或建议。" : "登录后才能参与评论。"}
+                placeholder={
+                  loggedIn ? getDiscussionCommentPlaceholder(post.postType) : "登录后才能参与评论。"
+                }
                 value={commentValue}
                 onChange={(event) => setCommentValue(event.target.value)}
                 disabled={!loggedIn}

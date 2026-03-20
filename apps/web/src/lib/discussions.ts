@@ -12,6 +12,8 @@ export type DiscussionPostSort = "newest" | "hot" | "featured" | "unsolved"
 
 export type DiscussionTargetType = "post" | "comment"
 
+export type DiscussionQuestionHelpMode = "hint" | "bug_fix" | "complexity" | "concept"
+
 export type DiscussionReportReasonCode =
   | "spoiler"
   | "advertisement"
@@ -151,6 +153,17 @@ export const DISCUSSION_REPORT_REASON_OPTIONS: Array<{
   { value: "other", label: "其他" },
 ]
 
+export const DISCUSSION_QUESTION_HELP_MODE_OPTIONS: Array<{
+  value: DiscussionQuestionHelpMode
+  label: string
+  description: string
+}> = [
+  { value: "hint", label: "思路提醒", description: "只想确认方向、状态设计或关键转化" },
+  { value: "bug_fix", label: "查错定位", description: "代码或思路大体对，但边界、判定或细节有误" },
+  { value: "complexity", label: "复杂度优化", description: "当前做法能过样例，但复杂度可能不够" },
+  { value: "concept", label: "概念理解", description: "不理解算法、性质或题意里的某个点" },
+]
+
 export function getDiscussionPostTypeLabel(type: DiscussionPostType) {
   const match = DISCUSSION_POST_TYPE_OPTIONS.find((item) => item.value === type)
   return match?.label ?? type
@@ -159,6 +172,118 @@ export function getDiscussionPostTypeLabel(type: DiscussionPostType) {
 export function getDiscussionSortLabel(sort: DiscussionPostSort) {
   const match = DISCUSSION_SORT_OPTIONS.find((item) => item.value === sort)
   return match?.label ?? sort
+}
+
+export function getDiscussionTitlePlaceholder(type: DiscussionPostType) {
+  switch (type) {
+    case "question":
+      return "例如：这题为什么单调栈在重复元素时会多弹一次？"
+    case "problem_discussion":
+      return "例如：这题样例二为什么不能直接贪心？"
+    case "solution":
+      return "例如：P1001 题解：单调队列 + 二分答案"
+    case "contest_discussion":
+      return "例如：NOIP 模拟赛 Round 3 赛后复盘"
+    case "experience":
+      return "例如：从入门到提高的刷题节奏怎么安排？"
+    case "feedback":
+      return "例如：题目页评论入口在移动端被遮挡"
+    case "announcement":
+      return "例如：讨论区发布规范更新"
+    default:
+      return "输入讨论标题"
+  }
+}
+
+export function getDiscussionComposerHint(type: DiscussionPostType) {
+  switch (type) {
+    case "question":
+      return "问答帖建议按模板写清已尝试内容和具体卡点，默认优先求思路、边界和错因，不直接索要整份 AC 代码。"
+    case "problem_discussion":
+      return "题目讨论必须绑定题目，适合交流题意理解、边界情况、样例歧义和常见误区。"
+    case "solution":
+      return "题解帖必须绑定题目。若题目处于进行中的比赛，后端会自动延迟公开，避免剧透。"
+    case "contest_discussion":
+      return "比赛讨论必须绑定比赛。比赛进行中禁止贴代码、正解和关键结论，普通用户发布会更严格审核。"
+    case "experience":
+      return "经验帖适合沉淀训练路径、错题复盘、学习方法和阶段性总结。"
+    case "feedback":
+      return "站务反馈请尽量写清复现路径、期望行为和影响范围。"
+    case "announcement":
+      return "公告帖仅管理员可发布。"
+    default:
+      return "讨论区优先服务算法学习、做题交流、比赛复盘和题解沉淀。"
+  }
+}
+
+export function getDiscussionBodyPlaceholder(type: DiscussionPostType) {
+  switch (type) {
+    case "problem_discussion":
+      return "围绕题意理解、样例、边界、判题规则或错误思路展开。尽量先给自己的分析，再提疑问。"
+    case "solution":
+      return "建议按“核心思路 / 正确性 / 复杂度 / 关键代码片段”来组织题解。"
+    case "contest_discussion":
+      return "可以写赛前准备、赛后复盘、心态总结和比赛体验。比赛进行中请不要贴解法和代码。"
+    case "experience":
+      return "分享训练计划、错题总结、阶段复盘或学习建议。"
+    case "feedback":
+      return "说明问题现象、复现步骤、期望行为和设备环境。"
+    case "announcement":
+      return "写明规则、时间点、影响范围或公告详情。"
+    default:
+      return "支持 Markdown。"
+  }
+}
+
+export function getDiscussionCommentPlaceholder(type: DiscussionPostType) {
+  switch (type) {
+    case "question":
+      return "优先指出思路、边界、错因或复杂度问题，尽量不要直接贴整份 AC 代码。"
+    case "problem_discussion":
+      return "补充你对题意、边界或样例的理解，也可以指出容易踩坑的地方。"
+    case "solution":
+      return "可以讨论正确性、复杂度、代码实现细节或更优写法。"
+    case "contest_discussion":
+      return "赛中避免剧透，赛后可以复盘策略、卡点和时间分配。"
+    default:
+      return "支持 Markdown，写下你的补充、疑问或建议。"
+  }
+}
+
+export function getDiscussionContextBinding(type: DiscussionPostType) {
+  return {
+    requiresProblem: type === "problem_discussion" || type === "solution",
+    requiresContest: type === "contest_discussion",
+  }
+}
+
+export function buildStructuredQuestionMarkdown(input: {
+  helpMode: DiscussionQuestionHelpMode
+  attemptSummary: string
+  stuckPoint: string
+  errorMessage?: string
+  extraContext?: string
+}) {
+  const helpModeLabel =
+    DISCUSSION_QUESTION_HELP_MODE_OPTIONS.find((item) => item.value === input.helpMode)?.label ?? input.helpMode
+
+  const sections = [
+    `## 求助类型\n${helpModeLabel}`,
+    `## 我已经尝试过\n${input.attemptSummary.trim()}`,
+    `## 当前卡点\n${input.stuckPoint.trim()}`,
+  ]
+
+  if (input.errorMessage?.trim()) {
+    sections.push(`## 报错或异常现象\n${input.errorMessage.trim()}`)
+  }
+
+  if (input.extraContext?.trim()) {
+    sections.push(`## 补充信息\n${input.extraContext.trim()}`)
+  }
+
+  sections.push("## 求助边界\n请优先指出思路、边界条件或错误原因；如果需要给代码，请只给关键片段，不直接贴整份 AC 代码。")
+
+  return sections.join("\n\n")
 }
 
 export function getDiscussionPostTypeTone(type: DiscussionPostType) {

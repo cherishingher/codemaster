@@ -982,6 +982,11 @@ export default function ProblemDetailPage() {
                   </Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
+                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>
+                    提问求助
+                  </Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
                   <a href="#problem-solutions">题解与视频</a>
                 </Button>
                 <Button asChild size="sm" variant="outline">
