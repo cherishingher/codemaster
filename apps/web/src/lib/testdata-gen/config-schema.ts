@@ -31,6 +31,14 @@ const ArrayGeneratorSchema = z.object({
   }),
 })
 
+const ScalarsGeneratorSchema = z.object({
+  type: z.literal("scalars"),
+  params: z.object({
+    layout: z.array(z.number().int().positive()).min(1),
+    value: NumericRangeSchema,
+  }),
+})
+
 const StringGeneratorSchema = z.object({
   type: z.literal("string"),
   params: z.object({
@@ -108,6 +116,7 @@ const GridQueriesGeneratorSchema = z.object({
 })
 
 const GeneratorSchema = z.discriminatedUnion("type", [
+  ScalarsGeneratorSchema,
   ArrayGeneratorSchema,
   StringGeneratorSchema,
   IntervalsGeneratorSchema,

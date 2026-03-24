@@ -5,11 +5,17 @@ export type NumericRangeSpec = {
 }
 
 export type TestdataGeneratorType =
+  | "scalars"
   | "array"
   | "string"
   | "intervals"
   | "queries"
   | "grid_queries"
+
+export type ScalarsGeneratorParams = {
+  layout: number[]
+  value: NumericRangeSpec
+}
 
 export type ArrayGeneratorParams = {
   n: NumericRangeSpec
@@ -75,6 +81,7 @@ export type GridQueriesGeneratorParams = {
 }
 
 export type GeneratorConfig =
+  | { type: "scalars"; params: ScalarsGeneratorParams }
   | { type: "array"; params: ArrayGeneratorParams }
   | { type: "string"; params: StringGeneratorParams }
   | { type: "intervals"; params: IntervalsGeneratorParams }

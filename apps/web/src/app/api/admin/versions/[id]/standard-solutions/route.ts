@@ -4,6 +4,7 @@ import { z } from "zod"
 import { withAuth } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { createStoredFileAsset } from "@/lib/file-assets"
+import { problemModeSupportsCode, resolveProblemAdminMode } from "@/lib/problem-admin"
 
 const JsonPayloadSchema = z.object({
   source: z.string().min(1),
@@ -71,10 +72,28 @@ export const GET = withAuth(async (_req, { params }) => {
 export const POST = withAuth(async (req, { params }, user) => {
   const version = await db.problemVersion.findUnique({
     where: { id: params.id },
-    select: { id: true },
+    select: {
+      id: true,
+      problem: {
+        select: {
+          tags: {
+            include: { tag: true },
+          },
+        },
+      },
+    },
   })
   if (!version) {
     return NextResponse.json({ error: "version_not_found" }, { status: 404 })
+  }
+  const problemMode = resolveProblemAdminMode({
+    tags: version.problem.tags.map((item) => item.tag.name),
+  })
+  if (!problemModeSupportsCode(problemMode)) {
+    return NextResponse.json(
+      { error: "scratch_problem_not_supported", message: "Scratch 题不需要上传标准输入输出标程。" },
+      { status: 422 }
+    )
   }
 
   const contentType = req.headers.get("content-type") ?? ""

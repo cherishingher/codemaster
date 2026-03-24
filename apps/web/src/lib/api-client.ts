@@ -16,10 +16,28 @@ export class ApiError extends Error {
   }
 }
 
+const ERROR_MESSAGE_MAP: Record<string, string> = {
+  problem_id_required: "缺少题目标识，无法提交。",
+  problem_not_found: "题目不存在或当前不可见。",
+  problem_version_not_found: "题目当前没有可用版本，暂时不能提交。",
+  testcases_not_configured: "当前题目还没有配置测试点，暂时不能提交。",
+  scratch_rules_not_configured: "当前 Scratch 题还没有配置评测规则，暂时不能提交。",
+  scratch_project_invalid: "Scratch 项目文件无效，请重新导入后再提交。",
+  scratch_rules_incomplete: "当前 Scratch 评测规则不完整，暂时不能提交。",
+  judge_queue_failed: "评测任务入队失败，请稍后重试。",
+  hustoj_submit_failed: "提交到评测机失败，请稍后重试。",
+};
+
 function getErrorMessage(data: unknown, fallback: string) {
   if (data && typeof data === "object" && "message" in data) {
     const message = (data as { message?: unknown }).message;
     if (typeof message === "string") return message;
+  }
+  if (data && typeof data === "object" && "error" in data) {
+    const errorCode = (data as { error?: unknown }).error;
+    if (typeof errorCode === "string") {
+      return ERROR_MESSAGE_MAP[errorCode] ?? errorCode;
+    }
   }
   return fallback;
 }
@@ -410,6 +428,24 @@ export const api = {
         overview: <T = unknown>() => client<T>("/admin/analytics/learning/overview"),
         trends: <T = unknown>() => client<T>("/admin/analytics/learning/trends"),
       },
+    },
+    dataKit: {
+      overview: <T = unknown>() => client<T>("/admin/data-kit/overview"),
+      generate: <T = unknown>(body: unknown) =>
+        client<T>("/admin/data-kit/generate", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      validate: <T = unknown>(body: unknown) =>
+        client<T>("/admin/data-kit/validate", {
+          method: "POST",
+          body: JSON.stringify(body),
+        }),
+      selfTest: <T = unknown>() =>
+        client<T>("/admin/data-kit/self-test", {
+          method: "POST",
+          body: JSON.stringify({}),
+        }),
     },
     storeProducts: {
       list: <T = unknown>(params?: Record<string, string>) =>

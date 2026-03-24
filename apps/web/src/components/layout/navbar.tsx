@@ -49,6 +49,10 @@ export function Navbar() {
     pathname?.startsWith("/problems/") &&
     pathname.split("/").filter(Boolean).length === 2
 
+  if (isProblemWorkspace) {
+    return null
+  }
+
   return (
     <header className="sticky top-0 z-50 border-b border-border/10 bg-background/88 px-3 py-3 backdrop-blur-xl md:px-4">
       <div className="mx-auto w-full max-w-[var(--page-max)]">

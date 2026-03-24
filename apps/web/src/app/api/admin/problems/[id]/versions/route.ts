@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { withAuth } from "@/lib/authz";
-import { buildJudgeConfigCreateManyInput } from "@/lib/problem-admin";
+import {
+  buildJudgeConfigCreateManyInput,
+  problemModeSupportsScratch,
+  resolveProblemAdminMode,
+} from "@/lib/problem-admin";
 import { maybeBuildScratchRuleDraft } from "@/lib/scratch-rule-draft";
 import { Prisma } from "@prisma/client";
 
@@ -47,6 +51,7 @@ export const GET = withAuth(async (_req, { params }) => {
     return NextResponse.json({ error: "problem_not_found" }, { status: 404 })
   }
   const tags = problem.tags.map((item) => item.tag.name)
+  const problemMode = resolveProblemAdminMode({ tags })
 
   const versions = await db.problemVersion.findMany({
     where: { problemId: problem.id },
@@ -70,11 +75,14 @@ export const GET = withAuth(async (_req, { params }) => {
       inputFormat: v.inputFormat,
       outputFormat: v.outputFormat,
       samples: v.samples,
-      scratchRules: v.scratchRules ?? maybeBuildScratchRuleDraft({
-        statement: v.statement,
-        statementMd: v.statementMd,
-        tags,
-      }),
+      scratchRules: problemModeSupportsScratch(problemMode)
+        ? v.scratchRules ??
+          maybeBuildScratchRuleDraft({
+            statement: v.statement,
+            statementMd: v.statementMd,
+            tags,
+          })
+        : null,
       testdataGenerationConfig: v.testdataGenerationConfig,
       notes: v.notes,
       timeLimitMs: v.timeLimitMs,
@@ -141,12 +149,15 @@ export const POST = withAuth(async (req, { params }) => {
     });
 
     const nextVersion = (latest?.version ?? 0) + 1;
-    const tags = problem?.tags.map((item) => item.tag.name);
-    const scratchRules = maybeBuildScratchRuleDraft({
-      statement: payload.statement,
-      statementMd: payload.statementMd,
-      tags,
-    });
+    const tags = problem.tags.map((item) => item.tag.name);
+    const problemMode = resolveProblemAdminMode({ tags });
+    const scratchRules = problemModeSupportsScratch(problemMode)
+      ? maybeBuildScratchRuleDraft({
+          statement: payload.statement,
+          statementMd: payload.statementMd,
+          tags,
+        })
+      : null;
 
     const version = await tx.problemVersion.create({
       data: {

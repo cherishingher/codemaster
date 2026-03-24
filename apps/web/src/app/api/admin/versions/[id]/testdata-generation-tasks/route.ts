@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server"
 import { Prisma, type TestdataGenerationTaskStatus } from "@prisma/client"
 import { z } from "zod"
+import { execFile } from "child_process"
+import { promisify } from "util"
+import fs from "fs"
+import path from "path"
 import { withAuth } from "@/lib/authz"
 import { db } from "@/lib/db"
 import { createStoredFileAsset } from "@/lib/file-assets"
+import { readStoredTextAssetByUri } from "@/lib/file-assets"
+import { problemModeSupportsCode, resolveProblemAdminMode } from "@/lib/problem-admin"
 import { analyzeProblemForTestdata } from "@/lib/problem-analysis"
 import { pushTestdataGenerationJob } from "@/lib/queue"
 import { generatePlannedCase, validateAndPlanTestdataConfig } from "@/lib/testdata-gen"
@@ -15,6 +21,8 @@ import {
   TESTDATA_QUEUE_NAME,
   toInputJsonValue,
 } from "@/lib/testdata-gen/task-utils"
+
+const execFileAsync = promisify(execFile)
 
 const CreateTaskSchema = z.object({
   standardSolutionId: z.string().min(1),
@@ -29,6 +37,82 @@ function parsePagination(req: NextRequest) {
   const page = Math.max(1, Number.parseInt(searchParams.get("page") ?? "1", 10) || 1)
   const pageSize = Math.min(100, Math.max(1, Number.parseInt(searchParams.get("pageSize") ?? "20", 10) || 20))
   return { page, pageSize }
+}
+
+function resolveTestdataExecutionMode() {
+  const raw = process.env.TESTDATA_GENERATION_EXECUTION_MODE?.trim().toLowerCase()
+  if (raw === "queue") return "queue"
+  return "inline"
+}
+
+function resolveInlineRunnerScriptPath() {
+  const candidates = [
+    path.resolve(process.cwd(), "apps/web/scripts/run-testdata-generation-task.mts"),
+    path.resolve(process.cwd(), "scripts/run-testdata-generation-task.mts"),
+  ]
+  const matched = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!matched) {
+    throw new Error("inline_runner_script_not_found")
+  }
+  return matched
+}
+
+function resolveTsxBinaryPath() {
+  const candidates = [
+    path.resolve(process.cwd(), "node_modules/.bin/tsx"),
+    path.resolve(process.cwd(), "../node_modules/.bin/tsx"),
+    path.resolve(process.cwd(), "../../node_modules/.bin/tsx"),
+  ]
+  const matched = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!matched) {
+    throw new Error("tsx_binary_not_found")
+  }
+  return matched
+}
+
+function resolveWebTsconfigPath() {
+  const candidates = [
+    path.resolve(process.cwd(), "apps/web/tsconfig.json"),
+    path.resolve(process.cwd(), "tsconfig.json"),
+    path.resolve(process.cwd(), "../apps/web/tsconfig.json"),
+  ]
+  const matched = candidates.find((candidate) => fs.existsSync(candidate))
+  if (!matched) {
+    throw new Error("web_tsconfig_not_found")
+  }
+  return matched
+}
+
+async function runTaskInline(taskId: string) {
+  const scriptPath = resolveInlineRunnerScriptPath()
+  const tsxBinary = resolveTsxBinaryPath()
+  const tsconfigPath = resolveWebTsconfigPath()
+  const runnerEnv = {
+    ...process.env,
+    TESTDATA_RUNNER_MODE: process.env.TESTDATA_RUNNER_MODE ?? "docker",
+  }
+  const { stdout, stderr } = await execFileAsync(
+    tsxBinary,
+    ["--tsconfig", tsconfigPath, scriptPath, "--taskId", taskId, "--workerId", `inline-${process.pid}`],
+    {
+      cwd: process.cwd(),
+      env: runnerEnv,
+      maxBuffer: 4 * 1024 * 1024,
+    }
+  ).catch((error: Error & { stdout?: string; stderr?: string }) => {
+    throw new Error(
+      [
+        "inline_generation_failed",
+        error.message,
+        error.stderr?.trim(),
+        error.stdout?.trim(),
+      ]
+        .filter(Boolean)
+        .join(": ")
+    )
+  })
+
+  return { stdout, stderr }
 }
 
 export const GET = withAuth(async (req, { params }) => {
@@ -121,6 +205,15 @@ export const POST = withAuth(async (req, { params }, user) => {
   if (!version) {
     return NextResponse.json({ error: "version_not_found" }, { status: 404 })
   }
+  const problemMode = resolveProblemAdminMode({
+    tags: version.problem.tags.map((item) => item.tag.name),
+  })
+  if (!problemModeSupportsCode(problemMode)) {
+    return NextResponse.json(
+      { error: "scratch_problem_not_supported", message: "Scratch 题不使用标准输入输出测试点生成任务。" },
+      { status: 422 }
+    )
+  }
   const standardSolution = await db.standardSolution.findUnique({
     where: { id: payload.standardSolutionId },
     include: {
@@ -139,6 +232,8 @@ export const POST = withAuth(async (req, { params }, user) => {
     return NextResponse.json({ error: "solution_not_found" }, { status: 404 })
   }
 
+  const standardSolutionSource = await readStoredTextAssetByUri(standardSolution.sourceAsset?.uri).catch(() => null)
+
   let generationConfig: unknown = version.testdataGenerationConfig
   let configSource: "saved_config" | "auto_analysis" = "saved_config"
 
@@ -156,6 +251,8 @@ export const POST = withAuth(async (req, { params }, user) => {
       title: version.problem.title,
       statement: version.statement,
       statementMd: version.statementMd,
+      solutionSource: standardSolutionSource,
+      solutionLanguage: standardSolution.language,
       constraints: version.constraints,
       inputFormat: version.inputFormat,
       outputFormat: version.outputFormat,
@@ -290,33 +387,81 @@ export const POST = withAuth(async (req, { params }, user) => {
     return task
   })
 
-  await pushTestdataGenerationJob(
-    summarizeTaskForQueue({
-      task: created,
-      language: standardSolution.language,
-      codeUri: standardSolution.sourceAsset.uri,
-      configSnapshot,
-      timeLimitMs: version.timeLimitMs,
-      memoryLimitMb: version.memoryLimitMb,
-    })
-  )
+  let inlineExecutionError: string | null = null
+
+  if (resolveTestdataExecutionMode() === "queue") {
+    await pushTestdataGenerationJob(
+      summarizeTaskForQueue({
+        task: created,
+        language: standardSolution.language,
+        codeUri: standardSolution.sourceAsset.uri,
+        configSnapshot,
+        timeLimitMs: version.timeLimitMs,
+        memoryLimitMb: version.memoryLimitMb,
+      })
+    )
+  } else {
+    try {
+      await runTaskInline(created.id)
+    } catch (error) {
+      inlineExecutionError = error instanceof Error ? error.message : String(error)
+    }
+  }
+
+  const refreshed = await db.testdataGenerationTask.findUnique({
+    where: { id: created.id },
+    select: {
+      id: true,
+      problemVersionId: true,
+      standardSolutionId: true,
+      status: true,
+      stage: true,
+      mode: true,
+      seed: true,
+      plannedCaseCount: true,
+      generatedCaseCount: true,
+      persistedCaseCount: true,
+      createdAt: true,
+      errorCode: true,
+      errorMessage: true,
+    },
+  })
+
+  if (!refreshed) {
+    return NextResponse.json({ error: "task_not_found_after_create" }, { status: 500 })
+  }
+
+  if (inlineExecutionError && refreshed.status === "PENDING") {
+    return NextResponse.json(
+      {
+        error: "inline_generation_failed",
+        message: "测试点生成未能直接执行，请检查本地生成环境。",
+        detail: inlineExecutionError,
+        task: refreshed,
+      },
+      { status: 500 }
+    )
+  }
 
   return NextResponse.json({
     ok: true,
     task: {
-      id: created.id,
-      problemVersionId: created.problemVersionId,
-      standardSolutionId: created.standardSolutionId,
-      status: created.status,
-      stage: created.stage,
-      mode: created.mode,
-      seed: created.seed,
-      plannedCaseCount: created.plannedCaseCount,
-      generatedCaseCount: created.generatedCaseCount,
-      persistedCaseCount: created.persistedCaseCount,
+      id: refreshed.id,
+      problemVersionId: refreshed.problemVersionId,
+      standardSolutionId: refreshed.standardSolutionId,
+      status: refreshed.status,
+      stage: refreshed.stage,
+      mode: refreshed.mode,
+      seed: refreshed.seed,
+      plannedCaseCount: refreshed.plannedCaseCount,
+      generatedCaseCount: refreshed.generatedCaseCount,
+      persistedCaseCount: refreshed.persistedCaseCount,
       configSource,
-      createdAt: created.createdAt,
+      errorCode: refreshed.errorCode,
+      errorMessage: refreshed.errorMessage,
+      createdAt: refreshed.createdAt,
     },
+    ...(inlineExecutionError ? { warning: inlineExecutionError } : {}),
   }, { status: 201 })
 }, { roles: "admin" })
 

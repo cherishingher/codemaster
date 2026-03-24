@@ -117,11 +117,23 @@ export function getDefaultJudgeConfigs(input: {
   memoryLimitMb?: number | null;
 }) {
   const tags = (input.tags ?? []).map((tag) => tag.toLowerCase());
-  const scratchOnly = tags.some((tag) => tag.includes("scratch"));
+  const hasScratch = tags.some(
+    (tag) =>
+      tag.includes("scratch") ||
+      tag.includes("图形化") ||
+      tag.includes("sb3")
+  );
+  const hasExplicitCode = tags.some(
+    (tag) =>
+      tag === "c++" ||
+      tag === "cpp" ||
+      tag === "python" ||
+      tag === "py"
+  );
+  const supportsCode = hasExplicitCode || !hasScratch;
 
-  const base: DefaultJudgeConfig[] = scratchOnly
-    ? []
-    : [
+  const base: DefaultJudgeConfig[] = supportsCode
+    ? [
         {
           language: "cpp17",
           languageId: LanguageId.CPP17,
@@ -158,9 +170,10 @@ export function getDefaultJudgeConfigs(input: {
           isDefault: false,
           sortOrder: 40,
         },
-      ];
+      ]
+    : [];
 
-  if (tags.some((tag) => tag.includes("scratch"))) {
+  if (hasScratch) {
     base.push({
       language: tags.some((tag) => tag.includes("必"))
         ? "scratch-must"

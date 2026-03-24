@@ -1,5 +1,6 @@
 import { parseTestdataGenerationConfig } from "@/lib/testdata-gen/config-schema"
 import { planTestdataCases } from "@/lib/testdata-gen/planner"
+import { scalarsGenerator } from "@/lib/testdata-gen/generators/scalars"
 import { arrayGenerator } from "@/lib/testdata-gen/generators/array"
 import { stringGenerator } from "@/lib/testdata-gen/generators/string"
 import { intervalsGenerator } from "@/lib/testdata-gen/generators/intervals"
@@ -20,6 +21,10 @@ export {
 
 export function generatePlannedCase(plan: CasePlan): GeneratedCase {
   switch (plan.generator.type) {
+    case "scalars": {
+      const params = scalarsGenerator.validateParams(plan.generator.params)
+      return scalarsGenerator.generate({ seed: plan.caseSeed }, params)
+    }
     case "array": {
       const params = arrayGenerator.validateParams(plan.generator.params)
       return arrayGenerator.generate({ seed: plan.caseSeed }, params)

@@ -1,7 +1,7 @@
 "use client"
 
 import * as React from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import useSWR from "swr"
 import Link from "next/link"
 import { api, ApiError } from "@/lib/api-client"
@@ -20,8 +20,6 @@ import { Breadcrumbs } from "@/components/ui/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
 import { AiTutorPanel } from "@/components/ai/ai-tutor-panel"
 import { ProblemSolutionsPanel } from "@/components/solutions/problem-solutions-panel"
-import { PageHeader } from "@/components/patterns/page-header"
-import { StatusBadge } from "@/components/patterns/status-badge"
 import { ProblemTabs } from "@/components/problems/problem-tabs"
 import { SubmitBar } from "@/components/problems/submit-bar"
 import {
@@ -227,6 +225,7 @@ function isHiddenProblemTag(tag: string) {
 }
 
 export default function ProblemDetailPage() {
+  const router = useRouter()
   const params = useParams()
   const rawId = params.id
   const id = Array.isArray(rawId) ? rawId[0] : rawId
@@ -358,7 +357,8 @@ export default function ProblemDetailPage() {
         if (storageKey) {
           sessionStorage.setItem(storageKey, res.submissionId)
         }
-        toast.success("提交成功，正在评测...")
+        toast.success("提交成功，正在跳转到评测详情...")
+        router.push(`/submissions/${res.submissionId}`)
       } else {
         toast.error("提交失败: 未返回 Submission ID")
       }
@@ -915,67 +915,41 @@ export default function ProblemDetailPage() {
       className={cn(
         isScratch
           ? "mx-auto w-full max-w-[min(100vw-0.5rem,1920px)] px-1 py-1 md:px-2 md:py-2"
-          : "page-wrap py-4 md:py-6"
+          : "page-wrap py-2 md:py-3"
       )}
     >
     {!isScratch ? (
-      <div className="mb-4">
-        <PageHeader
-          eyebrow="Problem Workspace"
-          title={problem?.title ?? "题目详情"}
-          description="题目详情页统一成 PageTitle + Action Bar + 双栏工作区。题面、讨论和提示分开组织，避免把提问、题解和正文搅在一起。"
-          meta={
-            <>
-              <span>阅读题面</span>
+      <div className="mb-3 rounded-[1.5rem] border-[3px] border-border bg-card px-4 py-3 shadow-[8px_8px_0_hsl(var(--border))]">
+        <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+          <div className="min-w-0 space-y-2">
+            <Breadcrumbs
+              items={[
+                { label: "题库", href: "/problems" },
+                { label: problem?.title || "题目详情" },
+              ]}
+            />
+            <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>{limitText || "默认限制"}</span>
               <span>·</span>
-              <span>编码提交</span>
+              <span>{language.label}</span>
               <span>·</span>
-              <span>讨论求助</span>
-              <span>·</span>
-              <span>提示与题解</span>
-            </>
-          }
-          actions={
-            <div className="flex flex-wrap gap-3">
-              {problem?.slug ? (
-                <Button asChild variant="secondary">
-                  <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>查看该题提交</Link>
-                </Button>
-              ) : null}
-              <Button asChild variant="outline">
-                <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>提问求助</Link>
-              </Button>
-              <Button asChild variant="outline">
-                <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>进入讨论</Link>
-              </Button>
+              <span>{visibleTags.length ? `${visibleTags.length} 个标签` : "无标签"}</span>
             </div>
-          }
-          aside={
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {visibleTags.length ? (
-                  visibleTags.map((tag) => (
-                    <Badge key={`${problem?.id ?? id}-${tag}`} variant="outline" className={getTagClass(tag)}>
-                      {tag}
-                    </Badge>
-                  ))
-                ) : (
-                  <StatusBadge>无标签</StatusBadge>
-                )}
-              </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">评测限制</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{limitText ?? "默认限制"}</p>
-                </div>
-                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">当前模式</p>
-                  <p className="mt-2 text-sm font-semibold text-foreground">{isScratch ? "Scratch" : language.label}</p>
-                </div>
-              </div>
-            </div>
-          }
-        />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            {problem?.slug ? (
+              <Button asChild size="sm" variant="secondary">
+                <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>查看提交</Link>
+              </Button>
+            ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>提问</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>讨论</Link>
+            </Button>
+          </div>
+        </div>
       </div>
     ) : null}
     <div
@@ -984,7 +958,7 @@ export default function ProblemDetailPage() {
         "flex flex-col gap-3 md:min-h-0 md:flex-row md:overflow-hidden",
         isScratch
           ? "min-h-0"
-          : "min-h-[calc(100vh-14rem)] md:h-[calc(100vh-18rem)]"
+          : "min-h-[calc(100vh-10rem)] md:h-[calc(100vh-11.5rem)]"
       )}
       style={isScratch && scratchViewportHeight ? { height: `${scratchViewportHeight}px` } : undefined}
     >
@@ -996,25 +970,20 @@ export default function ProblemDetailPage() {
           "flex-1 rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-y-auto md:overscroll-contain",
           isScratch
             ? "p-3 md:w-[16rem] md:flex-none md:self-stretch md:px-4 md:py-4 lg:w-[17rem] xl:w-[18rem]"
-            : "p-4 md:w-1/2 md:p-5"
+            : "p-3 md:w-[46%] md:p-4"
         )}
       >
-        <div className="mb-3">
-           <Breadcrumbs items={[
-             { label: "题库", href: "/problems" },
-             { label: problem?.title || "题目详情" }
-           ]} />
-        </div>
         <div className="mb-2 flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-bold">{problem?.title ?? "加载中..."}</h1>
+          <h1 className="text-[1.7rem] font-bold leading-tight">{problem?.title ?? "加载中..."}</h1>
           {problem?.visibility && problem.visibility !== "public" ? (
             <span className="rounded-md border border-orange-500/40 bg-orange-500/10 px-2 py-0.5 text-xs text-orange-700">
               未公开
             </span>
           ) : null}
         </div>
+        <div className="mb-3 flex flex-wrap items-center gap-2">
         {visibleTags.length ? (
-          <div className="mb-3 flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             {visibleTags.map((tag) => (
               <Badge key={`${problem.id}-${tag}`} variant="outline" className={getTagClass(tag)}>
                 {tag}
@@ -1022,49 +991,34 @@ export default function ProblemDetailPage() {
             ))}
           </div>
         ) : null}
-        {limitText ? <div className="mb-3 text-xs text-muted-foreground">{limitText}</div> : null}
+        {limitText ? <div className="text-xs text-muted-foreground">{limitText}</div> : null}
+        </div>
         {!isScratch ? (
-          <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-              <div className="space-y-1">
-                <div className="text-sm font-semibold text-foreground">操作速览</div>
-                <div className="text-xs text-muted-foreground">
-                  先完成提交，再按需要查看题解、视频解析或专题内容包。
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {problem?.slug ? (
-                  <Button asChild size="sm" variant="secondary">
-                    <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
-                      查看该题提交
-                    </Link>
-                  </Button>
-                ) : null}
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>
-                    题目讨论
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>
-                    提问求助
-                  </Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <a href="#problem-solutions">题解与视频</a>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/products?type=membership">开通 VIP</Link>
-                </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link href="/content-packs">内容包专区</Link>
-                </Button>
-              </div>
-            </div>
+          <div className="mb-3 flex flex-wrap gap-2">
+            {problem?.slug ? (
+              <Button asChild size="sm" variant="secondary">
+                <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
+                  查看该题提交
+                </Link>
+              </Button>
+            ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>
+                题目讨论
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>
+                提问求助
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <a href="#problem-solutions">题解与视频</a>
+            </Button>
           </div>
         ) : null}
         {!isScratch ? (
-          <div className="mb-4">
+          <div className="mb-3">
             <ProblemTabs
               value={problemTab}
               onValueChange={setProblemTab}
@@ -1247,7 +1201,7 @@ export default function ProblemDetailPage() {
       <div
         className={cn(
           "flex min-w-0 flex-col rounded-[1.8rem] border-[3px] border-border bg-card shadow-[10px_10px_0_hsl(var(--border))] md:min-h-0 md:overflow-hidden",
-          isScratch ? "md:w-0 md:flex-1" : "md:w-1/2"
+          isScratch ? "md:w-0 md:flex-1" : "md:w-[54%]"
         )}
       >
         <SubmitBar
@@ -1311,7 +1265,7 @@ export default function ProblemDetailPage() {
         <div
           className={cn(
             "flex flex-col md:min-h-0 md:flex-1 md:overscroll-contain",
-            isScratch ? "gap-0 p-0 md:overflow-hidden" : "gap-4 p-4 md:overflow-y-auto"
+            isScratch ? "gap-0 p-0 md:overflow-hidden" : "gap-3 p-3 md:overflow-y-auto"
           )}
         >
           {isScratch ? (
@@ -1377,7 +1331,7 @@ export default function ProblemDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="h-[56vh] min-h-[360px]">
+            <div className="h-[62vh] min-h-[420px]">
               <CodeEditor
                 value={code}
                 onChange={(val) => {

@@ -1,4 +1,5 @@
 import type { GeneratorConfig, TestdataGeneratorType } from "@/lib/testdata-gen/types"
+import { scalarsGenerator } from "@/lib/testdata-gen/generators/scalars"
 import { arrayGenerator } from "@/lib/testdata-gen/generators/array"
 import { stringGenerator } from "@/lib/testdata-gen/generators/string"
 import { intervalsGenerator } from "@/lib/testdata-gen/generators/intervals"
@@ -6,6 +7,7 @@ import { queriesGenerator } from "@/lib/testdata-gen/generators/queries"
 import { gridQueriesGenerator } from "@/lib/testdata-gen/generators/grid-queries"
 
 const generators = {
+  scalars: scalarsGenerator,
   array: arrayGenerator,
   string: stringGenerator,
   intervals: intervalsGenerator,

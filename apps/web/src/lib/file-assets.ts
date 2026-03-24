@@ -1,5 +1,6 @@
 import path from "path"
 import { createHash } from "crypto"
+import { readFile } from "fs/promises"
 import { Prisma, type FileAssetKind, type FileStorageProvider } from "@prisma/client"
 import { db } from "@/lib/db"
 import { storeBufferAsset } from "@/lib/storage"
@@ -49,4 +50,12 @@ export async function createStoredFileAsset(options: CreateFileAssetOptions) {
       createdById: options.createdById ?? undefined,
     },
   })
+}
+
+export async function readStoredTextAssetByUri(uri?: string | null) {
+  if (!uri) return null
+  if (!uri.startsWith("file://")) return null
+
+  const filePath = new URL(uri).pathname
+  return readFile(filePath, "utf8")
 }

@@ -160,6 +160,75 @@ function buildArrayDraft(bounds: { nMax?: number; valueMax?: number }) {
   }
 }
 
+function buildScalarsDraft(bounds: { nMax?: number; mMax?: number; qMax?: number; valueMax?: number }, layout?: number[]) {
+  const scalarLayout = layout && layout.length > 0 ? layout : [2]
+  const valueMax = clampPositive(
+    bounds.valueMax ?? bounds.nMax ?? bounds.mMax ?? bounds.qMax ?? 10000,
+    10,
+    1000000000
+  )
+  const boundaryValues = [0, 1, -1, 2].filter((value, index, array) => array.indexOf(value) === index)
+  return {
+    version: 1,
+    groups: [
+      {
+        key: "sample",
+        title: "样例规模",
+        count: 2,
+        score: 0,
+        isSample: true,
+        visible: true,
+        generator: {
+          type: "scalars",
+          params: {
+            layout: scalarLayout,
+            value: { min: 0, max: Math.min(20, valueMax) },
+          },
+        },
+      },
+      {
+        key: "boundary",
+        title: "边界组",
+        count: 3,
+        score: 20,
+        generator: {
+          type: "scalars",
+          params: {
+            layout: scalarLayout,
+            value: { values: boundaryValues },
+          },
+        },
+      },
+      {
+        key: "random",
+        title: "随机组",
+        count: 5,
+        score: 35,
+        generator: {
+          type: "scalars",
+          params: {
+            layout: scalarLayout,
+            value: { min: -valueMax, max: valueMax },
+          },
+        },
+      },
+      {
+        key: "max",
+        title: "极值组",
+        count: 4,
+        score: 45,
+        generator: {
+          type: "scalars",
+          params: {
+            layout: scalarLayout,
+            value: { values: [valueMax, Math.max(1, valueMax - 1), -valueMax] },
+          },
+        },
+      },
+    ],
+  }
+}
+
 function buildStringDraft(bounds: { nMax?: number }) {
   const lengthMax = clampPositive(bounds.nMax ?? 100000, 16, 100000)
   return {
@@ -746,6 +815,21 @@ function buildScoreboard(input: ProblemAnalysisInput) {
   if ((features.bounds.nMax ?? 0) <= 3 || (features.bounds.qMax ?? 0) <= 3) {
     scoreboard.pitfalls.add("MIN_BOUNDARY")
   }
+  if (
+    scoreboard.generator.size === 0 &&
+    (features.formatHints.scalarLayout?.length || hasTag("入门", "模拟", "数学"))
+  ) {
+    addScore(scoreboard.category, "SCALAR_IO", 4)
+    addScore(scoreboard.structure, "SCALAR", 5)
+    addGeneratorScore(scoreboard, "scalars", 7, "SCALAR_IO_FALLBACK", {
+      ruleId: "scalars.detected",
+      message: "检测到基础标量输入结构，按标量题自动生成测试点",
+      source: features.formatHints.scalarLayout?.length ? "inputFormat" : "tags",
+    }, {
+      layout: features.formatHints.scalarLayout,
+      valueMax: features.bounds.valueMax ?? features.bounds.nMax ?? features.bounds.mMax ?? features.bounds.qMax,
+    })
+  }
   if (scoreboard.category.size === 0) {
     addScore(scoreboard.category, "BASIC_IO", 1)
     addScore(scoreboard.structure, "SCALAR", 1)
@@ -804,6 +888,13 @@ function buildSuggestedGroups(primary: GeneratorType | null, input: ProblemAnaly
         { key: "special", kind: "SPECIAL", targetCount: 2, goal: "覆盖稀疏可移动格局", recommendedGenerator: "grid_queries", paramsHint: { movableCellRatio: 0.55 }, focusRisks: ["MIN_BOUNDARY"] },
         { key: "max", kind: "MAX", targetCount: 3, goal: "覆盖最大棋盘和查询规模", recommendedGenerator: "grid_queries", paramsHint: { n: { max: features.bounds.nMax ?? 30 }, m: { max: features.bounds.mMax ?? 30 }, q: { max: features.bounds.qMax ?? 1000 } }, focusRisks: commonRisks },
       ]
+    case "scalars":
+      return [
+        { key: "sample", kind: "SAMPLE", targetCount: 2, goal: "覆盖最小标量输入", recommendedGenerator: "scalars", paramsHint: { layout: features.formatHints.scalarLayout ?? [2] }, focusRisks: ["MIN_BOUNDARY"] },
+        { key: "boundary", kind: "BOUNDARY", targetCount: 3, goal: "覆盖 0、1、-1 等边界值", recommendedGenerator: "scalars", paramsHint: { value: { values: [0, 1, -1] } }, focusRisks: ["MIN_BOUNDARY"] },
+        { key: "random", kind: "RANDOM", targetCount: 5, goal: "覆盖一般随机标量组合", recommendedGenerator: "scalars", paramsHint: { value: { max: features.bounds.valueMax ?? 1000000 } }, focusRisks: [] },
+        { key: "max", kind: "MAX", targetCount: 4, goal: "覆盖接近上界的数值", recommendedGenerator: "scalars", paramsHint: { value: { max: features.bounds.valueMax ?? features.bounds.nMax ?? 1000000000 } }, focusRisks: commonRisks },
+      ]
     default:
       return []
   }
@@ -830,6 +921,9 @@ function buildDraft(
       break
     case "grid_queries":
       draft = buildGridQueriesDraft(features.bounds)
+      break
+    case "scalars":
+      draft = buildScalarsDraft(features.bounds, features.formatHints.scalarLayout)
       break
     default:
       draft = null

@@ -26,6 +26,17 @@ const SubmitSchema = z.object({
   code: z.string().min(1),
 });
 
+function jsonError(error: string, status: number, message?: string, detail?: string) {
+  return NextResponse.json(
+    {
+      error,
+      ...(message ? { message } : {}),
+      ...(detail ? { detail } : {}),
+    },
+    { status }
+  );
+}
+
 function sortVersionTestcases(
   testcases: Array<{
     id: string;
@@ -49,7 +60,7 @@ export const POST = withAuth(async (req, { params }, user) => {
   const rawId = (resolvedParams as { id?: string | string[] } | undefined)?.id;
   const idOrSlug = Array.isArray(rawId) ? rawId[0] : rawId;
   if (!idOrSlug) {
-    return NextResponse.json({ error: "problem_id_required" }, { status: 400 });
+    return jsonError("problem_id_required", 400, "缺少题目标识，无法提交。");
   }
 
   const problem = await db.problem.findFirst({
@@ -66,7 +77,7 @@ export const POST = withAuth(async (req, { params }, user) => {
     },
   });
   if (!problem) {
-    return NextResponse.json({ error: "problem_not_found" }, { status: 404 });
+    return jsonError("problem_not_found", 404, "题目不存在或当前不可见。");
   }
 
   const canAccess =
@@ -76,29 +87,41 @@ export const POST = withAuth(async (req, { params }, user) => {
       (problem.visibility === "public" || problem.visibility === "contest")) ||
     user.roles.includes("admin");
   if (!canAccess) {
-    return NextResponse.json({ error: "problem_not_found" }, { status: 404 });
+    return jsonError("problem_not_found", 404, "题目不存在或当前不可见。");
   }
 
   const currentVersion = problem.currentVersion ?? problem.versions[0];
   if (!currentVersion) {
-    return NextResponse.json({ error: "problem_version_not_found" }, { status: 404 });
+    return jsonError("problem_version_not_found", 404, "题目当前没有可用版本，暂时不能提交。");
   }
 
   const languageId = getLanguageId(payload.language);
 
   if (isScratchLanguage(payload.language)) {
     if (!currentVersion.scratchRules) {
-      return NextResponse.json({ error: "scratch_rules_not_configured" }, { status: 400 });
+      return jsonError(
+        "scratch_rules_not_configured",
+        400,
+        "当前 Scratch 题还没有配置评测规则，暂时不能提交。"
+      );
     }
 
     const project = await parseScratchProjectCode(payload.code);
     if (!project) {
-      return NextResponse.json({ error: "scratch_project_invalid" }, { status: 400 });
+      return jsonError(
+        "scratch_project_invalid",
+        400,
+        "Scratch 项目文件无效，请重新导入后再提交。"
+      );
     }
 
     const rawRules = currentVersion.scratchRules as ScratchAnyRuleSet;
     if (!isSupportedScratchRuleSet(rawRules)) {
-      return NextResponse.json({ error: "scratch_rules_incomplete" }, { status: 400 });
+      return jsonError(
+        "scratch_rules_incomplete",
+        400,
+        "当前 Scratch 评测规则不完整，暂时不能提交。"
+      );
     }
 
     const submission = await db.submission.create({
@@ -145,7 +168,11 @@ export const POST = withAuth(async (req, { params }, user) => {
   );
 
   if (versionTestcases.length === 0) {
-    return NextResponse.json({ error: "testcases_not_configured" }, { status: 400 });
+    return jsonError(
+      "testcases_not_configured",
+      400,
+      "当前题目还没有配置测试点，暂时不能提交。"
+    );
   }
 
   if (process.env.ENABLE_LOCAL_RUNNER === "true") {
@@ -209,9 +236,11 @@ export const POST = withAuth(async (req, { params }, user) => {
           checkerMessage: "judge_queue_failed",
         },
       });
-      return NextResponse.json(
-        { error: "judge_queue_failed", detail },
-        { status: 503 }
+      return jsonError(
+        "judge_queue_failed",
+        503,
+        "评测任务入队失败，请稍后重试。",
+        detail
       );
     }
 
@@ -276,9 +305,11 @@ export const POST = withAuth(async (req, { params }, user) => {
         checkerMessage: "hustoj_submit_failed",
       },
     });
-    return NextResponse.json(
-      { error: "hustoj_submit_failed", detail },
-      { status: 400 }
+    return jsonError(
+      "hustoj_submit_failed",
+      400,
+      "提交到评测机失败，请稍后重试。",
+      detail
     );
   }
 

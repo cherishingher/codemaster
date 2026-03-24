@@ -230,6 +230,13 @@ function asInt(value: unknown, fallback = 0) {
   return Number.isFinite(parsed) ? Math.floor(parsed) : fallback
 }
 
+function parseOptionalPositiveInt(value: string) {
+  const trimmed = value.trim()
+  if (!trimmed) return undefined
+  const parsed = Number.parseInt(trimmed, 10)
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined
+}
+
 function formatJson(value: unknown) {
   if (value == null) return ""
   try {
@@ -286,8 +293,6 @@ const JUDGE_LANGUAGE_OPTIONS = [
   { value: "cpp14", label: "C++14" },
   { value: "cpp11", label: "C++11" },
   { value: "python", label: "Python" },
-  { value: "scratch-optional", label: "Scratch（可选）" },
-  { value: "scratch-must", label: "Scratch（必做）" },
 ]
 
 function getJudgeConfigPreset(language: string) {
@@ -302,16 +307,6 @@ function getJudgeConfigPreset(language: string) {
 if __name__ == "__main__":
     main()
 `,
-      }
-    case "scratch-optional":
-      return {
-        judgeMode: "scratch",
-        templateCode: "",
-      }
-    case "scratch-must":
-      return {
-        judgeMode: "scratch",
-        templateCode: "",
       }
     case "cpp14":
     case "cpp11":
@@ -332,6 +327,75 @@ int main() {
 }
 `,
       }
+  }
+}
+
+function isScratchTag(tag: string) {
+  const normalized = tag.trim().toLowerCase()
+  return (
+    normalized.includes("scratch") ||
+    normalized.includes("图形化") ||
+    normalized.includes("sb3")
+  )
+}
+
+function isCodeTag(tag: string) {
+  const normalized = tag.trim().toLowerCase()
+  return normalized === "c++" || normalized === "cpp" || normalized === "python" || normalized === "py"
+}
+
+function isScratchJudgeLanguage(language: string) {
+  const normalized = language.trim().toLowerCase()
+  return normalized === "sb3" || normalized.startsWith("scratch")
+}
+
+function resolveProblemWorkspaceMode(args: {
+  tags?: string[]
+  judgeConfigs?: Array<{ language: string }>
+}) {
+  const tags = args.tags ?? []
+  const hasScratchTag = tags.some(isScratchTag)
+  const hasExplicitCodeTag = tags.some(isCodeTag)
+  const hasScratchJudge = (args.judgeConfigs ?? []).some((config) =>
+    isScratchJudgeLanguage(config.language)
+  )
+  const hasCodeJudge = (args.judgeConfigs ?? []).some(
+    (config) => !isScratchJudgeLanguage(config.language)
+  )
+
+  if (hasScratchTag && hasExplicitCodeTag) return "hybrid" as const
+  if (hasScratchTag) return "scratch" as const
+  if (hasExplicitCodeTag) return "code" as const
+
+  const supportsScratch = hasScratchTag || hasScratchJudge
+  const supportsCode = hasExplicitCodeTag || hasCodeJudge || !supportsScratch
+
+  if (supportsScratch && supportsCode) return "hybrid" as const
+  if (supportsScratch) return "scratch" as const
+  return "code" as const
+}
+
+function getProblemModeLabel(mode: "code" | "scratch" | "hybrid") {
+  switch (mode) {
+    case "scratch":
+      return "Scratch 题"
+    case "hybrid":
+      return "双轨题"
+    case "code":
+    default:
+      return "代码题"
+  }
+}
+
+function getProblemModeDescription(mode: "code" | "scratch" | "hybrid") {
+  switch (mode) {
+    case "scratch":
+      return "当前题目按 Scratch 工作流管理：优先维护 Scratch 评测规则，不展示代码题的标程、测试点和 HUSTOJ 同步区。"
+    case "hybrid":
+      return "当前题目同时包含 Scratch 与代码轨道。后台会把两套配置拆开显示，避免再混在一个区块里编辑。"
+    case "code":
+    default:
+      return "当前题目按标准输入输出代码题管理：维护 Judge 配置、标程、测试点和自动造数据。"
   }
 }
 
@@ -483,6 +547,8 @@ export default function AdminProblemDetailPage() {
   const [standardSolutionUploading, setStandardSolutionUploading] = React.useState(false)
   const [standardSolutionResult, setStandardSolutionResult] = React.useState<ZipResult | null>(null)
   const [selectedStandardSolutionId, setSelectedStandardSolutionId] = React.useState("")
+  const [autoTestdataBusy, setAutoTestdataBusy] = React.useState(false)
+  const [autoTestdataResult, setAutoTestdataResult] = React.useState<ZipResult | null>(null)
   const [testdataTaskMode, setTestdataTaskMode] = React.useState<"APPEND" | "REPLACE_GENERATED" | "REPLACE_ALL">("REPLACE_GENERATED")
   const [testdataTaskCaseCount, setTestdataTaskCaseCount] = React.useState("10")
   const [testdataTaskTotalScore, setTestdataTaskTotalScore] = React.useState("100")
@@ -607,6 +673,34 @@ export default function AdminProblemDetailPage() {
   const selectedVersion = React.useMemo(
     () => versions.find((item) => item.id === selectedVersionId) ?? null,
     [selectedVersionId, versions]
+  )
+  const effectiveProblemTags = React.useMemo(
+    () => (selectedTags.length > 0 ? selectedTags : problem?.tags ?? []),
+    [problem?.tags, selectedTags]
+  )
+  const problemMode = React.useMemo(
+    () =>
+      resolveProblemWorkspaceMode({
+        tags: effectiveProblemTags,
+        judgeConfigs: selectedVersion?.judgeConfigs ?? [],
+      }),
+    [effectiveProblemTags, selectedVersion?.judgeConfigs]
+  )
+  const supportsCodeWorkflow = problemMode === "code" || problemMode === "hybrid"
+  const supportsScratchWorkflow = problemMode === "scratch" || problemMode === "hybrid"
+  const codeJudgeConfigEntries = React.useMemo(
+    () =>
+      judgeConfigsDraft
+        .map((config, index) => ({ config, index }))
+        .filter((item) => !isScratchJudgeLanguage(item.config.language)),
+    [judgeConfigsDraft]
+  )
+  const scratchJudgeConfigEntries = React.useMemo(
+    () =>
+      judgeConfigsDraft
+        .map((config, index) => ({ config, index }))
+        .filter((item) => isScratchJudgeLanguage(item.config.language)),
+    [judgeConfigsDraft]
   )
   const samplePreview = React.useMemo(
     () => parseProblemSamplesText(samples),
@@ -1306,65 +1400,51 @@ export default function AdminProblemDetailPage() {
     setTestdataConfigSaving(false)
   }
 
-  const analyzeTestdataGenerationConfig = async () => {
-    if (!selectedVersionId) return
-
-    setTestdataAnalysisLoading(true)
-    setTestdataConfigResult(null)
-
-    try {
-      const search = new URLSearchParams()
-      if (testdataTaskCaseCount.trim()) {
-        search.set("testcaseCount", testdataTaskCaseCount.trim())
-      }
-      if (testdataTaskTotalScore.trim()) {
-        search.set("totalScore", testdataTaskTotalScore.trim())
-      }
-      const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-analysis?${search.toString()}`, {
-        credentials: "include",
-      })
-      const text = await res.text()
-      let data: JsonObject | null = null
-      try {
-        data = asObject(JSON.parse(text))
-      } catch {
-        data = null
-      }
-
-      if (!res.ok) {
-        const message = data?.message ? String(data.message) : data?.error ? String(data.error) : text || res.statusText
-        throw new Error(message)
-      }
-
-      const analysis = asObject(data?.analysis) as TestdataAnalysisResult | null
-      setTestdataAnalysisResult(analysis)
-
-      if (data?.configDraft) {
-        setTestdataConfigText(JSON.stringify(data.configDraft, null, 2))
-        setTestdataConfigDirty(true)
-        const primary = analysis?.recommendations?.primaryGenerator?.type ?? "unknown"
-        const message = `已按题面分析生成 ${primary} 配置草稿；你现在可以直接创建任务，或先保存为高级配置`
-        setTestdataConfigResult({ type: "info", message })
-        toast.success("已生成测试数据配置草稿", { description: message })
-      } else {
-        const message = "已生成分析结果，但当前题型仍需要人工补充 generator 配置"
-        setTestdataConfigResult({ type: "info", message })
-        toast.message("需要人工补充配置", { description: message })
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "testdata_generation_analysis_failed"
-      setTestdataConfigResult({ type: "error", message })
-      toast.error("题目分析失败", { description: message })
+  const requestTestdataAnalysis = async (standardSolutionId?: string) => {
+    if (!selectedVersionId) {
+      throw new Error("请先选择题目版本")
     }
 
-    setTestdataAnalysisLoading(false)
+    const search = new URLSearchParams()
+    const testcaseCount = parseOptionalPositiveInt(testdataTaskCaseCount)
+    const totalScore = parseOptionalPositiveInt(testdataTaskTotalScore)
+    if (testcaseCount) {
+      search.set("testcaseCount", String(testcaseCount))
+    }
+    if (totalScore) {
+      search.set("totalScore", String(totalScore))
+    }
+    if (standardSolutionId) {
+      search.set("standardSolutionId", standardSolutionId)
+    }
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-analysis?${search.toString()}`, {
+      credentials: "include",
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      const message = data?.message ? String(data.message) : data?.error ? String(data.error) : text || res.statusText
+      throw new Error(message)
+    }
+
+    return {
+      analysis: asObject(data?.analysis) as TestdataAnalysisResult | null,
+      configDraft: data?.configDraft ?? null,
+    }
   }
 
-  const uploadStandardSolution = async () => {
-    if (!selectedVersionId || !standardSolutionFile) return
+  const requestUploadStandardSolution = async () => {
+    if (!selectedVersionId || !standardSolutionFile) {
+      throw new Error("请先选择版本并上传标程文件")
+    }
 
-    setStandardSolutionUploading(true)
-    setStandardSolutionResult(null)
     const form = new FormData()
     form.append("file", standardSolutionFile)
     form.append("language", standardSolutionLanguage)
@@ -1386,16 +1466,146 @@ export default function AdminProblemDetailPage() {
       data = null
     }
 
-    if (res.ok && data) {
-      const solution = asObject(data.solution)
-      const message = `已上传标程 ${String(solution?.label ?? standardSolutionFile.name)}`
+    if (!res.ok || !data) {
+      const message =
+        typeof data?.message === "string"
+          ? data.message
+          : data?.error
+            ? String(data.error)
+            : text || res.statusText
+      throw new Error(message)
+    }
+
+    const solution = asObject(data.solution)
+    return {
+      id: String(solution?.id ?? ""),
+      label: String(solution?.label ?? standardSolutionFile.name),
+    }
+  }
+
+  const requestSaveTestdataGenerationConfig = async (config: unknown) => {
+    if (!selectedVersionId) {
+      throw new Error("请先选择题目版本")
+    }
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-config`, {
+      method: "PUT",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(config),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (!res.ok) {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      throw new Error(message)
+    }
+  }
+
+  const requestCreateTestdataGenerationTask = async (standardSolutionId: string) => {
+    if (!selectedVersionId || !standardSolutionId) {
+      throw new Error("请先选择版本和标程")
+    }
+
+    const testcaseCount = parseOptionalPositiveInt(testdataTaskCaseCount)
+    if (!testcaseCount) {
+      throw new Error("请填写测试点个数")
+    }
+
+    const totalScore = parseOptionalPositiveInt(testdataTaskTotalScore)
+    const payload: Record<string, unknown> = {
+      standardSolutionId,
+      mode: testdataTaskMode,
+      testcaseCount,
+      seed: testdataTaskSeed.trim() || undefined,
+    }
+    if (totalScore) {
+      payload.totalScore = totalScore
+    }
+
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-tasks`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (!res.ok || !data) {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      throw new Error(message)
+    }
+
+    const task = asObject(data.task)
+    return {
+      id: String(task?.id ?? ""),
+      configSource: typeof task?.configSource === "string" ? task.configSource : "saved_config",
+      plannedCaseCount: String(task?.plannedCaseCount ?? 0),
+      persistedCaseCount: Number(task?.persistedCaseCount ?? 0),
+      status: typeof task?.status === "string" ? task.status : "",
+      errorMessage: typeof task?.errorMessage === "string" ? task.errorMessage : "",
+    }
+  }
+
+  const analyzeTestdataGenerationConfig = async () => {
+    if (!selectedVersionId) return
+
+    setTestdataAnalysisLoading(true)
+    setTestdataConfigResult(null)
+
+    try {
+      const { analysis, configDraft } = await requestTestdataAnalysis(selectedStandardSolutionId || undefined)
+      setTestdataAnalysisResult(analysis)
+
+      if (configDraft) {
+        setTestdataConfigText(JSON.stringify(configDraft, null, 2))
+        setTestdataConfigDirty(true)
+        const primary = analysis?.recommendations?.primaryGenerator?.type ?? "unknown"
+        const message = `已按题面、标签${selectedStandardSolutionId ? "和标程代码" : ""}分析生成 ${primary} 配置草稿；你现在可以直接创建任务，或先保存为高级配置`
+        setTestdataConfigResult({ type: "info", message })
+        toast.success("已生成测试数据配置草稿", { description: message })
+      } else {
+        const message = "已生成分析结果，但当前题型仍需要人工补充 generator 配置"
+        setTestdataConfigResult({ type: "info", message })
+        toast.message("需要人工补充配置", { description: message })
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "testdata_generation_analysis_failed"
+      setTestdataConfigResult({ type: "error", message })
+      toast.error("题目分析失败", { description: message })
+    }
+
+    setTestdataAnalysisLoading(false)
+  }
+
+  const uploadStandardSolution = async () => {
+    if (!selectedVersionId || !standardSolutionFile) return
+
+    setStandardSolutionUploading(true)
+    setStandardSolutionResult(null)
+    try {
+      const solution = await requestUploadStandardSolution()
+      const message = `已上传标程 ${solution.label}`
       setStandardSolutionResult({ type: "success", message })
       toast.success("标程上传成功", { description: message })
+      setSelectedStandardSolutionId(solution.id)
       setStandardSolutionFile(null)
       setStandardSolutionLabel("")
       await loadTestdataResources()
-    } else {
-      const message = data?.error ? String(data.error) : text || res.statusText
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "standard_solution_upload_failed"
       setStandardSolutionResult({ type: "error", message })
       toast.error("标程上传失败", { description: message })
     }
@@ -1408,45 +1618,106 @@ export default function AdminProblemDetailPage() {
 
     setTestdataTaskCreating(true)
     setTestdataTaskResult(null)
-    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-tasks`, {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        standardSolutionId: selectedStandardSolutionId,
-        mode: testdataTaskMode,
-        testcaseCount: Number(testdataTaskCaseCount || 0),
-        totalScore: Number(testdataTaskTotalScore || 0),
-        seed: testdataTaskSeed.trim() || undefined,
-      }),
-    })
-    const text = await res.text()
-    let data: JsonObject | null = null
     try {
-      data = asObject(JSON.parse(text))
-    } catch {
-      data = null
-    }
-
-    if (res.ok && data) {
-      const task = asObject(data.task)
-      const taskId = String(task?.id ?? "")
-      const configSource = typeof task?.configSource === "string" ? task.configSource : "saved_config"
-      const message = `已创建任务 ${taskId}，计划 ${String(task?.plannedCaseCount ?? 0)} 组，来源 ${configSource === "auto_analysis" ? "自动分析" : "已保存配置"}`
+      const task = await requestCreateTestdataGenerationTask(selectedStandardSolutionId)
+      const message =
+        task.status === "SUCCEEDED"
+          ? `已直接写入 ${task.persistedCaseCount} 个测试点，来源 ${task.configSource === "auto_analysis" ? "自动分析" : "已保存配置"}`
+          : `已创建任务 ${task.id}，计划 ${task.plannedCaseCount} 组，当前状态 ${task.status || "未知"}${task.errorMessage ? `：${task.errorMessage}` : ""}`
       setTestdataTaskResult({ type: "success", message })
-      toast.success("测试数据生成任务已创建", { description: message })
+      toast.success(task.status === "SUCCEEDED" ? "测试点已生成并写入" : "测试数据生成任务已创建", {
+        description: message,
+      })
       setTestdataTaskSeed("")
       await loadTestdataResources()
-      if (taskId) {
-        setSelectedTestdataTaskId(taskId)
+      if (task.id) {
+        setSelectedTestdataTaskId(task.id)
       }
-    } else {
-      const message = data?.error ? String(data.error) : text || res.statusText
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "testdata_generation_task_create_failed"
       setTestdataTaskResult({ type: "error", message })
       toast.error("测试数据生成任务创建失败", { description: message })
     }
 
     setTestdataTaskCreating(false)
+  }
+
+  const uploadSolutionAndAutoGenerateTestdata = async () => {
+    if (!selectedVersionId) return
+
+    const testcaseCount = parseOptionalPositiveInt(testdataTaskCaseCount)
+    if (!testcaseCount) {
+      const message = "请先填写测试点个数"
+      setAutoTestdataResult({ type: "error", message })
+      toast.error("无法自动生成测试点", { description: message })
+      return
+    }
+
+    setAutoTestdataBusy(true)
+    setAutoTestdataResult(null)
+    setTestdataTaskResult(null)
+    setStandardSolutionResult(null)
+
+    try {
+      let standardSolutionId = selectedStandardSolutionId
+      let uploadedLabel = ""
+
+      if (standardSolutionFile) {
+        const uploaded = await requestUploadStandardSolution()
+        standardSolutionId = uploaded.id
+        uploadedLabel = uploaded.label
+        setSelectedStandardSolutionId(uploaded.id)
+        setStandardSolutionResult({ type: "success", message: `已上传标程 ${uploaded.label}` })
+        setStandardSolutionFile(null)
+        setStandardSolutionLabel("")
+      }
+
+      if (!standardSolutionId) {
+        throw new Error("请先上传标程，或选择已有标程")
+      }
+
+      const { analysis, configDraft } = await requestTestdataAnalysis(standardSolutionId)
+      setTestdataAnalysisResult(analysis)
+
+      if (!configDraft) {
+        const detected = analysis?.recommendations?.primaryGenerator?.type ?? "未识别"
+        throw new Error(`当前自动识别为 ${detected}，但系统还不能为该类型直接生成配置，请先走高级配置。`)
+      }
+
+      setTestdataConfigText(JSON.stringify(configDraft, null, 2))
+      await requestSaveTestdataGenerationConfig(configDraft)
+      setTestdataConfigDirty(false)
+      setTestdataConfigResult({
+        type: "success",
+        message: `已按题面、标签和标程自动保存 ${analysis?.recommendations?.primaryGenerator?.type ?? "unknown"} 配置`,
+      })
+
+      const task = await requestCreateTestdataGenerationTask(standardSolutionId)
+      await loadTestdataResources()
+      if (task.id) {
+        setSelectedTestdataTaskId(task.id)
+      }
+
+      const parts = [
+        uploadedLabel ? `标程 ${uploadedLabel}` : "已使用当前默认标程",
+        `识别类型 ${analysis?.recommendations?.primaryGenerator?.type ?? "unknown"}`,
+        task.status === "SUCCEEDED"
+          ? `已直接写入 ${task.persistedCaseCount} 个测试点`
+          : `已创建 ${task.plannedCaseCount} 组测试点任务`,
+      ]
+      const message = parts.join("，")
+      setAutoTestdataResult({ type: "success", message })
+      setTestdataTaskResult({ type: "success", message })
+      toast.success(task.status === "SUCCEEDED" ? "自动生成测试点完成" : "自动生成测试点任务已创建", {
+        description: message,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "auto_testdata_generation_failed"
+      setAutoTestdataResult({ type: "error", message })
+      toast.error("自动生成测试点失败", { description: message })
+    }
+
+    setAutoTestdataBusy(false)
   }
 
   const retrySelectedTestdataTask = async () => {
@@ -1613,11 +1884,53 @@ export default function AdminProblemDetailPage() {
             </Button>
           </div>
           <div className="text-xs text-muted-foreground">
-            选择语言/数据结构/算法标签。Scratch 题请选：scratch-必做 或 scratch-可选。
+            选择语言/数据结构/算法标签。Scratch 题请选：scratch-必做 或 scratch-可选；普通代码题请保留 C++ / Python。只有双轨题才同时带 Scratch 和代码语言标签。
           </div>
           <TagGroup title="语言标签" tags={languageTags} selected={selectedTags} onToggle={toggleTag} />
           <TagGroup title="数据结构" tags={dataStructureTags} selected={selectedTags} onToggle={toggleTag} />
           <TagGroup title="算法标签" tags={algorithmTags} selected={selectedTags} onToggle={toggleTag} />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardContent className="p-6 space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold">题型工作流</h2>
+              <div className="text-xs text-muted-foreground">
+                后台会按标签和当前版本语言配置，自动把 Scratch 题与代码题的管理区分开。
+              </div>
+            </div>
+            <Badge variant="outline">{getProblemModeLabel(problemMode)}</Badge>
+          </div>
+          <div className="rounded-lg border border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
+            {getProblemModeDescription(problemMode)}
+          </div>
+          <div className="grid gap-3 md:grid-cols-3">
+            <div className="rounded-lg border border-border/70 p-4 text-sm">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">代码题工作流</div>
+              <div className="mt-2 font-medium">{supportsCodeWorkflow ? "启用" : "关闭"}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Judge 配置、标程上传、自动造数据、测试点管理、HUSTOJ 同步。
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/70 p-4 text-sm">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">Scratch 工作流</div>
+              <div className="mt-2 font-medium">{supportsScratchWorkflow ? "启用" : "关闭"}</div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                Scratch 规则生成、规则 JSON 维护、上传 Scratch 答案验证。
+              </div>
+            </div>
+            <div className="rounded-lg border border-border/70 p-4 text-sm">
+              <div className="text-xs uppercase tracking-wide text-muted-foreground">当前版本现状</div>
+              <div className="mt-2 font-medium">
+                代码语言 {codeJudgeConfigEntries.length} 个 · Scratch 语言 {scratchJudgeConfigEntries.length} 个
+              </div>
+              <div className="mt-2 text-xs text-muted-foreground">
+                这里显示的是当前版本配置，不再把 Scratch 语言和 C++/Python 放在同一个编辑表单里。
+              </div>
+            </div>
+          </div>
         </CardContent>
       </Card>
 
@@ -1770,184 +2083,193 @@ export default function AdminProblemDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-lg font-semibold">Judge 配置</h2>
-              <div className="text-xs text-muted-foreground">
-                按版本维护语言、模板代码、入口签名、编译/运行命令和默认语言。
+      {supportsCodeWorkflow ? (
+        <Card>
+          <CardContent className="p-6 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">代码题 Judge 配置</h2>
+                <div className="text-xs text-muted-foreground">
+                  这里只维护 C++ / Python 等标准输入输出语言。Scratch 轨道的配置会放到下面的 Scratch 专区单独处理。
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="secondary" onClick={addJudgeConfig} disabled={!selectedVersionId}>
+                  新增语言
+                </Button>
+                <Button onClick={saveJudgeConfigs} disabled={!selectedVersionId || judgeConfigsSaving}>
+                  {judgeConfigsSaving ? "保存中..." : "保存 Judge 配置"}
+                </Button>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button variant="secondary" onClick={addJudgeConfig} disabled={!selectedVersionId}>
-                新增语言
-              </Button>
-              <Button onClick={saveJudgeConfigs} disabled={!selectedVersionId || judgeConfigsSaving}>
-                {judgeConfigsSaving ? "保存中..." : "保存 Judge 配置"}
-              </Button>
-            </div>
-          </div>
 
-          <select
-            className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-            value={selectedVersionId}
-            onChange={(e) => setSelectedVersionId(e.target.value)}
-          >
-            <option value="">选择版本</option>
-            {versions.map((v) => (
-              <option key={v.id} value={v.id}>
-                v{v.version}
-              </option>
-            ))}
-          </select>
+            <select
+              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+              value={selectedVersionId}
+              onChange={(e) => setSelectedVersionId(e.target.value)}
+            >
+              <option value="">选择版本</option>
+              {versions.map((v) => (
+                <option key={v.id} value={v.id}>
+                  v{v.version}
+                </option>
+              ))}
+            </select>
 
-          {!selectedVersionId ? (
-            <div className="text-sm text-muted-foreground">请先选择版本。</div>
-          ) : judgeConfigsDraft.length === 0 ? (
-            <div className="text-sm text-muted-foreground">当前版本还没有 Judge 配置。</div>
-          ) : (
-            <div className="space-y-4">
-              {judgeConfigsDraft.map((config, index) => (
-                <div key={`${selectedVersionId}-${index}`} className="rounded-lg border border-border p-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="font-medium">语言配置 #{index + 1}</div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => removeJudgeConfig(index)}
-                    >
-                      删除
-                    </Button>
-                  </div>
+            {supportsScratchWorkflow && scratchJudgeConfigEntries.length > 0 ? (
+              <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 text-xs text-muted-foreground">
+                当前版本另外还有 {scratchJudgeConfigEntries.length} 个 Scratch 语言配置，它们不会在这里和代码语言混编编辑。
+              </div>
+            ) : null}
 
-                  <div className="grid gap-3 md:grid-cols-4">
-                    <select
-                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                      value={config.language}
-                      onChange={(e) => updateJudgeConfig(index, { language: e.target.value })}
-                    >
-                      {JUDGE_LANGUAGE_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+            {!selectedVersionId ? (
+              <div className="text-sm text-muted-foreground">请先选择版本。</div>
+            ) : codeJudgeConfigEntries.length === 0 ? (
+              <div className="text-sm text-muted-foreground">当前版本还没有代码题 Judge 配置。</div>
+            ) : (
+              <div className="space-y-4">
+                {codeJudgeConfigEntries.map(({ config, index }, renderIndex) => (
+                  <div key={`${selectedVersionId}-${index}`} className="rounded-lg border border-border p-4 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div className="font-medium">语言配置 #{renderIndex + 1}</div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeJudgeConfig(index)}
+                      >
+                        删除
+                      </Button>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-4">
+                      <select
+                        className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                        value={config.language}
+                        onChange={(e) => updateJudgeConfig(index, { language: e.target.value })}
+                      >
+                        {JUDGE_LANGUAGE_OPTIONS.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      <Input
+                        placeholder="judgeMode"
+                        value={config.judgeMode}
+                        onChange={(e) => updateJudgeConfig(index, { judgeMode: e.target.value })}
+                      />
+                      <Input
+                        placeholder="timeLimitMs"
+                        value={config.timeLimitMs}
+                        onChange={(e) => updateJudgeConfig(index, { timeLimitMs: e.target.value })}
+                      />
+                      <Input
+                        placeholder="memoryLimitMb"
+                        value={config.memoryLimitMb}
+                        onChange={(e) => updateJudgeConfig(index, { memoryLimitMb: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => applyJudgeConfigPreset(index, config.language)}
+                      >
+                        套用预设
+                      </Button>
+                      <div className="text-xs text-muted-foreground">
+                        切换语言后可点击“套用预设”自动填充 judgeMode 与模板代码。
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <Input
+                        placeholder="entrypoint"
+                        value={config.entrypoint}
+                        onChange={(e) => updateJudgeConfig(index, { entrypoint: e.target.value })}
+                      />
+                      <Input
+                        placeholder="entrySignature"
+                        value={config.entrySignature}
+                        onChange={(e) => updateJudgeConfig(index, { entrySignature: e.target.value })}
+                      />
+                      <Input
+                        placeholder="sortOrder"
+                        value={config.sortOrder}
+                        onChange={(e) => updateJudgeConfig(index, { sortOrder: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <Input
+                        placeholder="compileCommand"
+                        value={config.compileCommand}
+                        onChange={(e) => updateJudgeConfig(index, { compileCommand: e.target.value })}
+                      />
+                      <Input
+                        placeholder="runCommand"
+                        value={config.runCommand}
+                        onChange={(e) => updateJudgeConfig(index, { runCommand: e.target.value })}
+                      />
+                    </div>
+
                     <Input
-                      placeholder="judgeMode"
-                      value={config.judgeMode}
-                      onChange={(e) => updateJudgeConfig(index, { judgeMode: e.target.value })}
+                      placeholder="templateCodeUri"
+                      value={config.templateCodeUri}
+                      onChange={(e) => updateJudgeConfig(index, { templateCodeUri: e.target.value })}
                     />
-                    <Input
-                      placeholder="timeLimitMs"
-                      value={config.timeLimitMs}
-                      onChange={(e) => updateJudgeConfig(index, { timeLimitMs: e.target.value })}
-                    />
-                    <Input
-                      placeholder="memoryLimitMb"
-                      value={config.memoryLimitMb}
-                      onChange={(e) => updateJudgeConfig(index, { memoryLimitMb: e.target.value })}
-                    />
-                  </div>
 
-                  <div className="flex flex-wrap gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => applyJudgeConfigPreset(index, config.language)}
-                    >
-                      套用预设
-                    </Button>
-                    <div className="text-xs text-muted-foreground">
-                      切换语言后可点击“套用预设”自动填充 judgeMode 与模板代码。
+                    <textarea
+                      className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                      placeholder="templateCode"
+                      value={config.templateCode}
+                      onChange={(e) => updateJudgeConfig(index, { templateCode: e.target.value })}
+                    />
+
+                    <div className="flex flex-wrap gap-4 text-sm">
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={config.isEnabled}
+                          onChange={(e) => updateJudgeConfig(index, { isEnabled: e.target.checked })}
+                        />
+                        启用
+                      </label>
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={config.isDefault}
+                          onChange={(e) => {
+                            if (!e.target.checked) return
+                            setJudgeConfigsDraft((prev) =>
+                              prev.map((item, itemIndex) => ({
+                                ...item,
+                                isDefault: itemIndex === index,
+                              }))
+                            )
+                          }}
+                        />
+                        默认语言
+                      </label>
                     </div>
                   </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
-                  <div className="grid gap-3 md:grid-cols-3">
-                    <Input
-                      placeholder="entrypoint"
-                      value={config.entrypoint}
-                      onChange={(e) => updateJudgeConfig(index, { entrypoint: e.target.value })}
-                    />
-                    <Input
-                      placeholder="entrySignature"
-                      value={config.entrySignature}
-                      onChange={(e) => updateJudgeConfig(index, { entrySignature: e.target.value })}
-                    />
-                    <Input
-                      placeholder="sortOrder"
-                      value={config.sortOrder}
-                      onChange={(e) => updateJudgeConfig(index, { sortOrder: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="grid gap-3 md:grid-cols-2">
-                    <Input
-                      placeholder="compileCommand"
-                      value={config.compileCommand}
-                      onChange={(e) => updateJudgeConfig(index, { compileCommand: e.target.value })}
-                    />
-                    <Input
-                      placeholder="runCommand"
-                      value={config.runCommand}
-                      onChange={(e) => updateJudgeConfig(index, { runCommand: e.target.value })}
-                    />
-                  </div>
-
-                  <Input
-                    placeholder="templateCodeUri"
-                    value={config.templateCodeUri}
-                    onChange={(e) => updateJudgeConfig(index, { templateCodeUri: e.target.value })}
-                  />
-
-                  <textarea
-                    className="min-h-[120px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                    placeholder="templateCode"
-                    value={config.templateCode}
-                    onChange={(e) => updateJudgeConfig(index, { templateCode: e.target.value })}
-                  />
-
-                  <div className="flex flex-wrap gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={config.isEnabled}
-                        onChange={(e) => updateJudgeConfig(index, { isEnabled: e.target.checked })}
-                      />
-                      启用
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={config.isDefault}
-                        onChange={(e) => {
-                          if (!e.target.checked) return
-                          setJudgeConfigsDraft((prev) =>
-                            prev.map((item, itemIndex) => ({
-                              ...item,
-                              isDefault: itemIndex === index,
-                            }))
-                          )
-                        }}
-                      />
-                      默认语言
-                    </label>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      {supportsCodeWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">自动测试数据生成</h2>
+              <h2 className="text-lg font-semibold">代码题自动测试数据生成</h2>
               <div className="text-xs text-muted-foreground">
-                先保存模板化 generator 配置，再上传标程并异步生成测试点。
-                当前 MVP 已支持 array / string / intervals / queries。
+                推荐做法是直接上传标程，然后让系统按题面、标签和答案代码自动识别题型并生成测试点。
+                当前自动模式优先支持 array / string / intervals / queries / grid_queries。
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1974,9 +2296,116 @@ export default function AdminProblemDetailPage() {
           </div>
 
           <div className="space-y-2">
+            <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
+              <div className="text-sm font-medium">0. 推荐流程：上传标程并自动生成测试点</div>
+              <div className="text-xs text-muted-foreground">
+                你只需要上传正确答案代码，手动填写测试点个数。系统会结合题目标签、题面、输入格式和标程代码，自动识别题型并估算测试点范围，再直接创建生成任务。
+              </div>
+              <div className="grid gap-3 md:grid-cols-3">
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={standardSolutionLanguage}
+                  onChange={(e) => setStandardSolutionLanguage(e.target.value)}
+                >
+                  <option value="cpp17">C++17</option>
+                  <option value="cpp14">C++14</option>
+                  <option value="cpp11">C++11</option>
+                  <option value="python">Python</option>
+                </select>
+                <Input
+                  placeholder="标程名称（可选）"
+                  value={standardSolutionLabel}
+                  onChange={(e) => setStandardSolutionLabel(e.target.value)}
+                />
+                <label className="text-sm text-muted-foreground flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={standardSolutionIsPrimary}
+                    onChange={(e) => setStandardSolutionIsPrimary(e.target.checked)}
+                  />
+                  设为默认标程
+                </label>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1.35fr)_repeat(3,minmax(0,1fr))]">
+                <input
+                  type="file"
+                  accept=".cpp,.cc,.cxx,.py,.txt"
+                  onChange={(e) => setStandardSolutionFile(e.target.files?.[0] ?? null)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                />
+                <Input
+                  placeholder="测试点个数"
+                  value={testdataTaskCaseCount}
+                  onChange={(e) => setTestdataTaskCaseCount(e.target.value)}
+                />
+                <Input
+                  placeholder="总分（默认 100）"
+                  value={testdataTaskTotalScore}
+                  onChange={(e) => setTestdataTaskTotalScore(e.target.value)}
+                />
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={testdataTaskMode}
+                  onChange={(e) =>
+                    setTestdataTaskMode(
+                      e.target.value as "APPEND" | "REPLACE_GENERATED" | "REPLACE_ALL"
+                    )
+                  }
+                >
+                  <option value="REPLACE_GENERATED">替换自动生成测试点</option>
+                  <option value="APPEND">追加</option>
+                  <option value="REPLACE_ALL">替换全部测试点</option>
+                </select>
+              </div>
+              <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_220px]">
+                <Input
+                  placeholder="随机种子（可选）"
+                  value={testdataTaskSeed}
+                  onChange={(e) => setTestdataTaskSeed(e.target.value)}
+                />
+                <Button
+                  onClick={uploadSolutionAndAutoGenerateTestdata}
+                  disabled={
+                    !selectedVersionId ||
+                    autoTestdataBusy ||
+                    (!standardSolutionFile && !selectedStandardSolutionId)
+                  }
+                >
+                  {autoTestdataBusy ? "自动生成中..." : "上传标程并自动生成测试点"}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                如果不重新上传文件，系统会使用当前选中的已有标程；测试点范围由系统自动估算，当前只要求你填写测试点个数。
+              </div>
+              {testdataAnalysisResult?.recommendations.primaryGenerator ? (
+                <div className="rounded-md border border-border/70 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
+                  当前自动识别：
+                  <span className="ml-1 text-foreground">
+                    {testdataAnalysisResult.recommendations.primaryGenerator.type}
+                  </span>
+                  <span className="ml-2">
+                    置信度 {Math.round(testdataAnalysisResult.recommendations.primaryGenerator.score * 100)}%
+                  </span>
+                </div>
+              ) : null}
+              {autoTestdataResult && (
+                <div
+                  className={`text-xs break-all ${
+                    autoTestdataResult.type === "success"
+                      ? "text-emerald-400"
+                      : autoTestdataResult.type === "error"
+                        ? "text-red-400"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {autoTestdataResult.message}
+                </div>
+              )}
+            </div>
+
             <div className="text-sm font-medium">1. 高级配置（可选）</div>
             <div className="text-xs text-muted-foreground">
-              正常使用只需要上传标程，再填写测试点个数和总分创建任务。下面的 JSON 配置仅用于高级覆盖。
+              如果自动流程生成的范围或分组不符合预期，再手动改这里的 JSON。正常使用优先走上面的自动模式。
             </div>
             <textarea
               className="min-h-[220px] w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-xs"
@@ -2053,7 +2482,7 @@ export default function AdminProblemDetailPage() {
           </div>
 
           <div className="space-y-3 rounded-lg border border-border/70 p-4">
-            <div className="text-sm font-medium">2. 上传标程</div>
+            <div className="text-sm font-medium">2. 单独上传 / 切换标程（可选）</div>
             <div className="grid gap-3 md:grid-cols-3">
               <select
                 className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -2142,9 +2571,9 @@ export default function AdminProblemDetailPage() {
           </div>
 
           <div className="space-y-3 rounded-lg border border-border/70 p-4">
-            <div className="text-sm font-medium">3. 创建生成任务</div>
+            <div className="text-sm font-medium">3. 手动创建生成任务（高级）</div>
             <div className="text-xs text-muted-foreground">
-              系统会按题面、输入格式和数据规模自动选择 generator，并按测试点个数平分总分。
+              如果你不想走上面的推荐自动流程，也可以在选定标程后手动创建任务。
             </div>
             <div className="grid gap-3 md:grid-cols-4">
               <select
@@ -2363,10 +2792,12 @@ export default function AdminProblemDetailPage() {
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
+      {supportsCodeWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-4">
-          <h2 className="text-lg font-semibold">添加测试点</h2>
+          <h2 className="text-lg font-semibold">代码题测试点录入</h2>
           <div className="grid md:grid-cols-2 gap-3">
             <select
               className="h-10 rounded-md border border-input bg-background px-3 text-sm"
@@ -2471,12 +2902,14 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
+      {supportsCodeWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold">测试点管理</h2>
+              <h2 className="text-lg font-semibold">代码题测试点管理</h2>
               <div className="text-xs text-muted-foreground">
                 可直接编辑 sample / hidden / stress、分组、顺序、分值和可见性。
               </div>
@@ -2581,7 +3014,9 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
+      {supportsScratchWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Scratch 评测规则生成</h2>
@@ -2655,7 +3090,9 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
+      {supportsScratchWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Scratch 规则 JSON / 验证</h2>
@@ -2732,6 +3169,7 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardContent className="p-6 space-y-4">
@@ -2798,15 +3236,17 @@ export default function AdminProblemDetailPage() {
         </CardContent>
       </Card>
 
+      {supportsCodeWorkflow ? (
       <Card>
         <CardContent className="p-6 space-y-2">
-          <h2 className="text-lg font-semibold">同步到 HUSTOJ</h2>
+          <h2 className="text-lg font-semibold">代码题同步到 HUSTOJ</h2>
           <Button onClick={syncHustoj} disabled={!problemId}>立即同步</Button>
           <div className="text-xs text-muted-foreground break-all">
             {syncResult || `未同步 (problemId: ${problemId || "missing"})`}
           </div>
         </CardContent>
       </Card>
+      ) : null}
 
       <Card>
         <CardContent className="p-6 space-y-2">

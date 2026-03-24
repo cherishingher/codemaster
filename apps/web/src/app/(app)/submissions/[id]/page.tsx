@@ -209,8 +209,18 @@ export default function SubmissionDetailPage() {
 
             <SectionCard
               title="测试点明细"
-              description="每个测试点的状态、耗时、内存和对拍信息集中展示，方便定位具体失败区间。"
-              action={<div className="text-sm font-semibold text-muted-foreground">{visibleCases.length} 个测试点</div>}
+              description="提交后会自动刷新当前页；上方用格子展示每个测试点的状态，下方查看选中测试点的详细预览。"
+              action={
+                <div className="flex items-center gap-3 text-sm font-semibold text-muted-foreground">
+                  <span>{visibleCases.length} 个测试点</span>
+                  {submission && ["PENDING", "JUDGING"].includes(submission.status) ? (
+                    <span className="inline-flex items-center gap-1 text-sky-700">
+                      <Loader2 className="size-3.5 animate-spin" />
+                      自动刷新中
+                    </span>
+                  ) : null}
+                </div>
+              }
             >
               <TestcaseList cases={visibleCases} getTone={getResultTone} />
             </SectionCard>

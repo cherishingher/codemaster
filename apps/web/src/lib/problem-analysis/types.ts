@@ -7,6 +7,7 @@ export type ProblemCategory =
   | "INTERVAL_PROBLEM"
   | "QUERY_SIMULATION"
   | "BASIC_IO"
+  | "SCALAR_IO"
 
 export type InputStructure =
   | "SCALAR"
@@ -38,6 +39,7 @@ export type Pitfall =
 
 export type GeneratorType = "array" | "string" | "graph" | "tree" | "intervals" | "queries"
   | "grid_queries"
+  | "scalars"
 
 export type ProblemAnalysisInput = {
   problemId?: string
@@ -45,6 +47,8 @@ export type ProblemAnalysisInput = {
   title?: string | null
   statement?: string | null
   statementMd?: string | null
+  solutionSource?: string | null
+  solutionLanguage?: string | null
   tags: string[]
   constraints?: string | null
   inputFormat?: string | null
@@ -54,7 +58,7 @@ export type ProblemAnalysisInput = {
 export type RuleEvidence = {
   ruleId: string
   message: string
-  source: "title" | "statement" | "statementMd" | "constraints" | "inputFormat" | "tags" | "derived"
+  source: "title" | "statement" | "statementMd" | "solutionSource" | "constraints" | "inputFormat" | "tags" | "derived"
 }
 
 export type GeneratorRecommendation = {
