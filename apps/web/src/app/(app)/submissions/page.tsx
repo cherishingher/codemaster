@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import {
@@ -14,24 +13,21 @@ import {
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { FilterBar } from "@/components/patterns/filter-bar"
 import { PaginationBar } from "@/components/patterns/pagination-bar"
+import { PageHeader } from "@/components/patterns/page-header"
+import { StatCard } from "@/components/patterns/stat-card"
+import { SubmissionLogList } from "@/components/submissions/submission-log-list"
 import {
   EmptyState,
   LoadingState,
   UnauthorizedState,
 } from "@/components/patterns/state-panel"
-import { SectionHeading } from "@/components/patterns/section-heading"
 import { useCopyFeedback } from "@/lib/hooks/use-copy-feedback"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
-import {
-  getSubmissionStatusClass,
-  getSubmissionStatusLabel,
-} from "@/lib/submissions"
 
 type SubmissionListResponse = {
   data: Array<{
@@ -273,65 +269,81 @@ export default function SubmissionsPage() {
   return (
     <div className="page-wrap py-8 md:py-10">
       <div className="space-y-8">
-        <SectionHeading
+        <PageHeader
           eyebrow="Submissions"
           title="把每次提交收拢成一个可扫描的执行日志。"
           description="保留原有筛选、分页和个人鉴权逻辑，只重构状态标签、资源消耗和时间信息的视觉层级。"
-          action={
+          meta={
+            <>
+              <span>执行日志</span>
+              <span>·</span>
+              <span>结果筛选</span>
+              <span>·</span>
+              <span>资源消耗</span>
+              <span>·</span>
+              <span>分页跳转</span>
+            </>
+          }
+          actions={
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
-                <Send className="h-4 w-4 text-foreground" />
-                <span>{meta?.total ?? 0} 条提交</span>
+              <Button
+                type="button"
+                variant={copied ? "default" : "secondary"}
+                onClick={copyCurrentViewLink}
+              >
+                {copied ? "已复制筛选链接" : "复制当前筛选链接"}
+              </Button>
+            </div>
+          }
+          aside={
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className="flex size-12 items-center justify-center rounded-[1.2rem] border-[3px] border-border bg-secondary">
+                  <Send className="size-5 text-foreground" />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Current View
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold text-foreground">{meta?.total ?? 0} 条提交</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">结果</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{status === "all" ? "全部" : status}</p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">语言</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{language === "all" ? "混合" : language}</p>
+                </div>
               </div>
             </div>
           }
         />
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Status
-                </p>
-                <p className="text-2xl font-semibold text-foreground">{status === "all" ? "全部" : status}</p>
-                <p className="text-sm text-muted-foreground">当前结果筛选</p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-primary/30 p-3 text-foreground">
-                <Activity className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Language
-                </p>
-                <p className="text-2xl font-semibold text-foreground">{language === "all" ? "混合" : language}</p>
-                <p className="text-sm text-muted-foreground">语言过滤器</p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-secondary p-3 text-foreground">
-                <FileCode2 className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Range
-                </p>
-                <p className="text-2xl font-semibold text-foreground">
-                  {dateFrom || dateTo ? "已限定" : "全部"}
-                </p>
-                <p className="text-sm text-muted-foreground">时间窗口 {dateFrom || "起"} - {dateTo || "今"}</p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-accent p-3 text-foreground">
-                <Clock3 className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Status"
+            value={status === "all" ? "全部" : status}
+            description="当前结果筛选"
+            icon={Activity}
+            tone="primary"
+          />
+          <StatCard
+            label="Language"
+            value={language === "all" ? "混合" : language}
+            description="语言过滤器"
+            icon={FileCode2}
+            tone="secondary"
+          />
+          <StatCard
+            label="Range"
+            value={dateFrom || dateTo ? "已限定" : "全部"}
+            description={`时间窗口 ${dateFrom || "起"} - ${dateTo || "今"}`}
+            icon={Clock3}
+            tone="accent"
+          />
         </div>
 
         <FilterBar
@@ -343,13 +355,6 @@ export default function SubmissionsPage() {
               <Button type="button" variant="ghost" onClick={resetFilters} disabled={!hasActiveFilters}>
                 <RotateCcw className="mr-2 h-4 w-4" />
                 重置
-              </Button>
-              <Button
-                type="button"
-                variant={copied ? "default" : "secondary"}
-                onClick={copyCurrentViewLink}
-              >
-                {copied ? "已复制" : "复制当前筛选链接"}
               </Button>
             </>
           }
@@ -447,68 +452,7 @@ export default function SubmissionsPage() {
                 description="当前筛选条件下没有匹配提交；你可以放宽语言、日期或题目范围。"
               />
             ) : null}
-            {!isLoading ? submissions.map((submission) => (
-              <div
-                key={submission.id}
-                className="rounded-[1.6rem] border-[3px] border-border bg-[linear-gradient(135deg,rgba(255,255,255,0.96),rgba(227,239,248,0.88))] p-4 shadow-[8px_8px_0_hsl(var(--border))] transition hover:-translate-y-1 hover:shadow-[10px_10px_0_hsl(var(--border))]"
-              >
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Link
-                        href={`/submissions/${submission.id}`}
-                        className="rounded-full border-[2px] border-border bg-white px-3 py-1 font-mono text-xs text-muted-foreground shadow-[4px_4px_0_hsl(var(--border))] hover:text-primary"
-                      >
-                        #{submission.id}
-                      </Link>
-                      <Badge variant="outline" className={getSubmissionStatusClass(submission.status)}>
-                        {getSubmissionStatusLabel(submission.status)}
-                      </Badge>
-                      {submission.rawStatus && submission.rawStatus !== submission.status ? (
-                        <Badge variant="outline" className="border-border bg-white text-foreground">
-                          {submission.rawStatus}
-                        </Badge>
-                      ) : null}
-                    </div>
-                    <div className="space-y-1">
-                      <Link
-                        href={`/problems/${submission.problem.slug}`}
-                        className="block truncate text-lg font-semibold tracking-tight text-foreground transition hover:text-primary"
-                      >
-                        {submission.problem.title}
-                      </Link>
-                      <p className="text-sm text-muted-foreground">{new Date(submission.createdAt).toLocaleString()}</p>
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">语言</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{submission.language ?? "-"}</p>
-                      </div>
-                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">分数</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{submission.score ?? 0}</p>
-                      </div>
-                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">时间</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{submission.timeUsedMs ?? 0} ms</p>
-                      </div>
-                      <div className="rounded-[1.2rem] border-[3px] border-border bg-white px-3 py-3 shadow-[5px_5px_0_hsl(var(--border))]">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-muted-foreground">内存</p>
-                        <p className="mt-1 text-sm font-medium text-foreground">{submission.memoryUsedKb ?? 0} KB</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2">
-                    <Button asChild variant="outline">
-                      <Link href={`/problems/${submission.problem.slug}`}>题目</Link>
-                    </Button>
-                    <Button asChild>
-                      <Link href={`/submissions/${submission.id}`}>详情</Link>
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            )) : null}
+            {!isLoading ? <SubmissionLogList submissions={submissions} /> : null}
           </CardContent>
         </Card>
 

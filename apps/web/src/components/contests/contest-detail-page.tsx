@@ -151,6 +151,12 @@ export function ContestDetailPage() {
             </div>
 
             <div className="flex flex-wrap gap-3">
+              <Button asChild variant="outline">
+                <Link href={`/discuss?contestId=${encodeURIComponent(contest.id)}&postType=contest_discussion`}>
+                  <Users className="size-4" />
+                  比赛讨论
+                </Link>
+              </Button>
               {isEnded ? (
                 <>
                   <Button asChild variant="secondary">

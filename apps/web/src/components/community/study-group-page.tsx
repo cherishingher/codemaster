@@ -130,7 +130,7 @@ export function StudyGroupPage({ groupIdOrSlug }: StudyGroupPageProps) {
     <div className="page-wrap py-10 md:py-14">
       <div className="mb-6">
         <Button asChild variant="ghost" size="sm">
-          <Link href="/discuss">
+          <Link href="/discuss/legacy">
             <ArrowLeft className="size-4" />
             返回社区
           </Link>

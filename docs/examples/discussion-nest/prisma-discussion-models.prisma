@@ -1,0 +1,129 @@
+enum DiscussionPostType {
+  problem_discussion
+  solution
+  contest_discussion
+  question
+  experience
+  feedback
+  announcement
+  general
+}
+
+enum DiscussionAuditStatus {
+  pending
+  approved
+  rejected
+  manual_review
+}
+
+enum DiscussionDisplayStatus {
+  visible
+  hidden
+  shadow_hidden
+}
+
+model DiscussionPost {
+  id             String                  @id @db.Char(26)
+  authorId       String                  @db.Char(26)
+  postType       DiscussionPostType
+  title          String                  @db.VarChar(160)
+  contentMarkdown String                 @db.MediumText
+  contentHtml    String?                 @db.MediumText
+  contentPlain   String?                 @db.Text
+  excerpt        String?                 @db.VarChar(500)
+  problemId      String?                 @db.Char(26)
+  contestId      String?                 @db.Char(26)
+  bestCommentId  String?                 @db.Char(26)
+  acceptedById   String?                 @db.Char(26)
+  auditStatus    DiscussionAuditStatus   @default(pending)
+  displayStatus  DiscussionDisplayStatus @default(visible)
+  publishStatus  String                  @default("immediate") @db.VarChar(24)
+  publishAt      DateTime?
+  isLocked       Boolean                 @default(false)
+  isDeleted      Boolean                 @default(false)
+  deletedAt      DateTime?
+  deletedBy      String?                 @db.Char(26)
+  isPinned       Boolean                 @default(false)
+  pinScope       String                  @default("none") @db.VarChar(20)
+  isFeatured     Boolean                 @default(false)
+  isRecommended  Boolean                 @default(false)
+  isOfficial     Boolean                 @default(false)
+  isSolved       Boolean                 @default(false)
+  solvedAt       DateTime?
+  riskLevel      Int                     @default(0) @db.UnsignedTinyInt
+  riskFlags      Json?
+  commentCount   Int                     @default(0) @db.UnsignedInt
+  replyCount     Int                     @default(0) @db.UnsignedInt
+  likeCount      Int                     @default(0) @db.UnsignedInt
+  favoriteCount  Int                     @default(0) @db.UnsignedInt
+  viewCount      Int                     @default(0) @db.UnsignedInt
+  reportCount    Int                     @default(0) @db.UnsignedInt
+  hotScore       Decimal                 @default(0) @db.Decimal(18, 6)
+  lastCommentAt  DateTime?
+  lastCommentUserId String?              @db.Char(26)
+  metadata       Json?
+  createdAt      DateTime                @default(now())
+  updatedAt      DateTime                @updatedAt
+  comments       DiscussionComment[]
+  tags           DiscussionPostTag[]
+
+  @@index([authorId, createdAt(sort: Desc)])
+  @@index([problemId, createdAt(sort: Desc)])
+  @@index([contestId, createdAt(sort: Desc)])
+  @@index([postType, auditStatus, displayStatus, createdAt(sort: Desc)])
+  @@index([displayStatus, auditStatus, hotScore(sort: Desc)])
+}
+
+model DiscussionComment {
+  id              String                  @id @db.Char(26)
+  postId          String                  @db.Char(26)
+  authorId        String                  @db.Char(26)
+  rootCommentId   String?                 @db.Char(26)
+  parentCommentId String?                 @db.Char(26)
+  replyToUserId   String?                 @db.Char(26)
+  contentMarkdown String                  @db.Text
+  contentHtml     String?                 @db.Text
+  contentPlain    String?                 @db.Text
+  depth           Int                     @default(1) @db.UnsignedTinyInt
+  floorNo         Int                     @default(0) @db.UnsignedInt
+  auditStatus     DiscussionAuditStatus   @default(pending)
+  displayStatus   DiscussionDisplayStatus @default(visible)
+  isDeleted       Boolean                 @default(false)
+  deletedAt       DateTime?
+  deletedBy       String?                 @db.Char(26)
+  likeCount       Int                     @default(0) @db.UnsignedInt
+  replyCount      Int                     @default(0) @db.UnsignedInt
+  reportCount     Int                     @default(0) @db.UnsignedInt
+  riskLevel       Int                     @default(0) @db.UnsignedTinyInt
+  riskFlags       Json?
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+  post            DiscussionPost          @relation(fields: [postId], references: [id])
+
+  @@index([postId, rootCommentId, createdAt])
+  @@index([parentCommentId, createdAt])
+  @@index([authorId, createdAt(sort: Desc)])
+}
+
+model DiscussionTag {
+  id        BigInt              @id @default(autoincrement()) @db.UnsignedBigInt
+  tagName   String              @unique @db.VarChar(32)
+  tagSlug   String              @unique @db.VarChar(64)
+  tagType   String              @default("topic") @db.VarChar(20)
+  status    String              @default("active") @db.VarChar(20)
+  postCount Int                 @default(0) @db.UnsignedInt
+  createdAt DateTime            @default(now())
+  updatedAt DateTime            @updatedAt
+  posts     DiscussionPostTag[]
+}
+
+model DiscussionPostTag {
+  postId     String        @db.Char(26)
+  tagId      BigInt        @db.UnsignedBigInt
+  createdAt  DateTime      @default(now())
+  post       DiscussionPost @relation(fields: [postId], references: [id])
+  tag        DiscussionTag  @relation(fields: [tagId], references: [id])
+
+  @@id([postId, tagId])
+  @@index([tagId, postId])
+}

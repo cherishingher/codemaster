@@ -13,3 +13,8 @@ apps/web/.next/
 apps/web/node_modules/
 tmp/
 backups/
+problem-batch-out/
+README_batch.md
+batch_*.py
+batch_prepare.config.json
+services/judge-agent/dist/

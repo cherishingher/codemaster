@@ -77,9 +77,9 @@ export function CommunityPostPage({ postId }: CommunityPostPageProps) {
     <div className="page-wrap py-10 md:py-14">
       <div className="mb-6 flex flex-wrap gap-3">
         <Button asChild variant="ghost" size="sm">
-          <Link href={post.group ? `/discuss/groups/${post.group.slug}` : "/discuss"}>
+          <Link href={post.group ? `/discuss/groups/${post.group.slug}` : "/discuss/legacy"}>
             <ArrowLeft className="size-4" />
-            {post.group ? "返回学习小组" : "返回社区"}
+            {post.group ? "返回学习小组" : "返回旧版社区"}
           </Link>
         </Button>
       </div>

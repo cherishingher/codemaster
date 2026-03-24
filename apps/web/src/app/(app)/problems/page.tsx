@@ -1,32 +1,37 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { usePathname, useRouter, useSearchParams } from "next/navigation"
 import useSWR from "swr"
 import {
   BookOpenText,
-  GraduationCap,
+  ChevronDown,
+  ChevronUp,
   Search,
   SlidersHorizontal,
-  Sparkles,
   RotateCcw,
   X,
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { UserProblemStatus } from "@/lib/oj"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FilterBar } from "@/components/patterns/filter-bar"
 import { PaginationBar } from "@/components/patterns/pagination-bar"
+import { PageHeader } from "@/components/patterns/page-header"
 import { EmptyState, ErrorState } from "@/components/patterns/state-panel"
-import { SectionHeading } from "@/components/patterns/section-heading"
+import { StatCard } from "@/components/patterns/stat-card"
+import { ProblemTable } from "@/components/problems/problem-table"
 import { useCopyFeedback } from "@/lib/hooks/use-copy-feedback"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
+import {
+  LUOGU_DIFFICULTY_BANDS,
+  getLuoguDifficultyBandById,
+  inferLuoguDifficultyBandFromDifficultyParam,
+  isLuoguDifficultyBandId,
+} from "@/lib/problem-difficulty"
 import { cn } from "@/lib/utils"
 
 type Problem = {
@@ -57,11 +62,9 @@ type ProblemsResponse = {
 
 const PAGE_SIZE = "12"
 const USER_STATUS_OPTIONS = new Set(["NOT_STARTED", "ATTEMPTED", "ACCEPTED"])
-const DIFFICULTY_OPTIONS = new Set(["1", "2", "3"])
+const HIDDEN_PROBLEM_TAGS = new Set(["scratch-必做", "scratch-可选"])
 const TAG_OPTIONS = Array.from(
   new Set([
-    "scratch-必做",
-    "scratch-可选",
     "C++",
     "Python",
     "数组",
@@ -118,81 +121,28 @@ function parseUserStatusParam(value: string | null) {
   }
 }
 
-function hasScratchTag(searchParams: URLSearchParams) {
-  const values = [
-    searchParams.get("tag") ?? "",
-    searchParams.get("tags") ?? "",
-    ...searchParams.getAll("tag"),
-    ...searchParams.getAll("tags"),
-  ]
-  return values.some((value) => value.toLowerCase().includes("scratch"))
-}
-
 function buildQueryString(input: {
   keyword: string
   tagQuery: string
   difficulty: string
   userStatus: string
-  scratchOnly: boolean
   page: number
   includeUserStatus: boolean
 }) {
   const params = new URLSearchParams()
   if (input.keyword.trim()) params.set("keyword", input.keyword.trim())
   if (input.tagQuery.trim()) params.set("tagQuery", input.tagQuery.trim())
-  if (input.difficulty !== "all") params.set("difficulty", input.difficulty)
+  if (input.difficulty !== "all") params.set("difficultyBand", input.difficulty)
   if (input.includeUserStatus && input.userStatus !== "all") {
     params.set("userStatus", input.userStatus)
   }
-  if (input.scratchOnly) params.set("tags", "scratch-必做,scratch-可选")
   if (input.page > 1) params.set("page", String(input.page))
   return params.toString()
 }
 
-function getDifficultyLabel(value: number) {
-  if (value <= 1) return "简单"
-  if (value === 2) return "中等"
-  return "困难"
-}
-
-function getDifficultyClass(value: number) {
-  if (value <= 1) return "border-emerald-200 bg-emerald-50 text-emerald-700"
-  if (value === 2) return "border-amber-200 bg-amber-50 text-amber-700"
-  return "border-rose-200 bg-rose-50 text-rose-700"
-}
-
 function getTagClass(tag: string) {
-  const normalized = tag.toLowerCase()
-  if (normalized.includes("scratch") && (normalized.includes("必") || normalized.includes("must"))) {
-    return "border-rose-200 bg-rose-50 text-rose-700"
-  }
-  if (normalized.includes("scratch")) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700"
-  }
+  void tag
   return "border-slate-200 bg-slate-50 text-slate-700"
-}
-
-function isTagMatch(tag: string, tagQuery: string) {
-  const normalizedTag = tag.trim().toLowerCase()
-  const normalizedQuery = tagQuery.trim().toLowerCase()
-  if (!normalizedQuery) return false
-  return normalizedTag.includes(normalizedQuery)
-}
-
-function getUserStatusMeta(status?: number) {
-  if (status === UserProblemStatus.ACCEPTED) {
-    return {
-      label: "已通过",
-      className: "border-emerald-200 bg-emerald-50 text-emerald-700",
-    }
-  }
-  if (status === UserProblemStatus.ATTEMPTED) {
-    return {
-      label: "已尝试",
-      className: "border-amber-200 bg-amber-50 text-amber-700",
-    }
-  }
-  return null
 }
 
 export default function ProblemsPage() {
@@ -205,78 +155,70 @@ export default function ProblemsPage() {
   const [tagQuery, setTagQuery] = React.useState("")
   const [difficulty, setDifficulty] = React.useState("all")
   const [userStatus, setUserStatus] = React.useState("all")
-  const [scratchOnly, setScratchOnly] = React.useState(false)
-  const [page, setPage] = React.useState(1)
   const [pageInput, setPageInput] = React.useState("1")
-  const deferredKeyword = React.useDeferredValue(keyword)
-  const deferredTagQuery = React.useDeferredValue(tagQuery)
+  const [tagPickerOpen, setTagPickerOpen] = React.useState(false)
+  const [difficultyPickerOpen, setDifficultyPickerOpen] = React.useState(false)
+
+  const appliedKeyword = searchParams.get("keyword") ?? searchParams.get("q") ?? ""
+  const appliedTagQuery = searchParams.get("tagQuery") ?? ""
+  const rawAppliedDifficultyBand = searchParams.get("difficultyBand")?.trim().toLowerCase()
+  const rawAppliedDifficulty = searchParams.get("difficulty")
+  const appliedDifficulty = isLuoguDifficultyBandId(rawAppliedDifficultyBand)
+    ? rawAppliedDifficultyBand
+    : inferLuoguDifficultyBandFromDifficultyParam(rawAppliedDifficulty)
+  const appliedUserStatus = loggedIn ? parseUserStatusParam(searchParams.get("userStatus")) : "all"
+  const appliedPage = parsePositiveInt(searchParams.get("page"), 1)
+  const appliedDifficultyMeta =
+    appliedDifficulty !== "all" && isLuoguDifficultyBandId(appliedDifficulty)
+      ? getLuoguDifficultyBandById(appliedDifficulty)
+      : null
 
   React.useEffect(() => {
-    const nextKeyword = searchParams.get("keyword") ?? searchParams.get("q") ?? ""
-    const nextTagQuery = searchParams.get("tagQuery") ?? ""
-    const rawDifficulty = searchParams.get("difficulty")
-    const nextDifficulty = rawDifficulty && DIFFICULTY_OPTIONS.has(rawDifficulty) ? rawDifficulty : "all"
-    const nextUserStatus = loggedIn ? parseUserStatusParam(searchParams.get("userStatus")) : "all"
-    const nextScratchOnly = hasScratchTag(searchParams)
-    const nextPage = parsePositiveInt(searchParams.get("page"), 1)
+    setKeyword((current) => (current === appliedKeyword ? current : appliedKeyword))
+    setTagQuery((current) => (current === appliedTagQuery ? current : appliedTagQuery))
+    setDifficulty((current) => (current === appliedDifficulty ? current : appliedDifficulty))
+    setUserStatus((current) => (current === appliedUserStatus ? current : appliedUserStatus))
+    setPageInput((current) => (current === String(appliedPage) ? current : String(appliedPage)))
+  }, [appliedDifficulty, appliedKeyword, appliedPage, appliedTagQuery, appliedUserStatus])
 
-    setKeyword((current) => (current === nextKeyword ? current : nextKeyword))
-    setTagQuery((current) => (current === nextTagQuery ? current : nextTagQuery))
-    setDifficulty((current) => (current === nextDifficulty ? current : nextDifficulty))
-    setUserStatus((current) => (current === nextUserStatus ? current : nextUserStatus))
-    setScratchOnly((current) => (current === nextScratchOnly ? current : nextScratchOnly))
-    setPage((current) => (current === nextPage ? current : nextPage))
-    setPageInput((current) => (current === String(nextPage) ? current : String(nextPage)))
-  }, [loggedIn, searchParams])
-
-  const queryString = React.useMemo(
+  const activeQueryString = React.useMemo(
     () =>
       buildQueryString({
-        keyword: deferredKeyword,
-        tagQuery: deferredTagQuery,
-        difficulty,
-        userStatus,
-        scratchOnly,
-        page,
+        keyword: appliedKeyword,
+        tagQuery: appliedTagQuery,
+        difficulty: appliedDifficulty,
+        userStatus: appliedUserStatus,
+        page: appliedPage,
         includeUserStatus: loggedIn,
       }),
-    [deferredKeyword, deferredTagQuery, difficulty, loggedIn, page, scratchOnly, userStatus]
+    [appliedDifficulty, appliedKeyword, appliedPage, appliedTagQuery, appliedUserStatus, loggedIn]
   )
-
-  React.useEffect(() => {
-    if (authLoading) return
-    if (queryString === searchParams.toString()) return
-    router.replace(queryString ? `${pathname}?${queryString}` : pathname, { scroll: false })
-  }, [authLoading, pathname, queryString, router, searchParams])
 
   const copyCurrentViewLink = React.useCallback(async () => {
     if (typeof window === "undefined") return
-    const href = `${window.location.origin}${pathname}${queryString ? `?${queryString}` : ""}`
+    const href = `${window.location.origin}${pathname}${activeQueryString ? `?${activeQueryString}` : ""}`
     await copyText(href, { errorTitle: "复制链接失败" })
-  }, [copyText, pathname, queryString])
+  }, [activeQueryString, copyText, pathname])
 
   const params = React.useMemo(() => {
     const next: Record<string, string> = {
-      page: String(page),
+      page: String(appliedPage),
       limit: PAGE_SIZE,
     }
-    if (deferredKeyword.trim()) {
-      next.keyword = deferredKeyword.trim()
+    if (appliedKeyword.trim()) {
+      next.keyword = appliedKeyword.trim()
     }
-    if (deferredTagQuery.trim()) {
-      next.tagQuery = deferredTagQuery.trim()
+    if (appliedTagQuery.trim()) {
+      next.tagQuery = appliedTagQuery.trim()
     }
-    if (difficulty !== "all") {
-      next.difficulty = difficulty
+    if (appliedDifficulty !== "all") {
+      next.difficultyBand = appliedDifficulty
     }
-    if (loggedIn && userStatus !== "all") {
-      next.userStatus = userStatus
-    }
-    if (scratchOnly) {
-      next.tags = "scratch-必做,scratch-可选"
+    if (loggedIn && appliedUserStatus !== "all") {
+      next.userStatus = appliedUserStatus
     }
     return next
-  }, [deferredKeyword, deferredTagQuery, difficulty, loggedIn, page, scratchOnly, userStatus])
+  }, [appliedDifficulty, appliedKeyword, appliedPage, appliedTagQuery, appliedUserStatus, loggedIn])
 
   const { data: problemsResponse, error, isLoading } = useSWR<ProblemsResponse>(
     ["/problems", params],
@@ -286,7 +228,7 @@ export default function ProblemsPage() {
   const problems = problemsResponse?.data ?? []
   const meta = problemsResponse?.meta
   const totalPages = Math.max(meta?.totalPages ?? 1, 1)
-  const currentPage = meta?.page ?? page
+  const currentPage = meta?.page ?? appliedPage
   const paginationItems = React.useMemo(
     () => buildPaginationItems(currentPage, totalPages),
     [currentPage, totalPages]
@@ -303,49 +245,105 @@ export default function ProblemsPage() {
   )
 
   React.useEffect(() => {
-    const displayPage = String(meta?.page ?? page)
+    const displayPage = String(meta?.page ?? appliedPage)
     setPageInput((current) => (current === displayPage ? current : displayPage))
-  }, [meta?.page, page])
+  }, [appliedPage, meta?.page])
+
+  const navigateWithFilters = React.useCallback(
+    (input: {
+      keyword: string
+      tagQuery: string
+      difficulty: string
+      userStatus: string
+      page: number
+    }) => {
+      const nextQueryString = buildQueryString({
+        ...input,
+        includeUserStatus: loggedIn,
+      })
+      router.replace(nextQueryString ? `${pathname}?${nextQueryString}` : pathname, { scroll: false })
+    },
+    [loggedIn, pathname, router]
+  )
+
+  const applyFilters = React.useCallback(() => {
+    setTagPickerOpen(false)
+    setDifficultyPickerOpen(false)
+    navigateWithFilters({
+      keyword,
+      tagQuery,
+      difficulty,
+      userStatus,
+      page: 1,
+    })
+  }, [difficulty, keyword, navigateWithFilters, tagQuery, userStatus])
 
   const resetFilters = () => {
     setKeyword("")
     setTagQuery("")
     setDifficulty("all")
     setUserStatus("all")
-    setScratchOnly(false)
-    setPage(1)
+    setTagPickerOpen(false)
+    setDifficultyPickerOpen(false)
+    router.replace(pathname, { scroll: false })
   }
 
-  const hasActiveFilters =
-    keyword.trim().length > 0 ||
-    tagQuery.trim().length > 0 ||
-    difficulty !== "all" ||
-    (loggedIn && userStatus !== "all") ||
-    scratchOnly
+  const hasAppliedFilters =
+    appliedKeyword.trim().length > 0 ||
+    appliedTagQuery.trim().length > 0 ||
+    appliedDifficulty !== "all" ||
+    (loggedIn && appliedUserStatus !== "all")
+
+  const hasPendingChanges =
+    keyword !== appliedKeyword ||
+    tagQuery !== appliedTagQuery ||
+    difficulty !== appliedDifficulty ||
+    userStatus !== appliedUserStatus
+
+  const canResetFilters = hasPendingChanges || hasAppliedFilters
 
   const applyTagFilter = (tag: string) => {
     setTagQuery(tag)
-    setPage(1)
+    setTagPickerOpen(false)
   }
 
   const clearTagFilter = () => {
     setTagQuery("")
-    setPage(1)
   }
 
-  const jumpTarget = parsePositiveInt(pageInput, meta?.page ?? page)
+  const filteredTagOptions = React.useMemo(() => {
+    const normalizedTagQuery = tagQuery.trim().toLowerCase()
+    return TAG_OPTIONS.filter((tag) =>
+      !normalizedTagQuery ? true : tag.toLowerCase().includes(normalizedTagQuery)
+    )
+  }, [tagQuery])
+
+  const jumpTarget = parsePositiveInt(pageInput, meta?.page ?? appliedPage)
   const normalizedJumpTarget = Math.min(Math.max(jumpTarget, 1), totalPages)
   const canJumpToPage =
     !isLoading &&
     Number.isFinite(Number(pageInput)) &&
-    normalizedJumpTarget !== (meta?.page ?? page)
+    normalizedJumpTarget !== (meta?.page ?? appliedPage)
 
   const submitPageJump = () => {
     if (!canJumpToPage) {
-      setPageInput(String(meta?.page ?? page))
+      setPageInput(String(meta?.page ?? appliedPage))
       return
     }
-    setPage(normalizedJumpTarget)
+    navigateWithFilters({
+      keyword: appliedKeyword,
+      tagQuery: appliedTagQuery,
+      difficulty: appliedDifficulty,
+      userStatus: appliedUserStatus,
+      page: normalizedJumpTarget,
+    })
+  }
+
+  const handleFilterKeyDown = (event: React.KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === "Enter") {
+      event.preventDefault()
+      applyFilters()
+    }
   }
 
   const activeSummary = (
@@ -353,22 +351,22 @@ export default function ProblemsPage() {
       <span>共 {meta?.total ?? 0} 题</span>
       <span>·</span>
       <span>每页 {meta?.limit ?? Number(PAGE_SIZE)} 题</span>
-      {tagQuery.trim() ? (
+      {appliedTagQuery.trim() ? (
         <>
           <span>·</span>
-          <span>标签筛选 {tagQuery.trim()}</span>
+          <span>标签筛选 {appliedTagQuery.trim()}</span>
         </>
       ) : null}
-      {loggedIn && userStatus !== "all" ? (
+      {appliedDifficultyMeta ? (
+        <>
+          <span>·</span>
+          <span>{appliedDifficultyMeta.fullLabel}</span>
+        </>
+      ) : null}
+      {loggedIn && appliedUserStatus !== "all" ? (
         <>
           <span>·</span>
           <span>个人状态已生效</span>
-        </>
-      ) : null}
-      {scratchOnly ? (
-        <>
-          <span>·</span>
-          <span>仅显示 Scratch 题</span>
         </>
       ) : null}
     </>
@@ -377,169 +375,219 @@ export default function ProblemsPage() {
   return (
     <div className="page-wrap py-8 md:py-10">
       <div className="space-y-8">
-        <SectionHeading
+        <PageHeader
           eyebrow="Problem Bank"
-          title="用更快的扫描节奏管理整库题目。"
-          description="保留原有数据接口和筛选逻辑，只把列表、筛选和分页整理成统一的高密度工作面。"
-          action={
+          title="题库列表改成更稳定的训练工作台。"
+          description="保留现有题目接口和筛选语义，只把页面结构统一成 PageTitle + Filter Bar + 高密度列表。搜索支持题号和题名，筛选修改后点击确认再执行查询。"
+          meta={
+            <>
+              <span>题号检索</span>
+              <span>·</span>
+              <span>标签过滤</span>
+              <span>·</span>
+              <span>难度分层</span>
+              <span>·</span>
+              <span>个人状态</span>
+            </>
+          }
+          actions={
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
-                <BookOpenText className="h-4 w-4 text-foreground" />
-                <span>{meta?.total ?? 0} 道题</span>
+              <Button type="button" variant={copied ? "default" : "secondary"} onClick={copyCurrentViewLink}>
+                {copied ? "已复制筛选链接" : "复制当前筛选链接"}
+              </Button>
+              <Button type="button" variant="outline" onClick={resetFilters} disabled={!canResetFilters}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                重置条件
+              </Button>
+            </div>
+          }
+          aside={
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Current View</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{meta?.total ?? 0} 道题</p>
               </div>
-              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
-                <GraduationCap className="h-4 w-4 text-foreground" />
-                <span>{loggedIn ? "已接入个人状态" : "未登录，仅展示公开列表"}</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">学习状态</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{loggedIn ? "已接入个人进度" : "公开视图"}</p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">交互规则</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">先选再确认</p>
+                </div>
               </div>
             </div>
           }
         />
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Focus
-                </p>
-                <p className="text-2xl font-semibold text-foreground">{meta?.total ?? 0}</p>
-                <p className="text-sm text-muted-foreground">题目总量</p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-primary/30 p-3 text-foreground">
-                <BookOpenText className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Filters
-                </p>
-                <p className="text-2xl font-semibold text-foreground">
-                  {hasActiveFilters ? "已启用" : "默认"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {hasActiveFilters ? "当前视图已收敛到目标题集" : "当前显示完整题库视图"}
-                </p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-accent p-3 text-foreground">
-                <SlidersHorizontal className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Scratch
-                </p>
-                <p className="text-2xl font-semibold text-foreground">
-                  {scratchOnly ? "仅看中" : "混合"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {scratchOnly ? "必做与可选 Scratch 题目已单独聚合" : "算法题与 Scratch 题混合展示"}
-                </p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-secondary p-3 text-foreground">
-                <Sparkles className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Problem Volume"
+            value={meta?.total ?? 0}
+            description="当前筛选视图下的题目总量"
+            icon={BookOpenText}
+            tone="primary"
+          />
+          <StatCard
+            label="Filters"
+            value={hasAppliedFilters ? "已启用" : "默认"}
+            description={hasAppliedFilters ? "当前视图已收敛到目标题集" : "当前显示完整公开题库视图"}
+            icon={SlidersHorizontal}
+            tone="accent"
+          />
+          <StatCard
+            label="Search"
+            value={appliedKeyword.trim() || appliedTagQuery.trim() ? "已收敛" : "全量"}
+            description={
+              appliedKeyword.trim() || appliedTagQuery.trim()
+                ? "关键词和标签条件已作用到结果列表"
+                : "当前还没有关键词筛选"
+            }
+            icon={Search}
+            tone="secondary"
+          />
         </div>
 
         <FilterBar
           title="筛选工作台"
-          description="保留原有筛选参数和 URL 同步逻辑，只重构筛选区的层级、间距和交互反馈。"
+          description="支持按题目名称模糊搜索，也支持按题号/别名搜索；调整筛选条件后，点击确认再开始查询。"
           summary={activeSummary}
-          actions={
-            <>
-              <Button type="button" variant="ghost" onClick={resetFilters} disabled={!hasActiveFilters}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                重置
-              </Button>
-              <Button
-                type="button"
-                variant={copied ? "default" : "secondary"}
-                onClick={copyCurrentViewLink}
-              >
-                {copied ? "已复制" : "复制当前筛选链接"}
-              </Button>
-            </>
-          }
+          className="overflow-visible"
         >
-          <div className="grid gap-3 xl:grid-cols-[minmax(260px,1.4fr)_minmax(220px,1fr)_160px_170px_auto]">
+          <div className="relative grid gap-3 xl:grid-cols-[minmax(300px,1.55fr)_minmax(280px,1.3fr)_170px_170px_120px]">
             <div className="relative">
               <Search className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
               <Input
                 type="search"
-                placeholder="搜索题目、slug 或标签"
+                placeholder="输入题目名称或题号，支持模糊搜索"
                 className="pl-9"
                 value={keyword}
                 onChange={(event) => {
                   setKeyword(event.target.value)
-                  setPage(1)
                 }}
+                onKeyDown={handleFilterKeyDown}
               />
             </div>
-            <div className="relative">
+            <div className="flex items-center gap-2">
               <Input
-                list="problem-tag-options"
-                placeholder="选择或输入标签"
+                placeholder="输入标签关键词"
                 value={tagQuery}
                 onChange={(event) => {
                   setTagQuery(event.target.value)
-                  setPage(1)
                 }}
+                onKeyDown={handleFilterKeyDown}
               />
-              <datalist id="problem-tag-options">
-                {TAG_OPTIONS.map((tag) => (
-                  <option key={tag} value={tag} />
-                ))}
-              </datalist>
+              <Button
+                type="button"
+                variant={tagPickerOpen || tagQuery.trim() ? "secondary" : "outline"}
+                className="h-11 shrink-0"
+                onClick={() => {
+                  setTagPickerOpen((value) => !value)
+                  setDifficultyPickerOpen(false)
+                }}
+              >
+                选择标签
+              </Button>
             </div>
-            <select
-              value={difficulty}
-              onChange={(event) => {
-                setDifficulty(event.target.value)
-                setPage(1)
-              }}
-              className="focus-ring h-11 rounded-[1.2rem] border-[3px] border-border bg-white px-3.5 text-sm shadow-[6px_6px_0_hsl(var(--border))]"
-            >
-              <option value="all">全部难度</option>
-              <option value="1">简单</option>
-              <option value="2">中等</option>
-              <option value="3">困难</option>
-            </select>
+            <div className="relative z-30">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-11 w-full justify-between rounded-[1rem] border-[2px] bg-white px-4 text-base font-semibold shadow-none"
+                onClick={() => {
+                  setDifficultyPickerOpen((value) => !value)
+                  setTagPickerOpen(false)
+                }}
+              >
+                <span className="text-foreground">题目难度</span>
+                {difficultyPickerOpen ? <ChevronUp className="h-5 w-5 text-foreground" /> : <ChevronDown className="h-5 w-5 text-foreground" />}
+              </Button>
+              {difficultyPickerOpen ? (
+                <div className="absolute left-0 top-[calc(100%+0.75rem)] z-50 w-[22rem] overflow-hidden rounded-[1.1rem] border border-slate-300 bg-[#f6f6f6] shadow-[0_18px_40px_-18px_rgba(15,23,42,0.55)]">
+                  <button
+                    type="button"
+                    className={cn(
+                      "focus-ring block w-full border-b border-slate-200 bg-white px-5 py-4 text-left text-[1rem] font-semibold transition-colors",
+                      difficulty === "all" ? "text-foreground" : "text-foreground hover:bg-slate-50"
+                    )}
+                    onClick={() => setDifficulty("all")}
+                  >
+                    所有
+                  </button>
+                  <div className="bg-white">
+                    {LUOGU_DIFFICULTY_BANDS.map((band) => (
+                      <button
+                        key={band.id}
+                        type="button"
+                        className={cn(
+                          "focus-ring block w-full px-5 py-3 text-left text-[1.05rem] font-semibold transition-colors hover:bg-slate-50",
+                          band.textClassName,
+                          difficulty === band.id ? "bg-slate-50" : null
+                        )}
+                        onClick={() => setDifficulty(band.id)}
+                      >
+                        {band.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+            </div>
             <select
               value={userStatus}
               onChange={(event) => {
                 setUserStatus(event.target.value)
-                setPage(1)
               }}
               disabled={!loggedIn}
-              className="focus-ring h-11 rounded-[1.2rem] border-[3px] border-border bg-white px-3.5 text-sm shadow-[6px_6px_0_hsl(var(--border))] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="focus-ring ui-field h-11 px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               <option value="all">全部状态</option>
               <option value="NOT_STARTED">未开始</option>
               <option value="ATTEMPTED">已尝试</option>
               <option value="ACCEPTED">已通过</option>
             </select>
-            <Button
-              type="button"
-              variant={scratchOnly ? "default" : "outline"}
-              onClick={() => {
-                setScratchOnly((value) => !value)
-                setPage(1)
-              }}
-              className="h-11"
-            >
-              {scratchOnly ? "正在筛 Scratch" : "仅看 Scratch"}
+            <Button type="button" className="h-11" onClick={applyFilters} disabled={authLoading || !hasPendingChanges}>
+              确认
             </Button>
           </div>
+          {tagPickerOpen ? (
+            <div className="rounded-[1.5rem] border-[3px] border-border bg-white p-4 shadow-[8px_8px_0_hsl(var(--border))]">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-foreground">标签选择</p>
+                  <p className="text-xs text-muted-foreground">点击一个标签填入筛选框，再点确认开始搜索。</p>
+                </div>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setTagPickerOpen(false)}>
+                  收起
+                </Button>
+              </div>
+              <div className="flex max-h-48 flex-wrap gap-2 overflow-y-auto pr-1">
+                {filteredTagOptions.map((tag) => (
+                  <button
+                    key={tag}
+                    type="button"
+                    className={cn(
+                      "focus-ring inline-flex items-center rounded-full border px-3 py-1.5 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary",
+                      getTagClass(tag),
+                      tagQuery.trim().toLowerCase() === tag.toLowerCase()
+                        ? "border-primary/50 bg-primary/15 text-primary"
+                        : null
+                    )}
+                    onClick={() => applyTagFilter(tag)}
+                  >
+                    {tag}
+                  </button>
+                ))}
+                {filteredTagOptions.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">没有匹配的标签，换个关键词试试。</div>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
           {tagQuery.trim() ? (
             <div className="flex flex-wrap items-center gap-2">
-              <span className="text-sm text-muted-foreground">当前标签筛选</span>
+              <span className="text-sm text-muted-foreground">已选标签</span>
               <button
                 type="button"
                 className="focus-ring inline-flex items-center gap-1 rounded-full border-[2px] border-border bg-primary/35 px-3 py-1 text-xs font-medium text-foreground transition-colors hover:bg-primary/45"
@@ -560,22 +608,21 @@ export default function ProblemsPage() {
         ) : null}
 
         {isLoading ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {Array.from({ length: 6 }).map((_, index) => (
-              <Card key={index} className="surface-panel rounded-[1.8rem]">
-                <CardContent className="space-y-4 p-6">
-                  <div className="space-y-3">
-                    <Skeleton className="h-4 w-28" />
-                    <Skeleton className="h-7 w-2/3" />
-                    <div className="flex flex-wrap gap-2">
-                      <Skeleton className="h-6 w-16 rounded-full" />
-                      <Skeleton className="h-6 w-20 rounded-full" />
-                      <Skeleton className="h-6 w-24 rounded-full" />
+          <div className="space-y-3">
+            {Array.from({ length: 8 }).map((_, index) => (
+                <Card key={index} className="surface-panel overflow-hidden rounded-[1.6rem]">
+                <CardContent className="overflow-x-auto px-5 py-4">
+                  <div className="grid min-w-[1000px] grid-cols-[220px_minmax(180px,1fr)_80px_minmax(260px,1.35fr)_100px_90px] items-center gap-4">
+                    <Skeleton className="h-12 rounded-full" />
+                    <Skeleton className="h-7 rounded-lg" />
+                    <Skeleton className="h-6 w-10 rounded-lg" />
+                    <div className="flex gap-2">
+                      <Skeleton className="h-8 w-16 rounded-full" />
+                      <Skeleton className="h-8 w-20 rounded-full" />
+                      <Skeleton className="h-8 w-24 rounded-full" />
                     </div>
-                  </div>
-                  <div className="grid gap-2 sm:grid-cols-2">
-                    <Skeleton className="h-14 rounded-2xl" />
-                    <Skeleton className="h-14 rounded-2xl" />
+                    <Skeleton className="h-6 rounded-lg" />
+                    <Skeleton className="h-6 rounded-lg" />
                   </div>
                 </CardContent>
               </Card>
@@ -593,122 +640,13 @@ export default function ProblemsPage() {
         ) : null}
 
         {!isLoading && !error ? (
-          <div className="grid gap-4 md:grid-cols-2">
-            {problems.map((problem) => {
-          const progress = getUserStatusMeta(problem.userStatus)
-          const href = `/problems/${problem.slug || problem.id}`
-          return (
-            <Card
-              key={problem.id}
-              role="link"
-              tabIndex={0}
-              className="surface-panel cursor-pointer overflow-hidden rounded-[1.9rem] transition duration-300 hover:-translate-y-1 hover:shadow-[14px_14px_0_hsl(var(--border))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-              onClick={() => router.push(href)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
-                  event.preventDefault()
-                  router.push(href)
-                }
-              }}
-            >
-              <CardContent className="p-0">
-                <div className="border-b-[3px] border-border bg-[linear-gradient(135deg,rgba(255,255,255,0.9),rgba(245,184,167,0.16))] px-6 py-5">
-                  <div className="min-w-0 space-y-3">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="rounded-full border-[2px] border-border bg-white px-2.5 py-1 font-mono text-xs text-muted-foreground shadow-[4px_4px_0_hsl(var(--border))]">
-                        {problem.slug}
-                      </span>
-                      <Link
-                        href={href}
-                        className="truncate text-lg font-semibold tracking-tight hover:text-primary"
-                        onClick={(event) => event.stopPropagation()}
-                      >
-                        {problem.title}
-                      </Link>
-                      <Badge variant="outline" className={getDifficultyClass(problem.difficulty)}>
-                        {getDifficultyLabel(problem.difficulty)}
-                      </Badge>
-                      {progress ? (
-                        <Badge variant="outline" className={progress.className}>
-                          {progress.label}
-                        </Badge>
-                      ) : null}
-                      {problem.visibility && problem.visibility !== "public" ? (
-                        <Badge
-                          variant="outline"
-                          className="border-orange-200 bg-orange-50 text-orange-700"
-                        >
-                          未公开
-                        </Badge>
-                      ) : null}
-                    </div>
-                    {problem.tags?.length ? (
-                      <div className="flex flex-wrap gap-2">
-                        {problem.tags.map((tag) => (
-                          <button
-                            key={`${problem.id}-${tag}`}
-                            type="button"
-                            className={cn(
-                              "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                              getTagClass(tag),
-                              isTagMatch(tag, tagQuery)
-                                ? "border-primary/50 bg-primary/15 text-primary"
-                                : null
-                            )}
-                            onClick={(event) => {
-                              event.stopPropagation()
-                              applyTagFilter(tag)
-                            }}
-                          >
-                            {tag}
-                          </button>
-                        ))}
-                      </div>
-                    ) : null}
-                    <div className="flex flex-wrap gap-3 text-xs text-muted-foreground">
-                      <span>版本 v{problem.version ?? "-"}</span>
-                      <span>总提交 {problem.totalSubmissions ?? 0}</span>
-                      <span>通过 {problem.acceptedSubmissions ?? 0}</span>
-                      <span>通过率 {Math.round((problem.passRate ?? 0) * 100)}%</span>
-                      {problem.bestScore ? <span>最好成绩 {problem.bestScore}</span> : null}
-                    </div>
-                  </div>
-                </div>
-                <div className="grid gap-3 px-6 py-5 sm:grid-cols-[1fr_auto] sm:items-center">
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <div className="rounded-[1.3rem] border-[3px] border-border bg-white p-4 shadow-[6px_6px_0_hsl(var(--border))]">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        进度
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-foreground">
-                        {progress?.label ?? "未开始"}
-                      </p>
-                    </div>
-                    <div className="rounded-[1.3rem] border-[3px] border-border bg-white p-4 shadow-[6px_6px_0_hsl(var(--border))]">
-                      <p className="text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                        通过率
-                      </p>
-                      <p className="mt-2 text-lg font-semibold text-foreground">
-                        {Math.round((problem.passRate ?? 0) * 100)}%
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-                    <span
-                      className={cn(
-                        "rounded-full border-[2px] px-3 py-1 text-xs font-medium",
-                        progress?.className ?? "border-border bg-white text-foreground",
-                      )}
-                    >
-                      {progress?.label ?? "未开始"}
-                    </span>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          )
-            })}
-          </div>
+          <ProblemTable
+            problems={problems}
+            hiddenTags={HIDDEN_PROBLEM_TAGS}
+            activeTagQuery={tagQuery}
+            getTagClass={getTagClass}
+            onTagSelect={applyTagFilter}
+          />
         ) : null}
 
         <PaginationBar
@@ -722,7 +660,15 @@ export default function ProblemsPage() {
           canJumpToPage={canJumpToPage}
           onPageInputChange={(value) => setPageInput(value.replace(/[^\d]/g, ""))}
           onPageInputSubmit={submitPageJump}
-          onPageChange={setPage}
+          onPageChange={(nextPage) =>
+            navigateWithFilters({
+              keyword: appliedKeyword,
+              tagQuery: appliedTagQuery,
+              difficulty: appliedDifficulty,
+              userStatus: appliedUserStatus,
+              page: nextPage,
+            })
+          }
         />
       </div>
     </div>
