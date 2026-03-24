@@ -15,12 +15,15 @@ import {
 import { SubmissionResult } from "@/components/problems/submission-result"
 import { useSubmission } from "@/lib/hooks/use-submission"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { ChevronLeft, ChevronRight, Loader2, Play, Send } from "lucide-react"
 import { toast } from "sonner"
 import { Breadcrumbs } from "@/components/ui/breadcrumbs"
 import { Badge } from "@/components/ui/badge"
 import { AiTutorPanel } from "@/components/ai/ai-tutor-panel"
 import { ProblemSolutionsPanel } from "@/components/solutions/problem-solutions-panel"
+import { PageHeader } from "@/components/patterns/page-header"
+import { StatusBadge } from "@/components/patterns/status-badge"
+import { ProblemTabs } from "@/components/problems/problem-tabs"
+import { SubmitBar } from "@/components/problems/submit-bar"
 import {
   getSubmissionStatusClass,
   getSubmissionStatusLabel,
@@ -260,6 +263,7 @@ export default function ProblemDetailPage() {
   )
   const [scratchFileName, setScratchFileName] = React.useState("")
   const [showScratchRecentModal, setShowScratchRecentModal] = React.useState(false)
+  const [problemTab, setProblemTab] = React.useState<"statement" | "discussion" | "tips">("statement")
   const [toastPos, setToastPos] = React.useState({ x: 0, y: 0 })
   const [isDraggingToast, setIsDraggingToast] = React.useState(false)
   const dragOffsetRef = React.useRef({ x: 0, y: 0 })
@@ -914,13 +918,73 @@ export default function ProblemDetailPage() {
           : "page-wrap py-4 md:py-6"
       )}
     >
+    {!isScratch ? (
+      <div className="mb-4">
+        <PageHeader
+          eyebrow="Problem Workspace"
+          title={problem?.title ?? "题目详情"}
+          description="题目详情页统一成 PageTitle + Action Bar + 双栏工作区。题面、讨论和提示分开组织，避免把提问、题解和正文搅在一起。"
+          meta={
+            <>
+              <span>阅读题面</span>
+              <span>·</span>
+              <span>编码提交</span>
+              <span>·</span>
+              <span>讨论求助</span>
+              <span>·</span>
+              <span>提示与题解</span>
+            </>
+          }
+          actions={
+            <div className="flex flex-wrap gap-3">
+              {problem?.slug ? (
+                <Button asChild variant="secondary">
+                  <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>查看该题提交</Link>
+                </Button>
+              ) : null}
+              <Button asChild variant="outline">
+                <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>提问求助</Link>
+              </Button>
+              <Button asChild variant="outline">
+                <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>进入讨论</Link>
+              </Button>
+            </div>
+          }
+          aside={
+            <div className="space-y-4">
+              <div className="flex flex-wrap gap-2">
+                {visibleTags.length ? (
+                  visibleTags.map((tag) => (
+                    <Badge key={`${problem?.id ?? id}-${tag}`} variant="outline" className={getTagClass(tag)}>
+                      {tag}
+                    </Badge>
+                  ))
+                ) : (
+                  <StatusBadge>无标签</StatusBadge>
+                )}
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">评测限制</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{limitText ?? "默认限制"}</p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">当前模式</p>
+                  <p className="mt-2 text-sm font-semibold text-foreground">{isScratch ? "Scratch" : language.label}</p>
+                </div>
+              </div>
+            </div>
+          }
+        />
+      </div>
+    ) : null}
     <div
       ref={workspaceViewportRef}
       className={cn(
         "flex flex-col gap-3 md:min-h-0 md:flex-row md:overflow-hidden",
         isScratch
           ? "min-h-0"
-          : "min-h-[calc(100vh-8.4rem)] md:h-[calc(100vh-8.4rem)]"
+          : "min-h-[calc(100vh-14rem)] md:h-[calc(100vh-18rem)]"
       )}
       style={isScratch && scratchViewportHeight ? { height: `${scratchViewportHeight}px` } : undefined}
     >
@@ -999,6 +1063,16 @@ export default function ProblemDetailPage() {
             </div>
           </div>
         ) : null}
+        {!isScratch ? (
+          <div className="mb-4">
+            <ProblemTabs
+              value={problemTab}
+              onValueChange={setProblemTab}
+              questionHref={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}
+              discussionHref={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}
+            />
+          </div>
+        ) : null}
         {error ? (
           <div className="rounded-md border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-700">
             题目不存在、未公开，或加载失败。
@@ -1007,7 +1081,7 @@ export default function ProblemDetailPage() {
         {isLoading && !problem ? (
           <div className="text-sm text-muted-foreground">加载中...</div>
         ) : null}
-        {!isScratch && statementHeadings.length > 0 ? (
+        {!isScratch && problemTab === "statement" && statementHeadings.length > 0 ? (
           <div className="mb-4 rounded-xl border-2 border-border/60 bg-background p-3">
             <div className="mb-3 text-sm font-semibold text-foreground">目录</div>
             <div className="space-y-1">
@@ -1030,110 +1104,140 @@ export default function ProblemDetailPage() {
             </div>
           </div>
         ) : null}
-        {statementMarkdown ? (
-          <ProblemMarkdown markdown={statementMarkdown} />
-        ) : (
-          <ProblemRichText content={problem?.statement} />
-        )}
-        {problem?.inputFormat ? (
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold text-foreground">输入格式</div>
-            {isScratch ? (
-              <ProblemMarkdown markdown={problem.inputFormat} />
-            ) : (
-              <ProblemRichText content={problem.inputFormat} />
-            )}
-          </div>
-        ) : null}
-        {problem?.outputFormat ? (
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold text-foreground">输出格式</div>
-            {isScratch ? (
-              <ProblemMarkdown markdown={problem.outputFormat} />
-            ) : (
-              <ProblemRichText content={problem.outputFormat} />
-            )}
-          </div>
-        ) : null}
-        {problem?.constraints ? (
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold text-foreground">约束</div>
-            {isScratch ? (
-              <ProblemMarkdown markdown={problem.constraints} />
-            ) : (
-              <ProblemRichText content={problem.constraints} />
-            )}
-          </div>
-        ) : null}
-        {samples.length ? (
-          <div className="mt-5 space-y-3">
-            <div className="text-sm font-semibold text-foreground">样例</div>
-            {samples.map((s, idx) => (
-              <div key={`${idx}-${s.input ?? ""}`} className="rounded-xl border-2 border-border/60 bg-background p-3">
-                <div className="mb-2 text-xs text-muted-foreground">样例 {idx + 1}</div>
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div>
-                    <div className="mb-1 text-xs text-muted-foreground">输入</div>
-                    <pre className="whitespace-pre-wrap text-xs text-foreground">{s.input ?? ""}</pre>
-                  </div>
-                  <div>
-                    <div className="mb-1 text-xs text-muted-foreground">输出</div>
-                    <pre className="whitespace-pre-wrap text-xs text-foreground">{s.output ?? ""}</pre>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : null}
-        {problem?.notes ? (
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold text-foreground">备注</div>
-            {isScratch ? (
-              <ProblemMarkdown markdown={problem.notes} />
-            ) : (
-              <ProblemRichText content={problem.notes} />
-            )}
-          </div>
-        ) : null}
-        {problem?.hints ? (
-          <div className="mt-5">
-            <div className="mb-2 text-sm font-semibold text-foreground">提示</div>
-            {isScratch ? (
-              <ProblemMarkdown markdown={problem.hints} />
-            ) : (
-              <ProblemRichText content={problem.hints} />
-            )}
-          </div>
-        ) : null}
-        {!isScratch ? (
+        {(isScratch || problemTab === "statement") ? (
           <>
-            <div id="problem-solutions" className="mt-6">
-              <ProblemSolutionsPanel problemId={id} />
-            </div>
-            <div className="mt-6">
-              <AiTutorPanel problemId={id} problemTitle={problem?.title ?? null} compact />
-            </div>
+            {statementMarkdown ? (
+              <ProblemMarkdown markdown={statementMarkdown} />
+            ) : (
+              <ProblemRichText content={problem?.statement} />
+            )}
+            {problem?.inputFormat ? (
+              <div className="mt-5">
+                <div className="mb-2 text-sm font-semibold text-foreground">输入格式</div>
+                {isScratch ? (
+                  <ProblemMarkdown markdown={problem.inputFormat} />
+                ) : (
+                  <ProblemRichText content={problem.inputFormat} />
+                )}
+              </div>
+            ) : null}
+            {problem?.outputFormat ? (
+              <div className="mt-5">
+                <div className="mb-2 text-sm font-semibold text-foreground">输出格式</div>
+                {isScratch ? (
+                  <ProblemMarkdown markdown={problem.outputFormat} />
+                ) : (
+                  <ProblemRichText content={problem.outputFormat} />
+                )}
+              </div>
+            ) : null}
+            {problem?.constraints ? (
+              <div className="mt-5">
+                <div className="mb-2 text-sm font-semibold text-foreground">约束</div>
+                {isScratch ? (
+                  <ProblemMarkdown markdown={problem.constraints} />
+                ) : (
+                  <ProblemRichText content={problem.constraints} />
+                )}
+              </div>
+            ) : null}
+            {samples.length ? (
+              <div className="mt-5 space-y-3">
+                <div className="text-sm font-semibold text-foreground">样例</div>
+                {samples.map((s, idx) => (
+                  <div key={`${idx}-${s.input ?? ""}`} className="rounded-xl border-2 border-border/60 bg-background p-3">
+                    <div className="mb-2 text-xs text-muted-foreground">样例 {idx + 1}</div>
+                    <div className="grid gap-3 md:grid-cols-2">
+                      <div>
+                        <div className="mb-1 text-xs text-muted-foreground">输入</div>
+                        <pre className="whitespace-pre-wrap text-xs text-foreground">{s.input ?? ""}</pre>
+                      </div>
+                      <div>
+                        <div className="mb-1 text-xs text-muted-foreground">输出</div>
+                        <pre className="whitespace-pre-wrap text-xs text-foreground">{s.output ?? ""}</pre>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : null}
+            {problem?.notes ? (
+              <div className="mt-5">
+                <div className="mb-2 text-sm font-semibold text-foreground">备注</div>
+                {isScratch ? (
+                  <ProblemMarkdown markdown={problem.notes} />
+                ) : (
+                  <ProblemRichText content={problem.notes} />
+                )}
+              </div>
+            ) : null}
           </>
         ) : null}
-        {!isScratch ? (
-          <div className="mt-6 rounded-xl border-2 border-border/60 bg-background p-3">
-            <div className="mb-3 flex items-center justify-between gap-2">
-              <div>
-                <div className="text-sm font-semibold text-foreground">该题最近提交</div>
-                <div className="text-xs text-muted-foreground">
-                  查看你在这道题上的最近 5 次提交与结果变化。
-                </div>
+        {!isScratch && problemTab === "discussion" ? (
+          <div className="space-y-4">
+            <div className="rounded-xl border-2 border-border/60 bg-background p-4">
+              <div className="text-sm font-semibold text-foreground">讨论入口</div>
+              <p className="mt-2 text-sm leading-7 text-muted-foreground">
+                题目讨论用于交流思路和赛后复盘；提问求助用于结构化说明你已经尝试过什么、现在具体卡在哪里。
+              </p>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <Button asChild>
+                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=question&sort=unsolved`}>
+                    发布求助帖
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary">
+                  <Link href={`/discuss?problemId=${encodeURIComponent(id)}&postType=problem_discussion`}>
+                    查看题目讨论
+                  </Link>
+                </Button>
               </div>
-              {problem?.slug ? (
-                <Link
-                  href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
-                  className="text-xs font-medium text-sky-700 hover:text-sky-800"
-                >
-                  查看全部
-                </Link>
-              ) : null}
             </div>
-            {recentSubmissionsContent}
+            <div className="rounded-xl border-2 border-border/60 bg-background p-4">
+              <div className="text-sm font-semibold text-foreground">提问模板提醒</div>
+              <ul className="mt-3 space-y-2 text-sm leading-7 text-muted-foreground">
+                <li>说明你当前的思路、复杂度判断和已经尝试过的修正。</li>
+                <li>明确卡点，例如边界、状态设计、样例不一致，而不是只说“不会做”。</li>
+                <li>默认不鼓励直接求完整 AC 代码，优先求提示、思路或错误定位。</li>
+              </ul>
+            </div>
+            <div className="rounded-xl border-2 border-border/60 bg-background p-4">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-sm font-semibold text-foreground">该题最近提交</div>
+                  <div className="text-xs text-muted-foreground">先看自己最近几次结果，再去发问会更高效。</div>
+                </div>
+                {problem?.slug ? (
+                  <Link
+                    href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
+                    className="text-xs font-medium text-sky-700 hover:text-sky-800"
+                  >
+                    查看全部
+                  </Link>
+                ) : null}
+              </div>
+              {recentSubmissionsContent}
+            </div>
+          </div>
+        ) : null}
+        {!isScratch && problemTab === "tips" ? (
+          <div className="space-y-5">
+            {problem?.hints ? (
+              <div>
+                <div className="mb-2 text-sm font-semibold text-foreground">提示</div>
+                <ProblemRichText content={problem.hints} />
+              </div>
+            ) : (
+              <div className="rounded-xl border-2 border-dashed border-border/60 bg-background p-4 text-sm text-muted-foreground">
+                当前题目还没有配置文字提示，可以先参考讨论区或最近提交结果。
+              </div>
+            )}
+            <div id="problem-solutions" className="mt-2">
+              <ProblemSolutionsPanel problemId={id} />
+            </div>
+            <div>
+              <AiTutorPanel problemId={id} problemTitle={problem?.title ?? null} compact />
+            </div>
           </div>
         ) : null}
       </div>
@@ -1146,48 +1250,39 @@ export default function ProblemDetailPage() {
           isScratch ? "md:w-0 md:flex-1" : "md:w-1/2"
         )}
       >
-        <div className="flex items-center justify-between border-b-[3px] border-border bg-background px-4 py-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-medium text-muted-foreground">语言</div>
-              <select
-                className="h-10 rounded-xl border-2 border-border bg-card px-3 text-sm text-foreground"
-                value={language.value}
-                    onChange={(e) => {
-                  const next =
-                    availableLanguages.find((item) => item.value === e.target.value) ??
-                    availableLanguages[0]
-                  if (!next) return
-                  const nextIsScratch =
-                    next.judgeMode === "scratch" || next.value.startsWith("scratch")
-                  const currentIsScratch = isScratch
-                  setLanguageValue(next.value)
-                  if (!nextIsScratch || !currentIsScratch) {
-                    setCode(next.template)
-                    setCodeTouched(false)
-                  }
-                }}
-              >
-                {availableLanguages.map((lang) => (
-                  <option key={lang.value} value={lang.value}>
-                    {lang.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="flex items-center gap-2 rounded-xl border-2 border-border/50 bg-muted/45 px-2 py-1 text-[11px] text-muted-foreground">
-              <span>评测</span>
-              <span className={`rounded-md border px-2 py-0.5 text-xs ${statusPillClass}`}>
-                {statusText}
-              </span>
-              {statusMeta ? (
-                <span className="hidden text-muted-foreground sm:inline">{statusMeta}</span>
-              ) : null}
+        <SubmitBar
+          languages={availableLanguages.map((item) => ({ label: item.label, value: item.value }))}
+          languageValue={language.value}
+          onLanguageChange={(value) => {
+            const next = availableLanguages.find((item) => item.value === value) ?? availableLanguages[0]
+            if (!next) return
+            const nextIsScratch = next.judgeMode === "scratch" || next.value.startsWith("scratch")
+            const currentIsScratch = isScratch
+            setLanguageValue(next.value)
+            if (!nextIsScratch || !currentIsScratch) {
+              setCode(next.template)
+              setCodeTouched(false)
+            }
+          }}
+          statusText={statusText}
+          statusPillClass={statusPillClass}
+          statusMeta={statusMeta}
+          isScratch={isScratch}
+          scratchSidebarCollapsed={scratchSidebarCollapsed}
+          onToggleScratchSidebar={() => setScratchSidebarCollapsed((current) => !current)}
+          onRun={handleRun}
+          onSubmit={handleSubmit}
+          isRunning={isRunning}
+          isSubmitting={isSubmitting}
+          disableRun={isRunning || isScratch}
+          disableSubmit={isSubmitting || Boolean(submissionId && !isFinished && !submission)}
+          quickLinks={
+            <>
               {submissionId ? (
                 <button
                   type="button"
                   onClick={handleScrollToResult}
-                  className="rounded-md px-2 py-0.5 text-[11px] text-emerald-700 hover:text-emerald-800"
+                  className="rounded-md px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:text-emerald-800"
                 >
                   查看结果
                 </button>
@@ -1195,7 +1290,7 @@ export default function ProblemDetailPage() {
               {problem?.slug ? (
                 <Link
                   href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}
-                  className="rounded-md px-2 py-0.5 text-[11px] text-sky-700 hover:text-sky-800"
+                  className="rounded-md px-2 py-0.5 text-[11px] font-medium text-sky-700 hover:text-sky-800"
                 >
                   该题提交
                 </Link>
@@ -1204,54 +1299,14 @@ export default function ProblemDetailPage() {
                 <button
                   type="button"
                   onClick={() => setShowScratchRecentModal(true)}
-                  className="rounded-md px-2 py-0.5 text-[11px] text-emerald-700 hover:text-emerald-800"
+                  className="rounded-md px-2 py-0.5 text-[11px] font-medium text-emerald-700 hover:text-emerald-800"
                 >
                   最近提交
                 </button>
               ) : null}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {isScratch ? (
-              <Button
-                size="sm"
-                variant="outline"
-                className="h-10 gap-2"
-                onClick={() => setScratchSidebarCollapsed((current) => !current)}
-              >
-                {scratchSidebarCollapsed ? (
-                  <ChevronRight className="h-4 w-4" />
-                ) : (
-                  <ChevronLeft className="h-4 w-4" />
-                )}
-                {scratchSidebarCollapsed ? "展开题面" : "收起题面"}
-              </Button>
-            ) : null}
-            <Button
-              size="sm"
-              variant="ghost"
-              className="h-10 gap-2 text-muted-foreground hover:text-foreground"
-              onClick={handleRun}
-              disabled={isRunning || isScratch}
-            >
-              <Play className="h-4 w-4" />
-              {isRunning ? "运行中..." : "运行"}
-            </Button>
-            <Button 
-              size="sm"
-              className="h-10 gap-2 bg-primary hover:bg-primary/90 text-primary-foreground"
-              onClick={handleSubmit} 
-              disabled={isSubmitting || Boolean(submissionId && !isFinished && !submission)}
-            >
-              {isSubmitting ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <Send className="h-4 w-4" />
-              )}
-              提交
-            </Button>
-          </div>
-        </div>
+            </>
+          }
+        />
 
         <div
           className={cn(

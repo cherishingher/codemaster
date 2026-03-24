@@ -1,52 +1,110 @@
-import Link from "next/link";
-import { ArrowRight, BookOpen, Check, Clock3, Lock, MonitorPlay, PlayCircle, Star, Users } from "lucide-react";
-import { SectionHeading } from "@/components/patterns/section-heading";
-import { UpgradePlanButton } from "@/components/learn/upgrade-plan-button";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { HOME_TRACKS } from "@/lib/home-tracks";
-import { HOME_FEATURES } from "@/lib/home-features";
-import { getFeaturedLearnCourses, getLearnViewerFromCookies, getVideoMembershipProduct } from "@/lib/learn";
+import Link from "next/link"
+import {
+  ArrowRight,
+  BookOpen,
+  BrainCircuit,
+  Check,
+  CheckCircle2,
+  Clock3,
+  Compass,
+  Flame,
+  GraduationCap,
+  LayoutList,
+  Lock,
+  PlayCircle,
+  Sparkles,
+  TrendingUp,
+} from "lucide-react"
+import { db } from "@/lib/db"
+import { HOME_TRACKS } from "@/lib/home-tracks"
+import { HOME_FEATURES } from "@/lib/home-features"
+import { getSubmissionStatusClass, getSubmissionStatusLabel } from "@/lib/submissions"
+import { getFeaturedLearnCourses, getLearnViewerFromCookies, getVideoMembershipProduct } from "@/lib/learn"
+import { AlertPanel } from "@/components/patterns/alert-panel"
+import { PageHeader } from "@/components/patterns/page-header"
+import { SectionCard } from "@/components/patterns/section-card"
+import { StatCard } from "@/components/patterns/stat-card"
+import { StatusBadge } from "@/components/patterns/status-badge"
+import { UpgradePlanButton } from "@/components/learn/upgrade-plan-button"
+import { Button } from "@/components/ui/button"
 
-const stats = [
-  { value: "1000+", label: "已入库题目" },
-  { value: "30万+", label: "累计提交" },
-  { value: "500+", label: "图形化任务" },
-];
-
-const testimonials = [
-  {
-    quote:
-      "题库筛选、提交反馈和进度看板放在一起后，我每天训练的启动成本低了很多。",
-    name: "陈思远",
-    role: "算法入门学员",
-    initial: "C",
-    tone: "bg-accent",
-  },
-  {
-    quote:
-      "Scratch 任务和代码题共用同一套账号体系，课堂切换练习模式非常顺手。",
-    name: "李安娜",
-    role: "信息学教师",
-    initial: "L",
-    tone: "bg-secondary",
-  },
-  {
-    quote:
-      "后台批量导入题目和测试点后，教研维护效率明显提升，迭代也更可控。",
-    name: "周凯文",
-    role: "教研管理员",
-    initial: "Z",
-    tone: "bg-[hsl(244_41%_88%)]",
-  },
-];
+const problemScaleStats = [
+  { value: "1000+", label: "已入库题目", icon: BookOpen, tone: "primary" as const },
+  { value: "30万+", label: "累计提交", icon: TrendingUp, tone: "secondary" as const },
+  { value: "500+", label: "图形化任务", icon: Sparkles, tone: "accent" as const },
+]
 
 function formatPrice(priceCents: number) {
   return new Intl.NumberFormat("zh-CN", {
     style: "currency",
     currency: "CNY",
     minimumFractionDigits: 0,
-  }).format(priceCents / 100);
+  }).format(priceCents / 100)
+}
+
+function formatDateTime(value: Date | null | undefined) {
+  return value ? new Date(value).toLocaleString("zh-CN") : "-"
+}
+
+function getWeeklyWindowStart() {
+  const start = new Date()
+  start.setDate(start.getDate() - 7)
+  return start
+}
+
+function buildHomeSuggestions(input: {
+  isLoggedIn: boolean
+  recentSubmissionCount: number
+  recentAcceptedCount: number
+  featuredCourseCount: number
+  isPaid: boolean
+}) {
+  const suggestions = []
+
+  if (!input.isLoggedIn) {
+    suggestions.push({
+      title: "先登录并保存训练记录",
+      description: "登录后才能把最近提交、学习进度和讨论互动完整串成训练闭环。",
+      href: "/login",
+      label: "前往登录",
+    })
+  } else if (input.recentSubmissionCount === 0) {
+    suggestions.push({
+      title: "今天先做 1 道题启动训练",
+      description: "先用一道基础题把训练链路打通，再回看提交反馈和训练看板。",
+      href: "/problems",
+      label: "去题库做题",
+    })
+  } else {
+    suggestions.push({
+      title: `最近 7 天已提交 ${input.recentSubmissionCount} 次`,
+      description: input.recentAcceptedCount > 0
+        ? `其中 ${input.recentAcceptedCount} 次通过，可以继续向更高难度推进。`
+        : "目前还没有通过记录，建议优先复盘最近一次失败提交的边界和复杂度。",
+      href: "/submissions",
+      label: "查看提交记录",
+    })
+  }
+
+  if (input.featuredCourseCount > 0) {
+    suggestions.push({
+      title: input.isPaid ? "补一节课程强化概念" : "先看一节试看课再开始训练",
+      description: input.isPaid
+        ? "把课程学习和做题训练配在同一天，效果会比只刷题更稳。"
+        : "如果今天不想直接刷题，先通过课程建立题型直觉，再回题库训练。",
+      href: "/learn",
+      label: "进入学习中心",
+    })
+  }
+
+  suggestions.push({
+    title: "给自己留一个可执行的下一步",
+    description: "不要让首页只是入口页。今天最好只选一件最明确的事情：刷题、补课或复盘。",
+    href: "/dashboard",
+    label: "查看训练看板",
+  })
+
+  return suggestions.slice(0, 3)
 }
 
 export default async function Home() {
@@ -54,402 +112,451 @@ export default async function Home() {
     getFeaturedLearnCourses(3),
     getLearnViewerFromCookies(),
     getVideoMembershipProduct(),
-  ]);
+  ])
+
+  const weeklyWindowStart = getWeeklyWindowStart()
+
+  const [recentSubmissions, recentSubmissionCount, recentAcceptedCount] = viewer.userId
+    ? await Promise.all([
+        db.submission.findMany({
+          where: { userId: viewer.userId },
+          orderBy: { createdAt: "desc" },
+          take: 5,
+          include: {
+            problem: {
+              select: {
+                slug: true,
+                title: true,
+              },
+            },
+          },
+        }),
+        db.submission.count({
+          where: {
+            userId: viewer.userId,
+            createdAt: { gte: weeklyWindowStart },
+          },
+        }),
+        db.submission.count({
+          where: {
+            userId: viewer.userId,
+            createdAt: { gte: weeklyWindowStart },
+            status: { in: ["ACCEPTED", "AC"] },
+          },
+        }),
+      ])
+    : [[], 0, 0]
+
+  const acceptedRate = recentSubmissionCount > 0 ? Math.round((recentAcceptedCount / recentSubmissionCount) * 100) : 0
+  const suggestions = buildHomeSuggestions({
+    isLoggedIn: viewer.isLoggedIn,
+    recentSubmissionCount,
+    recentAcceptedCount,
+    featuredCourseCount: featuredLearnCourses.length,
+    isPaid: viewer.plan === "paid",
+  })
 
   return (
     <div className="pb-20">
       <section className="page-wrap py-10 md:py-14 lg:py-16">
-        <div className="grid gap-10 lg:grid-cols-[1.02fr_0.98fr] lg:items-center">
-          <div className="space-y-8">
-            <div className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">
-              <span className="size-3 rounded-full bg-primary-foreground/80" />
-              新增：题库 + 图形化统一训练看板
-            </div>
-
-            <div className="space-y-5">
-              <h1 className="max-w-4xl text-balance text-5xl font-semibold tracking-tight text-foreground md:text-7xl">
-                <span className="text-primary">随时随地</span>完成刷题、
-                提交评测与图形化挑战。
-              </h1>
-              <p className="max-w-2xl text-lg leading-9 text-muted-foreground">
-                把题库、提交、Scratch 工作区与后台管理组织成一套统一界面。当前版本只扩展首页前端模块，
-                不改任何后端逻辑和数据链路。
-              </p>
-            </div>
-
-            <div className="flex flex-wrap gap-4">
-              <Button asChild size="lg" className="min-w-[16rem] justify-center">
-                <Link href="/problems">
-                  立即开始刷题
-                  <ArrowRight className="size-4" />
-                </Link>
-              </Button>
-              <Button asChild variant="secondary" size="lg" className="min-w-[13rem] justify-center">
-                <Link href="/register">注册账号</Link>
-              </Button>
-            </div>
-
-            <div className="grid max-w-xl grid-cols-3 gap-5">
-              {stats.map((item) => (
-                <div key={item.label} className="space-y-1">
-                  <p className="text-4xl font-semibold tracking-tight text-foreground">{item.value}</p>
-                  <p className="text-sm text-muted-foreground">{item.label}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="relative mx-auto w-full max-w-2xl">
-            <Card className="overflow-hidden rounded-[2.3rem] bg-background">
-              <CardContent className="space-y-7 p-7 md:p-9">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex items-center gap-4">
-                    <div className="flex size-18 items-center justify-center rounded-[1.5rem] bg-secondary">
-                      <MonitorPlay className="size-8 text-foreground" />
-                    </div>
-                    <div className="space-y-1">
-                      <h2 className="text-2xl font-semibold text-foreground">洛谷入门题单</h2>
-                      <p className="text-base text-muted-foreground">12 道题 · 已完成 8 题</p>
-                    </div>
-                  </div>
-                  <div className="rounded-[1.7rem] bg-accent px-5 py-4 text-3xl">🎯</div>
-                </div>
-
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm font-medium text-muted-foreground">
-                    <span>当前进度</span>
-                    <span className="text-2xl font-semibold text-primary">65%</span>
-                  </div>
-                  <div className="h-4 rounded-full border-[3px] border-border bg-card p-0.5">
-                    <div className="h-full w-[65%] rounded-full bg-primary" />
-                  </div>
-                </div>
-
-                <Button asChild size="lg" className="w-full justify-center">
-                  <Link href="/tracks/algorithm-basics">继续刷题</Link>
-                </Button>
-              </CardContent>
-            </Card>
-
-            <div className="absolute -left-4 bottom-10 flex size-20 items-center justify-center rounded-[1.7rem] bg-[hsl(244_41%_88%)] text-3xl shadow-[8px_8px_0_hsl(var(--border))]">
-              📚
-            </div>
-            <div className="absolute -right-5 top-16 flex size-22 items-center justify-center rounded-[1.7rem] bg-accent text-3xl shadow-[8px_8px_0_hsl(var(--border))]">
-              🧠
-            </div>
-            <div className="absolute -right-8 bottom-20 flex size-18 items-center justify-center rounded-full bg-primary/70 text-3xl shadow-[8px_8px_0_hsl(var(--border))]">
-              ⭐
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="page-wrap py-14 md:py-18">
-        <SectionHeading
-          eyebrow="视频学习"
-          title="把课程视频直接放进主站"
-          description="同一套账号里区分免费版和 VIP 会员。免费版能看试听课，VIP 会员解锁完整课程，不需要跳出网站。"
-          action={
-            <Button asChild variant="secondary">
-              <Link href="/learn">
-                进入学习中心
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          }
-        />
-
-        <div className="mt-8 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <Card className="overflow-hidden bg-background">
-            <div className="border-b-[3px] border-border bg-[linear-gradient(135deg,rgba(141,194,245,0.18),rgba(103,197,89,0.14))] px-6 py-6 md:px-8">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-white/75 px-3 py-1 text-xs font-semibold uppercase tracking-[0.14em] text-foreground">
-                    <MonitorPlay className="size-4" />
-                    学习中心
-                  </div>
-                  <h2 className="text-3xl font-semibold tracking-tight text-foreground">课程、试看与会员权限</h2>
-                  <p className="max-w-2xl text-sm leading-7 text-muted-foreground">
-                    当前主页已经接入视频学习模块。后面只要继续在数据库里上传分类课程和视频地址，网页端就能直接展示。
-                  </p>
-                </div>
-                <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">VIP 会员</p>
-                  <p className="mt-2 text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
-                </div>
-              </div>
-            </div>
-
-            <CardContent className="space-y-5 p-6 md:p-8">
-              <div className="grid gap-4 md:grid-cols-2">
-                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5">
-                  <p className="text-sm font-semibold text-foreground">免费版</p>
-                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                    <p className="inline-flex items-start gap-2">
-                      <PlayCircle className="mt-0.5 size-4 shrink-0 text-primary" />
-                      浏览课程分类和章节结构
-                    </p>
-                    <p className="inline-flex items-start gap-2">
-                      <PlayCircle className="mt-0.5 size-4 shrink-0 text-primary" />
-                      观看标记为试听的公开课
-                    </p>
-                  </div>
-                </div>
-                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5">
-                  <p className="text-sm font-semibold text-foreground">VIP 会员</p>
-                  <div className="mt-3 space-y-2 text-sm text-muted-foreground">
-                    <p className="inline-flex items-start gap-2">
-                      <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
-                      解锁全部课程视频
-                    </p>
-                    <p className="inline-flex items-start gap-2">
-                      <Lock className="mt-0.5 size-4 shrink-0 text-primary" />
-                      为后续专栏和体系课预留扩展位
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex flex-wrap gap-3">
-                <Button asChild>
-                  <Link href="/learn">
-                    查看课程库
-                    <ArrowRight className="size-4" />
-                  </Link>
-                </Button>
-                <UpgradePlanButton plan={viewer.plan} />
-              </div>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-5">
-            {featuredLearnCourses.length > 0 ? (
-              featuredLearnCourses.map((course, index) => (
-                <Card key={course.id} className="bg-background">
-                  <CardContent className="space-y-4 p-6">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="space-y-2">
-                        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-primary">
-                          {course.category || `课程 ${index + 1}`}
-                        </p>
-                        <h3 className="text-2xl font-semibold tracking-tight text-foreground">{course.title}</h3>
-                        <p className="text-sm leading-7 text-muted-foreground">
-                          {course.summary || course.description || "课程简介待补充"}
-                        </p>
-                      </div>
-                      <div className="rounded-[1.4rem] border-[3px] border-border bg-card px-4 py-3">
-                        <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">试看</p>
-                        <p className="mt-2 text-2xl font-semibold text-foreground">{course.previewCount}</p>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
-                      <span className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-card px-4 py-2">
-                        <BookOpen className="size-4 text-primary" />
-                        {course.lessonCount} 节课
-                      </span>
-                      <span className="inline-flex items-center gap-2 rounded-full border-[2px] border-border bg-card px-4 py-2">
-                        <Lock className="size-4 text-primary" />
-                        会员 {course.paidLessonCount} 节
-                      </span>
-                    </div>
-
-                    <Button asChild variant="secondary">
-                      <Link href={`/learn/${course.slug}`}>
-                        进入课程
-                        <ArrowRight className="size-4" />
-                      </Link>
-                    </Button>
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
-              <Card className="bg-background">
-                <CardContent className="space-y-3 p-6">
-                  <h3 className="text-2xl font-semibold tracking-tight text-foreground">课程库待填充</h3>
-                  <p className="text-sm leading-7 text-muted-foreground">
-                    视频学习页面已经接入完成，但当前数据库还没有发布课程。后续上传后这里会自动出现最新课程。
-                  </p>
-                  <Button asChild variant="secondary">
-                    <Link href="/learn">先看学习中心结构</Link>
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="page-wrap py-14 md:py-18">
-        <SectionHeading
-          eyebrow="热门专题"
-          title="探索热门刷题专题"
-          description="按题型和难度整理的训练专题，直接进入提交与评测流程。"
-          align="center"
-        />
-
-        <div className="mt-10 grid gap-6 lg:grid-cols-2">
-          {HOME_TRACKS.map((course) => {
-            const Icon = course.icon;
-            return (
-              <Card key={course.slug} className="bg-background transition-transform hover:-translate-y-0.5">
-                <CardContent className="p-6 md:p-8">
-                  <Link href={`/tracks/${course.slug}`} className="flex items-start justify-between gap-4">
-                    <div className="flex gap-5">
-                      <div className={`flex size-18 items-center justify-center rounded-[1.5rem] ${course.tone}`}>
-                        <Icon className="size-8 text-foreground" />
-                      </div>
-                      <div className="space-y-2">
-                        <h3 className="text-2xl font-semibold tracking-tight text-foreground">{course.title}</h3>
-                        <p className="text-base text-muted-foreground">维护：{course.author}</p>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                          <span className="inline-flex items-center gap-2">
-                            <BookOpen className="size-4" />
-                            {course.lessons}
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <Clock3 className="size-4" />
-                            {course.duration}
-                          </span>
-                          <span className="inline-flex items-center gap-2">
-                            <Users className="size-4" />
-                            {course.learners}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                    <div className="inline-flex items-center gap-2 rounded-full border-[2px] border-primary/90 px-4 py-2 text-base font-semibold text-primary">
-                      <Star className="size-4 fill-current" />
-                      {course.rating}
-                    </div>
-                  </Link>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        <div className="mt-10 flex justify-center">
-          <Button asChild variant="secondary" size="lg" className="min-w-[16rem] justify-center">
-            <Link href="/tracks">
-              查看所有专题
-              <ArrowRight className="size-4" />
-            </Link>
-          </Button>
-        </div>
-      </section>
-
-      <section className="py-14 md:py-18">
-        <div className="page-wrap rounded-[3rem] bg-card/65 px-6 py-10 md:px-8 md:py-14">
-          <SectionHeading
-            eyebrow="为什么选择 CodeMaster"
-            title="高效训练所需的一切"
-            description="面向 OJ 练习场景设计，兼顾高密度信息与持续学习体验。"
-            align="center"
-          />
-
-          <div className="mt-10 grid gap-6 md:grid-cols-2 xl:grid-cols-4">
-            {HOME_FEATURES.map((benefit) => {
-              const Icon = benefit.icon;
-              return (
-                <Link
-                  key={benefit.slug}
-                  href={`/features/${benefit.slug}`}
-                  className="rounded-[2rem] bg-background/85 px-7 py-8 text-center shadow-[0_16px_36px_rgba(31,41,55,0.08)]"
-                >
-                  <div className={`mx-auto mb-6 flex size-18 items-center justify-center rounded-[1.5rem] ${benefit.tone}`}>
-                    <Icon className="size-8 text-foreground" />
-                  </div>
-                  <h3 className="text-2xl font-semibold tracking-tight text-foreground">{benefit.title}</h3>
-                  <p className="mt-4 text-base leading-8 text-muted-foreground">{benefit.description}</p>
-                  <p className="mt-4 text-sm font-medium text-primary">查看详情</p>
-                </Link>
-              );
-            })}
-          </div>
-          <div className="mt-8 flex justify-center">
-            <Button asChild variant="secondary">
-              <Link href="/features">
-                查看全部能力模块
-                <ArrowRight className="size-4" />
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </section>
-
-      <section className="page-wrap py-14 md:py-18">
-        <SectionHeading
-          eyebrow="使用反馈"
-          title="他们怎么评价这套训练流"
-          description="以下是首页静态示例文案，用来演示用户评价模块的结构与层级。"
-          align="center"
-        />
-
-        <div className="mt-10 grid gap-6 xl:grid-cols-3">
-          {testimonials.map((item) => (
-            <Card key={item.name} className="bg-background">
-              <CardContent className="space-y-6 p-7">
-                <div className="flex gap-2 text-[hsl(48_86%_56%)]">
-                  {Array.from({ length: 5 }).map((_, index) => (
-                    <Star key={`${item.name}-${index}`} className="size-6 fill-current" />
-                  ))}
-                </div>
-                <p className="text-lg leading-9 text-muted-foreground">“{item.quote}”</p>
-                <div className="flex items-center gap-4">
-                  <div className={`flex size-16 items-center justify-center rounded-[1.3rem] text-3xl font-semibold text-foreground ${item.tone}`}>
-                    {item.initial}
-                  </div>
-                  <div>
-                    <p className="text-2xl font-semibold tracking-tight text-foreground">{item.name}</p>
-                    <p className="text-base text-muted-foreground">{item.role}</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </section>
-
-      <section className="bg-secondary/70 py-16 md:py-20">
-        <div className="page-wrap">
-          <Card className="mx-auto max-w-5xl bg-background">
-            <CardContent className="px-7 py-10 text-center md:px-12 md:py-14">
-              <div className="space-y-5">
-                <h2 className="text-balance text-4xl font-semibold tracking-tight text-foreground md:text-6xl">
-                  准备好开始练题了吗？
-                </h2>
-                <p className="mx-auto max-w-3xl text-lg leading-9 text-muted-foreground">
-                  从公开题库出发，逐步衔接专题训练、图形化任务和提交分析。先完成账号注册，再开始你的第一轮训练。
-                </p>
-              </div>
-
-              <div className="mt-8 flex flex-wrap justify-center gap-4">
-                <Button asChild size="lg" className="min-w-[16rem] justify-center">
+        <div className="space-y-6">
+          <PageHeader
+            eyebrow="Today Goal"
+            title={viewer.isLoggedIn ? `${viewer.name ?? "同学"}，今天先把训练闭环跑起来。` : "今天先选一件明确的事：刷题、补课，或者复盘最近提交。"}
+            description="首页现在不再做成普通宣传页，而是一个真正的训练入口。你一进来就能看到推荐题单、最近提交、学习建议和下一步操作。"
+            meta={
+              <>
+                <span>推荐题单</span>
+                <span>·</span>
+                <span>最近提交</span>
+                <span>·</span>
+                <span>学习建议</span>
+                <span>·</span>
+                <span>训练看板</span>
+              </>
+            }
+            actions={
+              <div className="flex flex-wrap gap-4">
+                <Button asChild size="lg" className="min-w-[15rem] justify-center">
                   <Link href="/problems">
                     立即开始刷题
                     <ArrowRight className="size-4" />
                   </Link>
                 </Button>
-                <Button asChild variant="secondary" size="lg" className="min-w-[13rem] justify-center">
-                  <Link href="/register">注册账号</Link>
+                <Button asChild variant="secondary" size="lg" className="min-w-[14rem] justify-center">
+                  <Link href="/dashboard">查看训练看板</Link>
                 </Button>
               </div>
+            }
+            aside={
+              <div className="space-y-5">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Today Checklist</p>
+                  <div className="space-y-2">
+                    <div className="rounded-[1.25rem] border-[3px] border-border bg-white px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">1. 选一道题开始训练</p>
+                      <p className="mt-1 text-xs leading-6 text-muted-foreground">从题库或专题题单进入，今天先完成第一轮提交。</p>
+                    </div>
+                    <div className="rounded-[1.25rem] border-[3px] border-border bg-white px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">2. 看结果，不只看状态</p>
+                      <p className="mt-1 text-xs leading-6 text-muted-foreground">提交后继续看测试点、耗时和改进建议，而不是只看 AC / WA。</p>
+                    </div>
+                    <div className="rounded-[1.25rem] border-[3px] border-border bg-white px-4 py-3">
+                      <p className="text-sm font-semibold text-foreground">3. 留下下一步</p>
+                      <p className="mt-1 text-xs leading-6 text-muted-foreground">做完题后决定是继续刷题、补一节课，还是发讨论求助。</p>
+                    </div>
+                  </div>
+                </div>
 
-              <div className="mt-8 flex flex-wrap items-center justify-center gap-8 text-base text-muted-foreground">
-                <span className="inline-flex items-center gap-2">
-                  <Check className="size-5 text-primary" />
-                  代码题与 Scratch 同站训练
-                </span>
-                <span className="inline-flex items-center gap-2">
-                  <Check className="size-5 text-primary" />
-                  提交、进度、后台管理一体化
-                </span>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">最近 7 天</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">{recentSubmissionCount}</p>
+                    <p className="text-sm text-muted-foreground">提交次数</p>
+                  </div>
+                  <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                    <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">通过率</p>
+                    <p className="mt-2 text-2xl font-semibold text-foreground">{acceptedRate}%</p>
+                    <p className="text-sm text-muted-foreground">最近窗口内</p>
+                  </div>
+                </div>
               </div>
-            </CardContent>
-          </Card>
+            }
+          />
+
+          <div className="grid gap-4 md:grid-cols-3">
+            {problemScaleStats.map((item) => (
+              <StatCard
+                key={item.label}
+                label={item.label}
+                value={item.value}
+                description="首页总览指标"
+                icon={item.icon}
+                tone={item.tone}
+              />
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="page-wrap py-10 md:py-12">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
+          <SectionCard
+            title="推荐题单"
+            description="把最常用的训练入口前置到首页，不让用户先在导航和列表里迷路。"
+            action={
+              <Button asChild variant="secondary">
+                <Link href="/tracks">
+                  查看全部题单
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
+            }
+          >
+            <div className="grid gap-4">
+              {HOME_TRACKS.slice(0, 3).map((track) => {
+                const Icon = track.icon
+                return (
+                  <Link
+                    key={track.slug}
+                    href={track.primaryHref}
+                    className="surface-inset block rounded-[1.7rem] p-5 transition hover:-translate-y-0.5 hover:shadow-[8px_8px_0_hsl(var(--border))]"
+                  >
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="flex items-start gap-4">
+                        <div className={`flex size-16 items-center justify-center rounded-[1.4rem] border-[3px] border-border ${track.tone}`}>
+                          <Icon className="size-7 text-foreground" />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-2xl font-semibold tracking-tight text-foreground">{track.title}</h3>
+                            <StatusBadge tone="info">{track.rating} 分推荐</StatusBadge>
+                          </div>
+                          <p className="text-sm leading-7 text-muted-foreground">{track.description}</p>
+                          <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                            <span className="inline-flex items-center gap-2">
+                              <BookOpen className="size-4 text-primary" />
+                              {track.lessons}
+                            </span>
+                            <span className="inline-flex items-center gap-2">
+                              <Clock3 className="size-4 text-primary" />
+                              {track.duration}
+                            </span>
+                            <span className="inline-flex items-center gap-2">
+                              <Flame className="size-4 text-primary" />
+                              {track.learners}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button asChild size="sm">
+                          <Link href={track.primaryHref}>开始训练</Link>
+                        </Button>
+                        <Button asChild size="sm" variant="secondary">
+                          <Link href={track.secondaryHref}>查看相关页面</Link>
+                        </Button>
+                      </div>
+                    </div>
+                  </Link>
+                )
+              })}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="最近提交"
+            description="提交页不该是孤立页面。首页直接把最近结果露出来，方便继续复盘。"
+            action={
+              viewer.isLoggedIn ? (
+                <Button asChild variant="secondary">
+                  <Link href="/submissions">
+                    查看全部提交
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+              ) : null
+            }
+          >
+            {viewer.isLoggedIn ? (
+              recentSubmissions.length > 0 ? (
+                <div className="space-y-3">
+                  {recentSubmissions.map((submission) => (
+                    <Link
+                      key={submission.id}
+                      href={`/submissions/${submission.id}`}
+                      className="surface-inset block rounded-[1.5rem] p-4 transition hover:-translate-y-0.5 hover:shadow-[8px_8px_0_hsl(var(--border))]"
+                    >
+                      <div className="flex flex-col gap-3">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <p className="text-base font-semibold text-foreground">{submission.problem.title}</p>
+                          <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${getSubmissionStatusClass(submission.status)}`}>
+                            {getSubmissionStatusLabel(submission.status)}
+                          </span>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                          <span>{submission.lang}</span>
+                          <span>·</span>
+                          <span>{formatDateTime(submission.createdAt)}</span>
+                          <span>·</span>
+                          <span>得分 {submission.score}</span>
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div className="rounded-[1.6rem] border-[3px] border-dashed border-border bg-background px-5 py-6 text-sm leading-7 text-muted-foreground">
+                  当前账号还没有提交记录。先从题库做一道题，首页就会开始显示你的最近结果和训练节奏。
+                </div>
+              )
+            ) : (
+              <div className="space-y-4 rounded-[1.6rem] border-[3px] border-dashed border-border bg-background px-5 py-6">
+                <p className="text-sm leading-7 text-muted-foreground">
+                  登录后首页会直接显示最近提交、最近通过题和训练建议，方便你从上一次停下来的地方继续。
+                </p>
+                <div className="flex flex-wrap gap-3">
+                  <Button asChild>
+                    <Link href="/login">登录后继续训练</Link>
+                  </Button>
+                  <Button asChild variant="secondary">
+                    <Link href="/register">注册账号</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+          </SectionCard>
+        </div>
+      </section>
+
+      <section className="page-wrap py-10 md:py-12">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+          <SectionCard
+            title="学习建议"
+            description="首页不只推荐入口，还要告诉用户下一步最值得做什么。"
+            action={<Compass className="size-4 text-primary" />}
+          >
+            <div className="grid gap-4">
+              {suggestions.map((item) => (
+                <div key={item.title} className="surface-inset rounded-[1.5rem] p-5">
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-start gap-3">
+                      <div className="rounded-[1rem] border-[2px] border-border bg-white p-2">
+                        <BrainCircuit className="size-4 text-foreground" />
+                      </div>
+                      <div className="space-y-1">
+                        <p className="text-lg font-semibold text-foreground">{item.title}</p>
+                        <p className="text-sm leading-7 text-muted-foreground">{item.description}</p>
+                      </div>
+                    </div>
+                    <div>
+                      <Button asChild size="sm" variant="secondary">
+                        <Link href={item.href}>
+                          {item.label}
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SectionCard>
+
+          <SectionCard
+            title="课程推荐"
+            description="把试看课和会员课前置，帮助用户在刷题之外快速补齐概念。"
+            action={
+              <div className="flex items-center gap-2">
+                <StatusBadge tone={viewer.plan === "paid" ? "success" : "warning"}>
+                  {viewer.plan === "paid" ? "VIP 会员" : viewer.isLoggedIn ? "免费版" : "访客模式"}
+                </StatusBadge>
+                <UpgradePlanButton plan={viewer.plan} />
+              </div>
+            }
+          >
+            <div className="grid gap-4">
+              {featuredLearnCourses.length > 0 ? (
+                featuredLearnCourses.map((course) => (
+                  <div key={course.id} className="surface-inset rounded-[1.55rem] p-5">
+                    <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                      <div className="space-y-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <StatusBadge tone="info">{course.category || "课程"}</StatusBadge>
+                          <StatusBadge tone="muted">试看 {course.previewCount} 节</StatusBadge>
+                        </div>
+                        <h3 className="text-2xl font-semibold tracking-tight text-foreground">{course.title}</h3>
+                        <p className="text-sm leading-7 text-muted-foreground">
+                          {course.summary || course.description || "课程简介待补充"}
+                        </p>
+                        <div className="flex flex-wrap gap-3 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-2">
+                            <PlayCircle className="size-4 text-primary" />
+                            {course.lessonCount} 节
+                          </span>
+                          <span className="inline-flex items-center gap-2">
+                            <Lock className="size-4 text-primary" />
+                            会员 {course.paidLessonCount} 节
+                          </span>
+                        </div>
+                      </div>
+                      <Button asChild variant="secondary">
+                        <Link href={`/learn/${course.slug}`}>
+                          进入课程
+                          <ArrowRight className="size-4" />
+                        </Link>
+                      </Button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-[1.6rem] border-[3px] border-dashed border-border bg-background px-5 py-6 text-sm leading-7 text-muted-foreground">
+                  当前数据库里还没有已发布课程。学习中心结构已经就绪，后续上课后这里会自动出现推荐课程。
+                </div>
+              )}
+              <div className="rounded-[1.6rem] border-[3px] border-border bg-[linear-gradient(135deg,rgba(103,197,89,0.14),rgba(245,184,167,0.16))] px-5 py-5">
+                <p className="text-sm font-semibold text-foreground">{product.name}</p>
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {product.validDays ? `有效期 ${product.validDays} 天` : "长期有效"} · 学习中心与视频权限统一管理
+                    </p>
+                  </div>
+                  <UpgradePlanButton plan={viewer.plan} size="lg" />
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
+      </section>
+
+      <section className="page-wrap py-10 md:py-12">
+        <SectionCard
+          title="平台能力模块"
+          description="不把首页做成纯营销页，而是把真正影响训练效率的能力模块收在一起。"
+          action={
+            <Button asChild variant="secondary">
+              <Link href="/features">
+                查看全部能力
+                <ArrowRight className="size-4" />
+              </Link>
+            </Button>
+          }
+        >
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {HOME_FEATURES.map((feature) => {
+              const Icon = feature.icon
+              return (
+                <Link
+                  key={feature.slug}
+                  href={feature.primaryHref}
+                  className="surface-inset rounded-[1.6rem] p-5 transition hover:-translate-y-0.5 hover:shadow-[8px_8px_0_hsl(var(--border))]"
+                >
+                  <div className={`mb-4 flex size-14 items-center justify-center rounded-[1.25rem] border-[3px] border-border ${feature.tone}`}>
+                    <Icon className="size-6 text-foreground" />
+                  </div>
+                  <h3 className="text-xl font-semibold tracking-tight text-foreground">{feature.title}</h3>
+                  <p className="mt-2 text-sm leading-7 text-muted-foreground">{feature.description}</p>
+                  <div className="mt-4 space-y-2">
+                    {feature.highlights.slice(0, 2).map((item) => (
+                      <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
+                        <Check className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <span>{item}</span>
+                      </p>
+                    ))}
+                  </div>
+                </Link>
+              )
+            })}
+          </div>
+        </SectionCard>
+      </section>
+
+      <section className="bg-secondary/70 py-16 md:py-20">
+        <div className="page-wrap">
+          <SectionCard
+            title="不要让首页只是“看看再说”"
+            description="现在它应该直接把你送进训练流程。今天最好的起点只有三个：去题库、看最近提交，或者补一节课。"
+            action={
+              <div className="flex flex-wrap justify-center gap-4">
+                <Button asChild size="lg" className="min-w-[16rem] justify-center">
+                  <Link href="/problems">
+                    去题库开始
+                    <ArrowRight className="size-4" />
+                  </Link>
+                </Button>
+                <Button asChild variant="secondary" size="lg" className="min-w-[13rem] justify-center">
+                  <Link href={viewer.isLoggedIn ? "/submissions" : "/login"}>
+                    {viewer.isLoggedIn ? "看最近提交" : "登录后继续"}
+                  </Link>
+                </Button>
+              </div>
+            }
+          >
+            <div className="grid gap-4 md:grid-cols-3">
+              <AlertPanel
+                title="训练链路已打通"
+                description="题库、提交、课程与训练看板已经在同一站内衔接，不需要再跳到割裂页面。"
+                icon={CheckCircle2}
+                tone="success"
+              />
+              <AlertPanel
+                title="适合学生与老师"
+                description="既可以做个人训练入口，也可以承接老师组织教学、题单和课程使用。"
+                icon={GraduationCap}
+                tone="info"
+              />
+              <AlertPanel
+                title="首页直接给下一步"
+                description="不再只是导航集合，而是先把今天最值得做的动作放到第一屏。"
+                icon={LayoutList}
+                tone="warning"
+              />
+            </div>
+          </SectionCard>
         </div>
       </section>
     </div>
-  );
+  )
 }

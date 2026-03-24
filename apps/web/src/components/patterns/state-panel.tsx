@@ -1,30 +1,24 @@
-import * as React from "react";
-import Link from "next/link";
-import {
-  AlertTriangle,
-  Lock,
-  Loader2,
-  SearchX,
-  type LucideIcon,
-} from "lucide-react";
-import { cn } from "@/lib/utils";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import * as React from "react"
+import Link from "next/link"
+import { AlertTriangle, Lock, Loader2, SearchX, type LucideIcon } from "lucide-react"
+import { cn } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
 
 type StatePanelProps = {
-  icon: LucideIcon;
-  title: string;
-  description: string;
-  tone?: "default" | "warning" | "danger";
-  action?: React.ReactNode;
-  className?: string;
-};
+  icon: LucideIcon
+  title: string
+  description: string
+  tone?: "default" | "warning" | "danger"
+  action?: React.ReactNode
+  className?: string
+}
 
 const toneStyles: Record<NonNullable<StatePanelProps["tone"]>, string> = {
-  default: "border-primary/12 bg-card/90 text-primary",
-  warning: "border-amber-200 bg-amber-50 text-amber-700",
+  default: "border-primary/18 bg-primary/8 text-primary",
+  warning: "border-amber-300/60 bg-amber-50 text-amber-700",
   danger: "border-destructive/15 bg-destructive/5 text-destructive",
-};
+}
 
 export function StatePanel({
   icon: Icon,
@@ -35,11 +29,11 @@ export function StatePanel({
   className,
 }: StatePanelProps) {
   return (
-    <Card className={cn("mx-auto max-w-xl", className)}>
+    <Card className={cn("mx-auto max-w-xl ui-state-card", className)}>
       <CardContent className="flex flex-col items-center gap-5 px-8 py-10 text-center">
         <div
           className={cn(
-            "flex size-14 items-center justify-center rounded-2xl border shadow-sm",
+            "flex size-14 items-center justify-center rounded-[1.4rem] border-[2px] shadow-[var(--shadow-sm)]",
             toneStyles[tone],
           )}
         >
@@ -47,12 +41,12 @@ export function StatePanel({
         </div>
         <div className="space-y-2">
           <h2 className="text-xl font-semibold tracking-tight text-foreground">{title}</h2>
-          <p className="text-sm leading-6 text-muted-foreground">{description}</p>
+          <p className="text-sm leading-7 text-muted-foreground">{description}</p>
         </div>
         {action ? <div className="flex flex-wrap items-center justify-center gap-3">{action}</div> : null}
       </CardContent>
     </Card>
-  );
+  )
 }
 
 export function LoadingState({
@@ -60,9 +54,9 @@ export function LoadingState({
   description = "正在准备界面与数据，请稍候。",
   className,
 }: {
-  title?: string;
-  description?: string;
-  className?: string;
+  title?: string
+  description?: string
+  className?: string
 }) {
   return (
     <StatePanel
@@ -72,7 +66,7 @@ export function LoadingState({
       className={className}
       action={<Loader2 className="size-4 animate-spin text-primary" />}
     />
-  );
+  )
 }
 
 export function EmptyState({
@@ -82,11 +76,11 @@ export function EmptyState({
   actionLabel = "返回题库",
   className,
 }: {
-  title?: string;
-  description?: string;
-  href?: string;
-  actionLabel?: string;
-  className?: string;
+  title?: string
+  description?: string
+  href?: string
+  actionLabel?: string
+  className?: string
 }) {
   return (
     <StatePanel
@@ -102,7 +96,7 @@ export function EmptyState({
         ) : null
       }
     />
-  );
+  )
 }
 
 export function ErrorState({
@@ -111,10 +105,10 @@ export function ErrorState({
   action,
   className,
 }: {
-  title?: string;
-  description?: string;
-  action?: React.ReactNode;
-  className?: string;
+  title?: string
+  description?: string
+  action?: React.ReactNode
+  className?: string
 }) {
   return (
     <StatePanel
@@ -125,7 +119,7 @@ export function ErrorState({
       action={action}
       className={className}
     />
-  );
+  )
 }
 
 export function UnauthorizedState({
@@ -133,9 +127,9 @@ export function UnauthorizedState({
   description = "当前内容需要登录后访问，请先完成登录再继续。",
   className,
 }: {
-  title?: string;
-  description?: string;
-  className?: string;
+  title?: string
+  description?: string
+  className?: string
 }) {
   return (
     <StatePanel
@@ -150,5 +144,5 @@ export function UnauthorizedState({
         </Button>
       }
     />
-  );
+  )
 }

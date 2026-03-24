@@ -7,7 +7,6 @@ import {
   BookOpenText,
   ChevronDown,
   ChevronUp,
-  GraduationCap,
   Search,
   SlidersHorizontal,
   RotateCcw,
@@ -15,20 +14,20 @@ import {
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 import { useAuth } from "@/lib/hooks/use-auth"
-import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Skeleton } from "@/components/ui/skeleton"
 import { FilterBar } from "@/components/patterns/filter-bar"
 import { PaginationBar } from "@/components/patterns/pagination-bar"
+import { PageHeader } from "@/components/patterns/page-header"
 import { EmptyState, ErrorState } from "@/components/patterns/state-panel"
-import { SectionHeading } from "@/components/patterns/section-heading"
+import { StatCard } from "@/components/patterns/stat-card"
+import { ProblemTable } from "@/components/problems/problem-table"
 import { useCopyFeedback } from "@/lib/hooks/use-copy-feedback"
 import { buildPaginationItems, getPaginationRange } from "@/lib/pagination"
 import {
   LUOGU_DIFFICULTY_BANDS,
-  getLuoguDifficultyBandByDifficulty,
   getLuoguDifficultyBandById,
   inferLuoguDifficultyBandFromDifficultyParam,
   isLuoguDifficultyBandId,
@@ -141,20 +140,9 @@ function buildQueryString(input: {
   return params.toString()
 }
 
-function isHiddenProblemTag(tag: string) {
-  return HIDDEN_PROBLEM_TAGS.has(tag.trim().toLowerCase())
-}
-
 function getTagClass(tag: string) {
   void tag
   return "border-slate-200 bg-slate-50 text-slate-700"
-}
-
-function isTagMatch(tag: string, tagQuery: string) {
-  const normalizedTag = tag.trim().toLowerCase()
-  const normalizedQuery = tagQuery.trim().toLowerCase()
-  if (!normalizedQuery) return false
-  return normalizedTag.includes(normalizedQuery)
 }
 
 export default function ProblemsPage() {
@@ -387,75 +375,78 @@ export default function ProblemsPage() {
   return (
     <div className="page-wrap py-8 md:py-10">
       <div className="space-y-8">
-        <SectionHeading
+        <PageHeader
           eyebrow="Problem Bank"
-          title="用更快的扫描节奏管理整库题目。"
-          description="保留原有数据接口和筛选逻辑，只把列表、筛选和分页整理成统一的高密度工作面。"
-          action={
+          title="题库列表改成更稳定的训练工作台。"
+          description="保留现有题目接口和筛选语义，只把页面结构统一成 PageTitle + Filter Bar + 高密度列表。搜索支持题号和题名，筛选修改后点击确认再执行查询。"
+          meta={
+            <>
+              <span>题号检索</span>
+              <span>·</span>
+              <span>标签过滤</span>
+              <span>·</span>
+              <span>难度分层</span>
+              <span>·</span>
+              <span>个人状态</span>
+            </>
+          }
+          actions={
             <div className="flex flex-wrap items-center gap-3">
-              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
-                <BookOpenText className="h-4 w-4 text-foreground" />
-                <span>{meta?.total ?? 0} 道题</span>
+              <Button type="button" variant={copied ? "default" : "secondary"} onClick={copyCurrentViewLink}>
+                {copied ? "已复制筛选链接" : "复制当前筛选链接"}
+              </Button>
+              <Button type="button" variant="outline" onClick={resetFilters} disabled={!canResetFilters}>
+                <RotateCcw className="mr-2 h-4 w-4" />
+                重置条件
+              </Button>
+            </div>
+          }
+          aside={
+            <div className="space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Current View</p>
+                <p className="mt-2 text-2xl font-semibold text-foreground">{meta?.total ?? 0} 道题</p>
               </div>
-              <div className="inline-flex items-center gap-3 rounded-full border-[3px] border-border bg-white px-4 py-2 text-sm text-muted-foreground shadow-[6px_6px_0_hsl(var(--border))]">
-                <GraduationCap className="h-4 w-4 text-foreground" />
-                <span>{loggedIn ? "已接入个人状态" : "未登录，仅展示公开列表"}</span>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">学习状态</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">{loggedIn ? "已接入个人进度" : "公开视图"}</p>
+                </div>
+                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">交互规则</p>
+                  <p className="mt-2 text-lg font-semibold text-foreground">先选再确认</p>
+                </div>
               </div>
             </div>
           }
         />
 
         <div className="grid gap-4 md:grid-cols-3">
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Focus
-                </p>
-                <p className="text-2xl font-semibold text-foreground">{meta?.total ?? 0}</p>
-                <p className="text-sm text-muted-foreground">题目总量</p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-primary/30 p-3 text-foreground">
-                <BookOpenText className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Filters
-                </p>
-                <p className="text-2xl font-semibold text-foreground">
-                  {hasAppliedFilters ? "已启用" : "默认"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {hasAppliedFilters ? "当前视图已收敛到目标题集" : "当前显示完整题库视图"}
-                </p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-accent p-3 text-foreground">
-                <SlidersHorizontal className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
-          <Card className="surface-panel rounded-[1.8rem]">
-            <CardContent className="flex items-start justify-between gap-4 p-5">
-              <div className="space-y-1.5">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-                  Search
-                </p>
-                <p className="text-2xl font-semibold text-foreground">
-                  {appliedKeyword.trim() || appliedTagQuery.trim() ? "已收敛" : "全量"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {appliedKeyword.trim() || appliedTagQuery.trim() ? "搜索条件已作用到当前题库列表" : "当前显示公开题库的默认视图"}
-                </p>
-              </div>
-              <div className="rounded-[1.2rem] border-[3px] border-border bg-secondary p-3 text-foreground">
-                <Search className="h-5 w-5" />
-              </div>
-            </CardContent>
-          </Card>
+          <StatCard
+            label="Problem Volume"
+            value={meta?.total ?? 0}
+            description="当前筛选视图下的题目总量"
+            icon={BookOpenText}
+            tone="primary"
+          />
+          <StatCard
+            label="Filters"
+            value={hasAppliedFilters ? "已启用" : "默认"}
+            description={hasAppliedFilters ? "当前视图已收敛到目标题集" : "当前显示完整公开题库视图"}
+            icon={SlidersHorizontal}
+            tone="accent"
+          />
+          <StatCard
+            label="Search"
+            value={appliedKeyword.trim() || appliedTagQuery.trim() ? "已收敛" : "全量"}
+            description={
+              appliedKeyword.trim() || appliedTagQuery.trim()
+                ? "关键词和标签条件已作用到结果列表"
+                : "当前还没有关键词筛选"
+            }
+            icon={Search}
+            tone="secondary"
+          />
         </div>
 
         <FilterBar
@@ -463,21 +454,6 @@ export default function ProblemsPage() {
           description="支持按题目名称模糊搜索，也支持按题号/别名搜索；调整筛选条件后，点击确认再开始查询。"
           summary={activeSummary}
           className="overflow-visible"
-          actions={
-            <>
-              <Button type="button" variant="ghost" onClick={resetFilters} disabled={!canResetFilters}>
-                <RotateCcw className="mr-2 h-4 w-4" />
-                重置
-              </Button>
-              <Button
-                type="button"
-                variant={copied ? "default" : "secondary"}
-                onClick={copyCurrentViewLink}
-              >
-                {copied ? "已复制" : "复制当前筛选链接"}
-              </Button>
-            </>
-          }
         >
           <div className="relative grid gap-3 xl:grid-cols-[minmax(300px,1.55fr)_minmax(280px,1.3fr)_170px_170px_120px]">
             <div className="relative">
@@ -564,7 +540,7 @@ export default function ProblemsPage() {
                 setUserStatus(event.target.value)
               }}
               disabled={!loggedIn}
-              className="focus-ring h-11 rounded-[1.2rem] border-[3px] border-border bg-white px-3.5 text-sm shadow-[6px_6px_0_hsl(var(--border))] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
+              className="focus-ring ui-field h-11 px-3.5 text-sm disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
             >
               <option value="all">全部状态</option>
               <option value="NOT_STARTED">未开始</option>
@@ -664,101 +640,13 @@ export default function ProblemsPage() {
         ) : null}
 
         {!isLoading && !error ? (
-          <div className="space-y-3">
-            <div className="surface-panel hidden rounded-[1.45rem] px-5 py-3 text-sm font-semibold text-muted-foreground lg:block">
-              <div className="grid grid-cols-[220px_minmax(180px,1fr)_80px_minmax(260px,1.35fr)_100px_90px] items-center gap-4">
-                <span>题号</span>
-                <span>题目名称</span>
-                <span>难度</span>
-                <span>题目标签</span>
-                <span>总提交</span>
-                <span>通过率</span>
-              </div>
-            </div>
-            {problems.map((problem) => {
-              const href = `/problems/${problem.slug || problem.id}`
-              const difficultyMeta = getLuoguDifficultyBandByDifficulty(problem.difficulty)
-              const displayTags = (problem.tags ?? []).filter((tag) => !isHiddenProblemTag(tag))
-              const visibleTags = displayTags.slice(0, 4)
-              const hiddenTagCount = Math.max(displayTags.length - visibleTags.length, 0)
-              return (
-                <Card
-                  key={problem.id}
-                  role="link"
-                  tabIndex={0}
-                  className="surface-panel cursor-pointer overflow-hidden rounded-[1.6rem] transition duration-300 hover:-translate-y-0.5 hover:shadow-[10px_10px_0_hsl(var(--border))] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
-                  onClick={() => router.push(href)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault()
-                      router.push(href)
-                    }
-                  }}
-                >
-                  <CardContent className="overflow-x-auto px-5 py-4">
-                    <div className="grid min-w-[1000px] grid-cols-[220px_minmax(180px,1fr)_80px_minmax(260px,1.35fr)_100px_90px] items-center gap-4">
-                      <div className="min-w-0">
-                        <span className="inline-flex max-w-full items-center rounded-full border-[2px] border-border bg-white px-3 py-2 font-mono text-sm text-muted-foreground shadow-[4px_4px_0_hsl(var(--border))]">
-                          <span className="truncate">{problem.slug}</span>
-                        </span>
-                      </div>
-                      <div className="min-w-0">
-                        <p className="truncate text-lg font-semibold tracking-tight text-foreground">
-                          {problem.title}
-                        </p>
-                      </div>
-                      <div className="min-w-0">
-                        <span
-                          className={cn("text-sm font-semibold", difficultyMeta.textClassName)}
-                          title={difficultyMeta.fullLabel}
-                        >
-                          {difficultyMeta.label}
-                        </span>
-                      </div>
-                      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-                        {visibleTags.length ? (
-                          <>
-                            {visibleTags.map((tag) => (
-                              <button
-                                key={`${problem.id}-${tag}`}
-                                type="button"
-                                className={cn(
-                                  "inline-flex shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors hover:border-primary/40 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                                  getTagClass(tag),
-                                  isTagMatch(tag, tagQuery)
-                                    ? "border-primary/50 bg-primary/15 text-primary"
-                                    : null
-                                )}
-                                onClick={(event) => {
-                                  event.stopPropagation()
-                                  applyTagFilter(tag)
-                                }}
-                              >
-                                {tag}
-                              </button>
-                            ))}
-                            {hiddenTagCount > 0 ? (
-                              <Badge variant="outline" className="shrink-0 border-slate-200 bg-slate-50 text-slate-700">
-                                +{hiddenTagCount}
-                              </Badge>
-                            ) : null}
-                          </>
-                        ) : (
-                          <span className="truncate text-sm text-muted-foreground">无标签</span>
-                        )}
-                      </div>
-                      <div className="text-sm font-medium text-foreground">
-                        {problem.totalSubmissions ?? 0}
-                      </div>
-                      <div className="text-sm font-medium text-foreground">
-                        {Math.round((problem.passRate ?? 0) * 100)}%
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              )
-            })}
-          </div>
+          <ProblemTable
+            problems={problems}
+            hiddenTags={HIDDEN_PROBLEM_TAGS}
+            activeTagQuery={tagQuery}
+            getTagClass={getTagClass}
+            onTagSelect={applyTagFilter}
+          />
         ) : null}
 
         <PaginationBar

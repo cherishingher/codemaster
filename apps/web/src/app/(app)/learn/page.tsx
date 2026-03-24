@@ -5,16 +5,19 @@ import {
   Eye,
   GraduationCap,
   Lock,
-  MonitorPlay,
   PlayCircle,
   Sparkles,
 } from "lucide-react";
+import { AlertPanel } from "@/components/patterns/alert-panel";
+import { SectionCard } from "@/components/patterns/section-card";
 import { SectionHeading } from "@/components/patterns/section-heading";
 import { EmptyState } from "@/components/patterns/state-panel";
 import { UpgradePlanButton } from "@/components/learn/upgrade-plan-button";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { PageHeader } from "@/components/patterns/page-header";
+import { StatCard } from "@/components/patterns/stat-card";
 import { getLearnLibraryData, groupCoursesByCategory } from "@/lib/learn";
 
 function formatPrice(priceCents: number) {
@@ -67,95 +70,134 @@ export default async function LearnPage() {
 
   return (
     <div className="page-wrap py-10 md:py-14">
-      <section className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
-        <Card className="bg-background">
-          <CardContent className="space-y-7 p-7 md:p-10">
-            <div className="inline-flex items-center gap-3 rounded-full bg-primary px-4 py-3 text-sm font-semibold text-primary-foreground">
-              <MonitorPlay className="size-4" />
-              视频学习中心
+      <section className="space-y-6">
+        <PageHeader
+          eyebrow="Learning Center"
+          title="学习中心改成课程树、权限说明和最近学习的统一入口。"
+          description="课程视频继续走现有数据链路，但页面层统一成 PageTitle + Main Content 的训练型结构，让学生知道先学什么，老师知道内容是如何被组织的。"
+          meta={
+            <>
+              <span>课程树</span>
+              <span>·</span>
+              <span>章节进度</span>
+              <span>·</span>
+              <span>试看权限</span>
+              <span>·</span>
+              <span>会员解锁</span>
+            </>
+          }
+          actions={
+            <div className="flex flex-wrap gap-3">
+              <UpgradePlanButton plan={viewer.plan} size="lg" />
+              <Button asChild variant="secondary">
+                <Link href="/dashboard">
+                  查看训练看板
+                  <ArrowRight className="size-4" />
+                </Link>
+              </Button>
             </div>
-
+          }
+          aside={
             <div className="space-y-4">
-              <h1 className="max-w-4xl text-balance text-4xl font-semibold tracking-tight text-foreground md:text-6xl">
-                在主站内直接接入
-                <span className="text-primary"> 分类课程、视频学习与会员权限</span>
-              </h1>
-              <p className="max-w-3xl text-base leading-8 text-muted-foreground md:text-lg">
-                课程按分类展示，免费版可以试看公开视频，VIP 会员解锁全部章节。后续只需要继续往数据库写课程、
-                分节和视频地址，就能直接在这里展示。
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm text-muted-foreground">已发布课程</p>
-                <p className="mt-2 text-3xl font-semibold text-foreground">{courses.length}</p>
+              <div className="flex items-start justify-between gap-4">
+                <div className="space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Account Plan</p>
+                  <h2 className="text-3xl font-semibold tracking-tight text-foreground">当前权限</h2>
+                </div>
+                <Badge className={planMeta.badgeClass}>{planMeta.label}</Badge>
               </div>
-              <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm text-muted-foreground">分类数量</p>
-                <p className="mt-2 text-3xl font-semibold text-foreground">{groups.length}</p>
-              </div>
-              <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm text-muted-foreground">试看内容</p>
-                <p className="mt-2 text-3xl font-semibold text-foreground">
-                  {courses.reduce((sum, course) => sum + course.previewCount, 0)}
-                </p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="overflow-hidden bg-background">
-          <CardContent className="space-y-6 p-7 md:p-10">
-            <div className="flex items-start justify-between gap-4">
-              <div className="space-y-2">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Account Plan</p>
-                <h2 className="text-3xl font-semibold tracking-tight text-foreground">当前权限</h2>
-              </div>
-              <Badge className={planMeta.badgeClass}>{planMeta.label}</Badge>
-            </div>
-
-            <p className="text-sm leading-7 text-muted-foreground">{planMeta.description}</p>
-
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm font-semibold text-foreground">免费版</p>
-                <div className="mt-3 space-y-2">
-                  {planFeatures.free.map((item) => (
-                    <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
-                      <Eye className="mt-0.5 size-4 shrink-0 text-primary" />
-                      <span>{item}</span>
+              <p className="text-sm leading-7 text-muted-foreground">{planMeta.description}</p>
+              <div className="rounded-[1.5rem] border-[3px] border-border bg-white px-5 py-5">
+                <p className="text-sm font-semibold text-foreground">{product.name}</p>
+                <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
+                  <div>
+                    <p className="text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {product.validDays ? `有效期 ${product.validDays} 天` : "长期有效"} · 本地开发环境走模拟支付
                     </p>
-                  ))}
-                </div>
-              </div>
-              <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
-                <p className="text-sm font-semibold text-foreground">VIP 会员</p>
-                <div className="mt-3 space-y-2">
-                  {planFeatures.paid.map((item) => (
-                    <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
-                      <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
-                      <span>{item}</span>
-                    </p>
-                  ))}
+                  </div>
                 </div>
               </div>
             </div>
+          }
+        />
 
-            <div className="rounded-[1.8rem] border-[3px] border-border bg-[linear-gradient(135deg,rgba(103,197,89,0.14),rgba(245,184,167,0.16))] px-5 py-5">
-              <p className="text-sm font-semibold text-foreground">{product.name}</p>
-              <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-                <div>
-                  <p className="text-3xl font-semibold text-foreground">{formatPrice(product.priceCents)}</p>
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {product.validDays ? `有效期 ${product.validDays} 天` : "长期有效"} · 本地开发环境走模拟支付
-                  </p>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <StatCard label="Courses" value={courses.length} description="已发布课程" icon={BookOpen} tone="primary" />
+          <StatCard label="Categories" value={groups.length} description="课程分类数量" icon={GraduationCap} tone="secondary" />
+          <StatCard
+            label="Preview"
+            value={courses.reduce((sum, course) => sum + course.previewCount, 0)}
+            description="可试看视频节数"
+            icon={Eye}
+            tone="accent"
+          />
+        </div>
+
+        <div className="grid gap-6 lg:grid-cols-[1.08fr_0.92fr]">
+          <SectionCard
+            title="学习权益说明"
+            description="学生可以先试看，再决定是否升级到完整体系课；后端权限逻辑保持不变，前台只负责把边界讲清楚。"
+          >
+            <div className="space-y-4">
+              <AlertPanel
+                title={`当前为${planMeta.label}`}
+                description={planMeta.description}
+                icon={viewer.plan === "paid" ? Sparkles : Eye}
+                tone={viewer.plan === "paid" ? "success" : "info"}
+              />
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
+                  <p className="text-sm font-semibold text-foreground">免费版</p>
+                  <div className="mt-3 space-y-2">
+                    {planFeatures.free.map((item) => (
+                      <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
+                        <Eye className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <span>{item}</span>
+                      </p>
+                    ))}
+                  </div>
                 </div>
-                <UpgradePlanButton plan={viewer.plan} size="lg" />
+                <div className="rounded-[1.6rem] border-[3px] border-border bg-card px-5 py-5">
+                  <p className="text-sm font-semibold text-foreground">VIP 会员</p>
+                  <div className="mt-3 space-y-2">
+                    {planFeatures.paid.map((item) => (
+                      <p key={item} className="inline-flex items-start gap-2 text-sm text-muted-foreground">
+                        <Sparkles className="mt-0.5 size-4 shrink-0 text-primary" />
+                        <span>{item}</span>
+                      </p>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          </CardContent>
-        </Card>
+          </SectionCard>
+
+          <SectionCard
+            title="最近学习建议"
+            description="先从试看课进入，再把学习结果回收到训练看板和题目提交闭环。"
+          >
+            <div className="space-y-3">
+              <AlertPanel
+                title="先试听，再回题库练习"
+                description="学习中心不是内容孤岛。建议先看一节试听课，再直接回题库做对应标签或难度的练习题。"
+                icon={PlayCircle}
+                tone="info"
+              />
+              <div className="space-y-3">
+                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5 text-sm leading-7 text-muted-foreground">
+                  1. 先打开一门试听课，确认课程节奏和适合的难度层级。
+                </div>
+                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5 text-sm leading-7 text-muted-foreground">
+                  2. 学完后直接回题库做对应标签或难度的练习题，形成学习-训练闭环。
+                </div>
+                <div className="rounded-[1.5rem] border-[3px] border-border bg-card px-5 py-5 text-sm leading-7 text-muted-foreground">
+                  3. 如果中断学习，训练看板可以帮助你快速回到最近一段进度。
+                </div>
+              </div>
+            </div>
+          </SectionCard>
+        </div>
       </section>
 
       <section className="mt-14">
@@ -259,15 +301,10 @@ export default async function LearnPage() {
       </section>
 
       <section className="mt-14">
-        <Card className="bg-background">
-          <CardContent className="flex flex-col gap-5 p-7 md:flex-row md:items-center md:justify-between md:p-10">
-            <div className="space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Next Step</p>
-              <h2 className="text-3xl font-semibold tracking-tight text-foreground">后续只要继续上传课程数据即可</h2>
-              <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
-                当前结构已经支持课程分类、章节、视频地址和试看权限。后面接入真实上传后台时，不需要再重做前台展示层。
-              </p>
-            </div>
+        <SectionCard
+          title="后续只要继续上传课程数据即可"
+          description="当前结构已经支持课程分类、章节、视频地址和试看权限。后面接入真实上传后台时，不需要再重做前台展示层。"
+          action={
             <div className="flex flex-wrap gap-3">
               <Button asChild variant="secondary">
                 <Link href="/profile">
@@ -277,8 +314,15 @@ export default async function LearnPage() {
               </Button>
               <UpgradePlanButton plan={viewer.plan} />
             </div>
-          </CardContent>
-        </Card>
+          }
+        >
+          <AlertPanel
+            title="课程库和会员权限已经在同一前端结构里"
+            description="后续继续扩课程、章节和试看数据时，前台只需要吃现有接口和内容字段，不需要再额外重做展示壳层。"
+            icon={GraduationCap}
+            tone="success"
+          />
+        </SectionCard>
       </section>
     </div>
   );
