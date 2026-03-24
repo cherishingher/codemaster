@@ -78,16 +78,18 @@ export function SubmitBar({
             </Button>
           ) : null}
 
-          <Button
-            size="sm"
-            variant="ghost"
-            className="h-10 gap-2 text-muted-foreground hover:text-foreground"
-            onClick={onRun}
-            disabled={disableRun}
-          >
-            <Play className="size-4" />
-            {isRunning ? "运行中..." : "运行"}
-          </Button>
+          {!isScratch ? (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-10 gap-2 text-muted-foreground hover:text-foreground"
+              onClick={onRun}
+              disabled={disableRun}
+            >
+              <Play className="size-4" />
+              {isRunning ? "运行中..." : "运行"}
+            </Button>
+          ) : null}
 
           <Button size="sm" className="h-10 gap-2" onClick={onSubmit} disabled={disableSubmit}>
             {isSubmitting ? <Loader2 className="size-4 animate-spin" /> : <Send className="size-4" />}

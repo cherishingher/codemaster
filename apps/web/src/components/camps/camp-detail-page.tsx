@@ -209,7 +209,9 @@ export function CampDetailPage() {
                             </Link>
                           </Button>
                         ) : (
-                          <Button disabled>待配置商品</Button>
+                          <div className="inline-flex items-center rounded-full border-[2px] border-dashed border-border/60 px-4 py-2 text-sm text-muted-foreground">
+                            报名商品暂未开放
+                          </div>
                         )}
 
                         <Button asChild variant="secondary">
