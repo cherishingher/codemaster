@@ -24,21 +24,38 @@ export function runCommand(
     }
     child.stdin.end()
 
-    function enforceOutputLimit() {
-      const totalBytes = Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8")
-      if (totalBytes > maxOutputBytes && !killed) {
+    function appendOutput(target: "stdout" | "stderr", data: Buffer) {
+      const usedBytes = Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8")
+      const remainingBytes = maxOutputBytes - usedBytes
+
+      if (remainingBytes <= 0) {
+        if (!killed) {
+          killed = true
+          child.kill("SIGKILL")
+        }
+        return
+      }
+
+      const chunk = data.subarray(0, remainingBytes)
+      const text = chunk.toString("utf8")
+
+      if (target === "stdout") {
+        stdout += text
+      } else {
+        stderr += text
+      }
+
+      if (data.length > remainingBytes && !killed) {
         killed = true
         child.kill("SIGKILL")
       }
     }
 
-    child.stdout.on("data", (data) => {
-      stdout += data.toString()
-      enforceOutputLimit()
+    child.stdout.on("data", (data: Buffer) => {
+      appendOutput("stdout", data)
     })
-    child.stderr.on("data", (data) => {
-      stderr += data.toString()
-      enforceOutputLimit()
+    child.stderr.on("data", (data: Buffer) => {
+      appendOutput("stderr", data)
     })
 
     const timer = setTimeout(() => {

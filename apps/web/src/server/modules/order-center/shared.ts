@@ -63,6 +63,10 @@ export function addDays(base: Date, days: number) {
   return next
 }
 
+export function isMockPaymentsEnabled() {
+  return process.env.ENABLE_MOCK_PAYMENTS === "true"
+}
+
 export function mapRefundRequest(
   refundRequest: OrderWithRelations["refundRequest"] | PaymentWithRelations["order"]["refundRequest"],
 ): RefundRequestItem | null {

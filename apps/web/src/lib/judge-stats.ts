@@ -68,6 +68,9 @@ export async function applyJudgeResult(args: {
   const accepted = args.status.toUpperCase() === "AC" || args.status.toUpperCase() === "ACCEPTED";
   const nextIsFinal = isFinalJudgeStatus(args.status);
   const wasFinal = submission.finishedAt !== null || isFinalJudgeStatus(submission.status);
+  if (wasFinal) {
+    return;
+  }
   const maxTimeMs =
     args.maxTimeMs ??
     (args.cases?.length ? Math.max(...args.cases.map((item) => item.timeMs)) : 0);
@@ -76,17 +79,23 @@ export async function applyJudgeResult(args: {
     (args.cases?.length ? Math.max(...args.cases.map((item) => item.memoryMb)) : 0);
 
   await db.$transaction(async (tx) => {
-    await tx.submission.update({
-      where: { id: args.submissionId },
+    const updatedSubmission = await tx.submission.updateMany({
+      where: {
+        id: args.submissionId,
+        finishedAt: null,
+      },
       data: {
         status: args.status,
         judgeResult: toSubmissionJudgeResult(args.status),
         score: args.score,
         timeUsedMs: maxTimeMs,
         memoryUsedKb: maxMemoryKb,
-        finishedAt: nextIsFinal ? submission.finishedAt ?? new Date() : submission.finishedAt,
+        finishedAt: nextIsFinal ? new Date() : undefined,
       },
     });
+    if (updatedSubmission.count === 0) {
+      return;
+    }
 
     if (args.compileMessage) {
       await tx.compileInfo.upsert({
@@ -135,7 +144,7 @@ export async function applyJudgeResult(args: {
       });
     }
 
-    if (wasFinal || !nextIsFinal) {
+    if (!nextIsFinal) {
       return;
     }
 

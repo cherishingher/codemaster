@@ -58,18 +58,24 @@ export async function POST(req: NextRequest) {
   }
 
   const password = await hashPassword(payload.data.password);
+  const usedAt = new Date();
   await db.$transaction([
     db.user.update({
       where: { id: user.id },
       data: {
         password,
-        emailVerifiedAt: type === "email" ? new Date() : undefined,
-        phoneVerifiedAt: type === "phone" ? new Date() : undefined,
+        emailVerifiedAt: type === "email" ? usedAt : undefined,
+        phoneVerifiedAt: type === "phone" ? usedAt : undefined,
       },
     }),
-    db.verificationCode.update({
-      where: { id: codeRecord.id },
-      data: { usedAt: new Date() },
+    db.verificationCode.updateMany({
+      where: {
+        target,
+        type,
+        purpose: "reset_password",
+        usedAt: null,
+      },
+      data: { usedAt },
     }),
     db.session.deleteMany({
       where: { userId: user.id },

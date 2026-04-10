@@ -50,17 +50,26 @@ function runCommand(
       child.kill("SIGKILL")
     }, options.timeoutMs)
 
-    child.stdout.on("data", (chunk) => {
-      stdout += chunk.toString()
-      if (Buffer.byteLength(stdout) > MAX_OUTPUT_BYTES) {
-        stdout = stdout.slice(0, MAX_OUTPUT_BYTES)
+    function appendOutput(target: "stdout" | "stderr", chunk: Buffer) {
+      const usedBytes = Buffer.byteLength(stdout, "utf8") + Buffer.byteLength(stderr, "utf8")
+      const remainingBytes = MAX_OUTPUT_BYTES - usedBytes
+      if (remainingBytes <= 0) {
+        return
       }
+
+      const text = chunk.subarray(0, remainingBytes).toString("utf8")
+      if (target === "stdout") {
+        stdout += text
+      } else {
+        stderr += text
+      }
+    }
+
+    child.stdout.on("data", (chunk: Buffer) => {
+      appendOutput("stdout", chunk)
     })
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString()
-      if (Buffer.byteLength(stderr) > MAX_OUTPUT_BYTES) {
-        stderr = stderr.slice(0, MAX_OUTPUT_BYTES)
-      }
+    child.stderr.on("data", (chunk: Buffer) => {
+      appendOutput("stderr", chunk)
     })
     child.on("error", (err) => {
       clearTimeout(killTimer)

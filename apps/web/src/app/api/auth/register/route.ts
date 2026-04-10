@@ -63,21 +63,27 @@ export async function POST(req: NextRequest) {
 
   try {
     const password = await hashPassword(data.password);
+    const usedAt = new Date();
     const [user] = await db.$transaction([
       db.user.create({
         data: {
           email: type === "email" ? target : undefined,
           phone: type === "phone" ? target : undefined,
-          emailVerifiedAt: type === "email" ? new Date() : undefined,
-          phoneVerifiedAt: type === "phone" ? new Date() : undefined,
+          emailVerifiedAt: type === "email" ? usedAt : undefined,
+          phoneVerifiedAt: type === "phone" ? usedAt : undefined,
           name: data.name,
           password,
         },
         select: { id: true, email: true, phone: true, name: true },
       }),
-      db.verificationCode.update({
-        where: { id: codeRecord.id },
-        data: { usedAt: new Date() },
+      db.verificationCode.updateMany({
+        where: {
+          target,
+          type,
+          purpose: "register",
+          usedAt: null,
+        },
+        data: { usedAt },
       }),
     ]);
 

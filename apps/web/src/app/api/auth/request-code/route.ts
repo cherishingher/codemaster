@@ -30,6 +30,13 @@ type AliyunClient = {
   ) => Promise<AliyunApiResponse>
 }
 
+type AliyunCoreConstructor = new (config: {
+  accessKeyId: string
+  accessKeySecret: string
+  endpoint: string
+  apiVersion: string
+}) => AliyunClient
+
 function getResponseString(result: AliyunApiResponse, ...keys: string[]) {
   for (const key of keys) {
     const value = result[key]
@@ -52,7 +59,7 @@ async function createAliyunClient(endpoint: string, apiVersion: string): Promise
   const accessKeyId = process.env.ALIYUN_ACCESS_KEY_ID
   const accessKeySecret = process.env.ALIYUN_ACCESS_KEY_SECRET
   if (!accessKeyId || !accessKeySecret) return null
-  const { default: Core } = (await import("@alicloud/pop-core")) as { default: any }
+  const { default: Core } = (await import("@alicloud/pop-core")) as { default: AliyunCoreConstructor }
   return new Core({ accessKeyId, accessKeySecret, endpoint, apiVersion })
 }
 
@@ -214,16 +221,30 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  await db.verificationCode.create({
-    data: {
-      target,
-      type,
-      purpose,
-      codeHash: hashVerificationCode(code, target),
-      expiresAt,
-      ip,
-    },
-  })
+  const usedAt = new Date()
+  await db.$transaction([
+    db.verificationCode.updateMany({
+      where: {
+        target,
+        type,
+        purpose,
+        usedAt: null,
+      },
+      data: {
+        usedAt,
+      },
+    }),
+    db.verificationCode.create({
+      data: {
+        target,
+        type,
+        purpose,
+        codeHash: hashVerificationCode(code, target),
+        expiresAt,
+        ip,
+      },
+    }),
+  ])
 
   if (debug) {
     console.log(`[auth] verification code for ${type}:${target} -> ${code}`)

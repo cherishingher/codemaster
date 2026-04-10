@@ -19,6 +19,7 @@ import type {
 import {
   OrderCenterError,
   buildBusinessNo,
+  isMockPaymentsEnabled,
   mapPayment,
   orderArgs,
   paymentArgs,
@@ -150,6 +151,10 @@ export async function createPaymentForOrder(
   userId: string,
   input: CreatePaymentInput,
 ): Promise<CreatePaymentResponse> {
+  if (input.channel === "MOCK" && !isMockPaymentsEnabled()) {
+    throw new OrderCenterError("mock_payments_disabled", "当前环境未启用模拟支付", 403)
+  }
+
   return db.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: input.orderId },
@@ -270,6 +275,15 @@ export async function handlePaymentCallback(
 
     if (!payment) {
       throw new OrderCenterError("payment_not_found", "支付单不存在", 404)
+    }
+
+    if (payment.channel === "MOCK" && !isMockPaymentsEnabled()) {
+      logger.warn("callback_rejected", {
+        paymentNo: input.paymentNo,
+        actorUserId: actor.userId,
+        reason: "mock_disabled",
+      })
+      throw new OrderCenterError("mock_payments_disabled", "当前环境未启用模拟支付", 403)
     }
 
     const isTrusted = Boolean(actor.trusted)
@@ -411,6 +425,10 @@ export async function quickMockPayOrder(
   orderId: string,
   input: PayOrderInput,
 ): Promise<PayOrderResponse> {
+  if (!isMockPaymentsEnabled()) {
+    throw new OrderCenterError("mock_payments_disabled", "当前环境未启用模拟支付", 403)
+  }
+
   const created = await createPaymentForOrder(userId, {
     orderId,
     channel: input.channel,
