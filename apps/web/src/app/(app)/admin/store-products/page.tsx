@@ -13,6 +13,7 @@ import { getProductTypeLabel } from "@/lib/products"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 type ProductFormState = {
   name: string
@@ -205,7 +206,6 @@ export default function AdminStoreProductsPage() {
   }, [])
 
   const previewSkus = React.useMemo(() => parseJsonSafely<Array<{ name?: string; priceCents?: number; currency?: string; isDefault?: boolean }>>(form.skuJson, []), [form.skuJson])
-  const previewBenefits = React.useMemo(() => parseJsonSafely<Array<{ title?: string }>>(form.benefitJson, []), [form.benefitJson])
   const includedTargets = React.useMemo(() => getIncludedTargets(form.metadataJson), [form.metadataJson])
   const defaultPreviewSku = previewSkus.find((item) => item.isDefault) ?? previewSkus[0]
 
@@ -256,6 +256,8 @@ export default function AdminStoreProductsPage() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
+      <AdminSecondaryGroupNav group="tools" />
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">商品管理</h1>
@@ -264,9 +266,6 @@ export default function AdminStoreProductsPage() {
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="secondary">
             <Link href="/products">前台商品中心</Link>
-          </Button>
-          <Button asChild variant="secondary">
-            <Link href="/admin">返回工具页</Link>
           </Button>
         </div>
       </div>

@@ -6,10 +6,12 @@ import { stringGenerator } from "@/lib/testdata-gen/generators/string"
 import { intervalsGenerator } from "@/lib/testdata-gen/generators/intervals"
 import { queriesGenerator } from "@/lib/testdata-gen/generators/queries"
 import { gridQueriesGenerator } from "@/lib/testdata-gen/generators/grid-queries"
+import { generateExternalPlannedCase } from "@/lib/testdata-gen/external"
 import type {
   CasePlan,
   GeneratedCase,
   TestdataGenerationConfig,
+  TestdataGenerationRuntimeContext,
 } from "@/lib/testdata-gen/types"
 
 export {
@@ -19,7 +21,10 @@ export {
   type TestdataGenerationConfig,
 }
 
-export function generatePlannedCase(plan: CasePlan): GeneratedCase {
+export async function generatePlannedCase(
+  plan: CasePlan,
+  runtimeContext: TestdataGenerationRuntimeContext = {},
+): Promise<GeneratedCase> {
   switch (plan.generator.type) {
     case "scalars": {
       const params = scalarsGenerator.validateParams(plan.generator.params)
@@ -44,6 +49,9 @@ export function generatePlannedCase(plan: CasePlan): GeneratedCase {
     case "grid_queries": {
       const params = gridQueriesGenerator.validateParams(plan.generator.params)
       return gridQueriesGenerator.generate({ seed: plan.caseSeed }, params)
+    }
+    case "external": {
+      return generateExternalPlannedCase(plan, plan.generator.params, runtimeContext)
     }
   }
 }

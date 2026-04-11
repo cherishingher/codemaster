@@ -7,6 +7,7 @@ import type { CmsOverviewResponse } from "@/lib/content-cms"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 const resourceMeta = {
   solution: { label: "题解", icon: FileText, href: "/admin/content/solutions" },
@@ -46,6 +47,8 @@ export function ContentCmsDashboard() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
+      <AdminSecondaryGroupNav group="content" />
+
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <h1 className="text-3xl font-bold tracking-tight">内容状态管理</h1>
@@ -114,7 +117,7 @@ export function ContentCmsDashboard() {
             <p>
               如果你在灰度环境需要一套可直接联调的演示数据，可前往
               <Link href="/admin" className="mx-1 font-medium text-foreground underline underline-offset-4">
-                管理后台首页
+                主后台首页
               </Link>
               的开发与诊断工具执行 seed，并使用页面里提供的 demo 账号逐角色验收。
             </p>

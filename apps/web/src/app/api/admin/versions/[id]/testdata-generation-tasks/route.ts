@@ -7,8 +7,7 @@ import fs from "fs"
 import path from "path"
 import { withAuth } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { createStoredFileAsset } from "@/lib/file-assets"
-import { readStoredTextAssetByUri } from "@/lib/file-assets"
+import { createStoredFileAsset, readStoredTextAssetByUri } from "@/lib/file-assets"
 import { problemModeSupportsCode, resolveProblemAdminMode } from "@/lib/problem-admin"
 import { analyzeProblemForTestdata } from "@/lib/problem-analysis"
 import { pushTestdataGenerationJob } from "@/lib/queue"
@@ -21,6 +20,7 @@ import {
   TESTDATA_QUEUE_NAME,
   toInputJsonValue,
 } from "@/lib/testdata-gen/task-utils"
+import type { TestdataGenerationRuntimeContext } from "@/lib/testdata-gen/types"
 
 const execFileAsync = promisify(execFile)
 
@@ -81,6 +81,50 @@ function resolveWebTsconfigPath() {
     throw new Error("web_tsconfig_not_found")
   }
   return matched
+}
+
+function buildGenerationRuntimeContext(input: {
+  version: {
+    id: string
+    problemId: string
+    statement: string
+    statementMd: string | null
+    constraints: string | null
+    inputFormat: string | null
+    outputFormat: string | null
+    timeLimitMs: number
+    memoryLimitMb: number
+    problem: {
+      title: string
+      tags: Array<{ tag: { name: string } }>
+    }
+  }
+  standardSolution: {
+    id: string
+    language: string
+  }
+  standardSolutionSource: string | null
+}): TestdataGenerationRuntimeContext {
+  return {
+    problem: {
+      id: input.version.problemId,
+      versionId: input.version.id,
+      title: input.version.problem.title,
+      statement: input.version.statement,
+      statementMd: input.version.statementMd,
+      constraints: input.version.constraints,
+      inputFormat: input.version.inputFormat,
+      outputFormat: input.version.outputFormat,
+      timeLimitMs: input.version.timeLimitMs,
+      memoryLimitMb: input.version.memoryLimitMb,
+      tags: input.version.problem.tags.map((item) => item.tag.name),
+    },
+    standardSolution: {
+      id: input.standardSolution.id,
+      language: input.standardSolution.language,
+      source: input.standardSolutionSource,
+    },
+  }
 }
 
 async function runTaskInline(taskId: string) {
@@ -301,12 +345,17 @@ export const POST = withAuth(async (req, { params }, user) => {
   if (runningTask) {
     return NextResponse.json({ error: "task_already_running", taskId: runningTask.id }, { status: 409 })
   }
+  const generationRuntimeContext = buildGenerationRuntimeContext({
+    version,
+    standardSolution,
+    standardSolutionSource,
+  })
 
   const generatedInputs = await Promise.all(
     plans.map(async (plan) => {
       // MVP keeps generator execution in the web tier so the worker only compiles,
       // runs the standard solution, and publishes final testcases.
-      const generated = generatePlannedCase(plan)
+      const generated = await generatePlannedCase(plan, generationRuntimeContext)
       const inputAsset = await createStoredFileAsset({
         prefix: "generated-inputs",
         fileName: `${plan.groupKey}-${String(plan.ordinal).padStart(3, "0")}.in`,
@@ -317,6 +366,7 @@ export const POST = withAuth(async (req, { params }, user) => {
         metadata: toInputJsonValue({
           taskSeed: plan.caseSeed,
           generator: plan.generator.type,
+          driver: plan.generator.type === "external" ? plan.generator.params.driver : undefined,
           planOrdinal: plan.ordinal,
         }),
       })
@@ -361,6 +411,7 @@ export const POST = withAuth(async (req, { params }, user) => {
         caseSeed: plan.caseSeed,
         generatorInput: toInputJsonValue({
           generator: plan.generator.type,
+          driver: plan.generator.type === "external" ? plan.generator.params.driver : undefined,
           metadata: generated.metadata ?? {},
         }),
         inputAssetId: inputAsset.id,

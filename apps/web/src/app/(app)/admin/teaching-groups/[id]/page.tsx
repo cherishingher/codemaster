@@ -244,7 +244,7 @@ export default function AdminTeachingGroupDetailPage() {
             <Link href={`/admin/teaching-groups/${group.id}/stats`}>查看班级统计</Link>
           </Button>
           <Button asChild variant="secondary">
-            <Link href="/admin/classes">返回班级列表</Link>
+            <Link href="/admin/teaching-groups">返回班级列表</Link>
           </Button>
         </div>
       </div>

@@ -459,6 +459,13 @@ export default function AdminProblemsPage() {
       statusFilter,
     ]
   )
+  const shouldExpandBulkTools = selectedCount > 0 || Boolean(pendingBulkAction)
+  const shouldExpandBulkLogs =
+    logPage > 1 ||
+    logActionFilter !== "all" ||
+    logSelectionModeFilter !== "all" ||
+    Boolean(logAdminInput.trim()) ||
+    Boolean(logAdminQuery.trim())
 
   React.useEffect(() => {
     const nextQuery = searchParams.get("q")?.trim() || ""
@@ -1072,9 +1079,7 @@ export default function AdminProblemsPage() {
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">题库管理</h1>
-          <p className="text-muted-foreground mt-2">
-            先看整库列表，再做单题编辑或批量导入。当前页支持快速修改基础信息。
-          </p>
+          <p className="text-muted-foreground mt-2">先查题，再做单题编辑；批量操作和日志默认收进高级区。</p>
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant={copied ? "default" : "secondary"} onClick={copyCurrentViewLink}>
@@ -1090,7 +1095,7 @@ export default function AdminProblemsPage() {
             {showCreateForm ? "收起新建题目" : "新建题目"}
           </Button>
           <Button variant="secondary" asChild>
-            <Link href="/admin">返回工具页</Link>
+            <Link href="/admin">返回后台首页</Link>
           </Button>
         </div>
       </div>
@@ -1191,19 +1196,26 @@ export default function AdminProblemsPage() {
             </div>
           </div>
 
-          <div className="rounded-lg border border-dashed border-border p-4 space-y-4">
-            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+          <details
+            open={shouldExpandBulkTools}
+            className="rounded-lg border border-dashed border-border p-4 [&_summary::-webkit-details-marker]:hidden"
+          >
+            <summary className="flex cursor-pointer list-none flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <div className="text-sm font-semibold">批量操作</div>
                 <div className="text-xs text-muted-foreground">
-                  支持勾选当前页，或直接选择当前筛选结果的全部题目。切换筛选条件后，选择会自动清空。
+                  {selectedCount > 0 ? selectionSummary : "默认收起。需要批量处理时再展开。"}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Badge variant="outline">已选 {selectedCount} 题</Badge>
                 {selectAllFiltered ? (
-                  <Badge variant="outline">作用范围：当前筛选结果全部题目</Badge>
+                  <Badge variant="outline">当前筛选结果全部题目</Badge>
                 ) : null}
+              </div>
+            </summary>
+            <div className="mt-4 space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-sm">
                 <Button variant="secondary" size="sm" onClick={toggleSelectCurrentPage}>
                   {allVisibleSelected ? "取消当前页全选" : "全选当前页"}
                 </Button>
@@ -1229,154 +1241,154 @@ export default function AdminProblemsPage() {
                   清空选择
                 </Button>
               </div>
-            </div>
-            <div className="grid gap-4 xl:grid-cols-3">
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
-                <div className="text-sm font-medium">批量归档</div>
-                <div className="text-xs text-muted-foreground">
-                  归档会把题目从公开题库下架，并标记为 `ARCHIVED / hidden / defunct=Y`。
-                </div>
-                <Button
-                  variant="destructive"
-                  onClick={prepareBulkArchive}
-                  disabled={bulkSaving || selectedCount === 0}
-                >
-                  {bulkSaving ? "处理中..." : "准备批量归档"}
-                </Button>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
-                <div className="text-sm font-medium">批量改可见性</div>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <select
-                    className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
-                    value={bulkVisibility}
-                    onChange={(event) => {
-                      setBulkVisibility(event.target.value as (typeof VISIBILITY_OPTIONS)[number])
-                      setPendingBulkAction(null)
-                    }}
-                  >
-                    {VISIBILITY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    onClick={prepareBulkVisibility}
-                    disabled={bulkSaving || selectedCount === 0}
-                  >
-                    {bulkSaving ? "处理中..." : "准备应用可见性"}
-                  </Button>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
-                <div className="text-sm font-medium">批量设置来源</div>
-                <div className="flex flex-col gap-3">
-                  <Input
-                    placeholder="来源，例如 luogu-sync / custom-import；留空表示清空来源"
-                    value={bulkSource}
-                    onChange={(event) => {
-                      setBulkSource(event.target.value)
-                      setPendingBulkAction(null)
-                    }}
-                  />
-                  <Button
-                    onClick={prepareBulkSource}
-                    disabled={bulkSaving || selectedCount === 0}
-                  >
-                    {bulkSaving ? "处理中..." : bulkSource.trim() ? "准备设置来源" : "准备清空来源"}
-                  </Button>
-                </div>
-              </div>
-              <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
-                <div className="text-sm font-medium">批量设置 / 删除标签</div>
-                <div className="grid gap-3 sm:grid-cols-[160px,minmax(0,1fr),auto]">
-                  <select
-                    className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-                    value={bulkTagAction}
-                    onChange={(event) => {
-                      setBulkTagAction(
-                        event.target.value as (typeof BULK_TAG_ACTION_OPTIONS)[number]["value"]
-                      )
-                      setPendingBulkAction(null)
-                    }}
-                  >
-                    {BULK_TAG_ACTION_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <Input
-                    placeholder="标签，逗号或换行分隔"
-                    value={bulkTagsText}
-                    onChange={(event) => {
-                      setBulkTagsText(event.target.value)
-                      setPendingBulkAction(null)
-                    }}
-                  />
-                  <Button
-                    onClick={prepareBulkTags}
-                    disabled={bulkSaving || selectedCount === 0}
-                  >
-                    {bulkSaving ? "处理中..." : "准备应用标签"}
-                  </Button>
-                </div>
-              </div>
-            </div>
-            {pendingBulkAction ? (
-              <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
-                <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">
-                      {pendingBulkAction.title}
-                    </div>
-                    <div className="text-sm text-muted-foreground">
-                      {pendingBulkAction.description}
-                    </div>
+              <div className="grid gap-4 xl:grid-cols-3">
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
+                  <div className="text-sm font-medium">批量归档</div>
+                  <div className="text-xs text-muted-foreground">
+                    会把题目从公开题库下架，并标记为 `ARCHIVED / hidden / defunct=Y`。
                   </div>
-                  <Badge variant="outline">执行前需要确认</Badge>
+                  <Button
+                    variant="destructive"
+                    onClick={prepareBulkArchive}
+                    disabled={bulkSaving || selectedCount === 0}
+                  >
+                    {bulkSaving ? "处理中..." : "准备批量归档"}
+                  </Button>
                 </div>
-                {pendingBulkAction.requiresConfirmText ? (
-                  <div className="grid gap-2 md:max-w-sm">
-                    <div className="text-xs text-muted-foreground">
-                      这是危险操作。请输入 <span className="font-semibold text-foreground">{pendingBulkAction.requiresConfirmText}</span> 后才能继续。
-                    </div>
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
+                  <div className="text-sm font-medium">批量改可见性</div>
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <select
+                      className="h-10 flex-1 rounded-md border border-input bg-background px-3 text-sm"
+                      value={bulkVisibility}
+                      onChange={(event) => {
+                        setBulkVisibility(event.target.value as (typeof VISIBILITY_OPTIONS)[number])
+                        setPendingBulkAction(null)
+                      }}
+                    >
+                      {VISIBILITY_OPTIONS.map((option) => (
+                        <option key={option} value={option}>
+                          {option}
+                        </option>
+                      ))}
+                    </select>
+                    <Button
+                      onClick={prepareBulkVisibility}
+                      disabled={bulkSaving || selectedCount === 0}
+                    >
+                      {bulkSaving ? "处理中..." : "准备应用可见性"}
+                    </Button>
+                  </div>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3">
+                  <div className="text-sm font-medium">批量设置来源</div>
+                  <div className="flex flex-col gap-3">
                     <Input
-                      placeholder={`输入 ${pendingBulkAction.requiresConfirmText}`}
-                      value={bulkConfirmText}
-                      onChange={(event) => setBulkConfirmText(event.target.value)}
+                      placeholder="来源，例如 luogu-sync / custom-import；留空表示清空来源"
+                      value={bulkSource}
+                      onChange={(event) => {
+                        setBulkSource(event.target.value)
+                        setPendingBulkAction(null)
+                      }}
                     />
+                    <Button
+                      onClick={prepareBulkSource}
+                      disabled={bulkSaving || selectedCount === 0}
+                    >
+                      {bulkSaving ? "处理中..." : bulkSource.trim() ? "准备设置来源" : "准备清空来源"}
+                    </Button>
                   </div>
-                ) : null}
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setPendingBulkAction(null)
-                      setBulkConfirmText("")
-                    }}
-                    disabled={bulkSaving}
-                  >
-                    取消
-                  </Button>
-                  <Button
-                    onClick={confirmPendingBulkAction}
-                    disabled={
-                      bulkSaving ||
-                      Boolean(
-                        pendingBulkAction.requiresConfirmText &&
-                          bulkConfirmText.trim().toUpperCase() !==
-                            pendingBulkAction.requiresConfirmText.toUpperCase()
-                      )
-                    }
-                  >
-                    {bulkSaving ? "执行中..." : pendingBulkAction.confirmLabel}
-                  </Button>
+                </div>
+                <div className="rounded-lg border border-border/70 bg-muted/20 p-4 space-y-3 xl:col-span-3">
+                  <div className="text-sm font-medium">批量设置 / 删除标签</div>
+                  <div className="grid gap-3 sm:grid-cols-[160px,minmax(0,1fr),auto]">
+                    <select
+                      className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                      value={bulkTagAction}
+                      onChange={(event) => {
+                        setBulkTagAction(
+                          event.target.value as (typeof BULK_TAG_ACTION_OPTIONS)[number]["value"]
+                        )
+                        setPendingBulkAction(null)
+                      }}
+                    >
+                      {BULK_TAG_ACTION_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <Input
+                      placeholder="标签，逗号或换行分隔"
+                      value={bulkTagsText}
+                      onChange={(event) => {
+                        setBulkTagsText(event.target.value)
+                        setPendingBulkAction(null)
+                      }}
+                    />
+                    <Button
+                      onClick={prepareBulkTags}
+                      disabled={bulkSaving || selectedCount === 0}
+                    >
+                      {bulkSaving ? "处理中..." : "准备应用标签"}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            ) : null}
-          </div>
+              {pendingBulkAction ? (
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-4 space-y-3">
+                  <div className="flex flex-col gap-2 lg:flex-row lg:items-start lg:justify-between">
+                    <div>
+                      <div className="text-sm font-semibold text-foreground">
+                        {pendingBulkAction.title}
+                      </div>
+                      <div className="text-sm text-muted-foreground">
+                        {pendingBulkAction.description}
+                      </div>
+                    </div>
+                    <Badge variant="outline">执行前需要确认</Badge>
+                  </div>
+                  {pendingBulkAction.requiresConfirmText ? (
+                    <div className="grid gap-2 md:max-w-sm">
+                      <div className="text-xs text-muted-foreground">
+                        这是危险操作。请输入 <span className="font-semibold text-foreground">{pendingBulkAction.requiresConfirmText}</span> 后才能继续。
+                      </div>
+                      <Input
+                        placeholder={`输入 ${pendingBulkAction.requiresConfirmText}`}
+                        value={bulkConfirmText}
+                        onChange={(event) => setBulkConfirmText(event.target.value)}
+                      />
+                    </div>
+                  ) : null}
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      variant="secondary"
+                      onClick={() => {
+                        setPendingBulkAction(null)
+                        setBulkConfirmText("")
+                      }}
+                      disabled={bulkSaving}
+                    >
+                      取消
+                    </Button>
+                    <Button
+                      onClick={confirmPendingBulkAction}
+                      disabled={
+                        bulkSaving ||
+                        Boolean(
+                          pendingBulkAction.requiresConfirmText &&
+                            bulkConfirmText.trim().toUpperCase() !==
+                              pendingBulkAction.requiresConfirmText.toUpperCase()
+                        )
+                      }
+                    >
+                      {bulkSaving ? "执行中..." : pendingBulkAction.confirmLabel}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
+          </details>
 
           {editingProblem ? (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-4">
@@ -1637,93 +1649,95 @@ export default function AdminProblemsPage() {
       </Card>
 
       <Card>
-        <CardContent className="p-6 space-y-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              <div className="text-lg font-semibold">最近批量操作</div>
-              <div className="text-sm text-muted-foreground">
-                记录操作者、动作、作用范围和受影响题目快照。
+        <CardContent className="p-6">
+          <details open={shouldExpandBulkLogs} className="[&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div className="text-lg font-semibold">最近批量操作</div>
+                <div className="text-sm text-muted-foreground">
+                  默认收起。需要排查批量归档、批量改标签、批量改来源时再展开。
+                </div>
               </div>
-            </div>
-            <div className="text-sm text-muted-foreground">
-              当前显示第 {logPaginationRange.from}-{logPaginationRange.to} 条，共 {logPaginationRange.total} 条 · 第 {Math.min(logPage, logTotalPages)} / {Math.max(logTotalPages, 1)} 页
-            </div>
-          </div>
+              <div className="text-sm text-muted-foreground">
+                共 {logPaginationRange.total} 条 · 第 {Math.min(logPage, logTotalPages)} / {Math.max(logTotalPages, 1)} 页
+              </div>
+            </summary>
 
-          <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto_auto]">
-            <form onSubmit={submitLogSearch} className="flex gap-2 lg:col-span-1">
-              <Input
-                value={logAdminInput}
-                onChange={(event) => setLogAdminInput(event.target.value)}
-                placeholder="按操作者姓名、邮箱或 ID 筛选"
-              />
-              <Button type="submit" variant="secondary" disabled={logsLoading}>
-                筛选
-              </Button>
-            </form>
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_auto_auto]">
+                <form onSubmit={submitLogSearch} className="flex gap-2 lg:col-span-1">
+                  <Input
+                    value={logAdminInput}
+                    onChange={(event) => setLogAdminInput(event.target.value)}
+                    placeholder="按操作者姓名、邮箱或 ID 筛选"
+                  />
+                  <Button type="submit" variant="secondary" disabled={logsLoading}>
+                    筛选
+                  </Button>
+                </form>
 
-            <select
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={logActionFilter}
-              onChange={(event) => {
-                setLogActionFilter(event.target.value as (typeof BULK_LOG_ACTION_OPTIONS)[number]["value"])
-                setLogPage(1)
-              }}
-            >
-              {BULK_LOG_ACTION_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <select
-              className="rounded-md border border-input bg-background px-3 py-2 text-sm"
-              value={logSelectionModeFilter}
-              onChange={(event) => {
-                setLogSelectionModeFilter(event.target.value as (typeof BULK_LOG_SELECTION_OPTIONS)[number]["value"])
-                setLogPage(1)
-              }}
-            >
-              {BULK_LOG_SELECTION_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </select>
-
-            <Button
-              variant="secondary"
-              onClick={resetLogFilters}
-              disabled={
-                logsLoading &&
-                logActionFilter === "all" &&
-                logSelectionModeFilter === "all" &&
-                !logAdminInput &&
-                !logAdminQuery
-              }
-            >
-              重置筛选
-            </Button>
-
-            <Button variant="secondary" onClick={loadBulkLogs} disabled={logsLoading}>
-              {logsLoading ? "刷新中..." : "刷新日志"}
-            </Button>
-          </div>
-
-          {logsLoading && bulkLogs.length === 0 ? (
-            <div className="text-sm text-muted-foreground">批量操作日志加载中...</div>
-          ) : bulkLogs.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
-              暂无批量操作日志。
-            </div>
-          ) : (
-            <div className="space-y-3">
-              {bulkLogs.map((log) => (
-                <div
-                  key={log.id}
-                  className="rounded-lg border border-border/70 bg-background p-4 space-y-3"
+                <select
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={logActionFilter}
+                  onChange={(event) => {
+                    setLogActionFilter(event.target.value as (typeof BULK_LOG_ACTION_OPTIONS)[number]["value"])
+                    setLogPage(1)
+                  }}
                 >
+                  {BULK_LOG_ACTION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className="rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  value={logSelectionModeFilter}
+                  onChange={(event) => {
+                    setLogSelectionModeFilter(event.target.value as (typeof BULK_LOG_SELECTION_OPTIONS)[number]["value"])
+                    setLogPage(1)
+                  }}
+                >
+                  {BULK_LOG_SELECTION_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+
+                <Button
+                  variant="secondary"
+                  onClick={resetLogFilters}
+                  disabled={
+                    logsLoading &&
+                    logActionFilter === "all" &&
+                    logSelectionModeFilter === "all" &&
+                    !logAdminInput &&
+                    !logAdminQuery
+                  }
+                >
+                  重置筛选
+                </Button>
+
+                <Button variant="secondary" onClick={loadBulkLogs} disabled={logsLoading}>
+                  {logsLoading ? "刷新中..." : "刷新日志"}
+                </Button>
+              </div>
+
+              {logsLoading && bulkLogs.length === 0 ? (
+                <div className="text-sm text-muted-foreground">批量操作日志加载中...</div>
+              ) : bulkLogs.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+                  暂无批量操作日志。
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {bulkLogs.map((log) => (
+                    <div
+                      key={log.id}
+                      className="rounded-lg border border-border/70 bg-background p-4 space-y-3"
+                    >
                   <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
                     <div className="space-y-2">
                       <div className="flex flex-wrap items-center gap-2">
@@ -1801,102 +1815,104 @@ export default function AdminProblemsPage() {
                       日志 ID: {log.id}
                     </div>
                   </div>
-                  <div className="flex flex-wrap gap-2">
-                    {log.targets.slice(0, 6).map((target) => (
-                      <Badge key={`${log.id}-${target.id}`} variant="outline">
-                        {target.title || target.slug || target.id}
-                      </Badge>
-                    ))}
-                    {log.targets.length > 6 ? (
-                      <Badge variant="outline">+{log.targets.length - 6} 题</Badge>
-                    ) : null}
+                      <div className="flex flex-wrap gap-2">
+                        {log.targets.slice(0, 6).map((target) => (
+                          <Badge key={`${log.id}-${target.id}`} variant="outline">
+                            {target.title || target.slug || target.id}
+                          </Badge>
+                        ))}
+                        {log.targets.length > 6 ? (
+                          <Badge variant="outline">+{log.targets.length - 6} 题</Badge>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="text-sm text-muted-foreground">
+                  当前显示第 {logPaginationRange.from}-{logPaginationRange.to} 条，共 {logPaginationRange.total} 条日志 · 第 {Math.min(logPage, logTotalPages)} / {Math.max(logTotalPages, 1)} 页
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button
+                    variant="secondary"
+                    disabled={logsLoading || logPage <= 1}
+                    onClick={() => setLogPage(1)}
+                  >
+                    首页
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={logsLoading || logPage <= 1}
+                    onClick={() => setLogPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    上一页
+                  </Button>
+                  <div className="flex flex-wrap items-center gap-1">
+                    {logPaginationItems.map((item) =>
+                      item.type === "ellipsis" ? (
+                        <span key={item.key} className="px-2 text-sm text-muted-foreground">
+                          ...
+                        </span>
+                      ) : (
+                        <Button
+                          key={item.page}
+                          type="button"
+                          size="sm"
+                          variant={item.page === logPage ? "default" : "secondary"}
+                          className={item.page === logPage ? "min-w-9 font-semibold ring-2 ring-primary/35 shadow-sm" : "min-w-9"}
+                          onClick={() => setLogPage(item.page)}
+                        >
+                          {item.page}
+                        </Button>
+                      )
+                    )}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    disabled={logsLoading || logPage >= logTotalPages}
+                    onClick={() => setLogPage((prev) => Math.min(logTotalPages, prev + 1))}
+                  >
+                    下一页
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    disabled={logsLoading || logPage >= logTotalPages}
+                    onClick={() => setLogPage(Math.max(logTotalPages, 1))}
+                  >
+                    末页
+                  </Button>
+                  <div className="ml-0 flex items-center gap-2 sm:ml-2">
+                    <span className="text-sm text-muted-foreground">跳转到</span>
+                    <Input
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      value={logPageInput}
+                      onChange={(event) => setLogPageInput(event.target.value.replace(/[^\d]/g, ""))}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault()
+                          submitLogPageJump()
+                        }
+                      }}
+                      onBlur={submitLogPageJump}
+                      className="h-10 w-20"
+                      aria-label="输入批量日志页码跳转"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={submitLogPageJump}
+                      disabled={!canJumpLogPage}
+                    >
+                      跳转
+                    </Button>
                   </div>
                 </div>
-              ))}
-            </div>
-          )}
-
-          <div className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-sm text-muted-foreground">
-              当前显示第 {logPaginationRange.from}-{logPaginationRange.to} 条，共 {logPaginationRange.total} 条日志 · 第 {Math.min(logPage, logTotalPages)} / {Math.max(logTotalPages, 1)} 页
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="secondary"
-                disabled={logsLoading || logPage <= 1}
-                onClick={() => setLogPage(1)}
-              >
-                首页
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={logsLoading || logPage <= 1}
-                onClick={() => setLogPage((prev) => Math.max(1, prev - 1))}
-              >
-                上一页
-              </Button>
-              <div className="flex flex-wrap items-center gap-1">
-                {logPaginationItems.map((item) =>
-                  item.type === "ellipsis" ? (
-                    <span key={item.key} className="px-2 text-sm text-muted-foreground">
-                      ...
-                    </span>
-                  ) : (
-                    <Button
-                      key={item.page}
-                      type="button"
-                      size="sm"
-                      variant={item.page === logPage ? "default" : "secondary"}
-                      className={item.page === logPage ? "min-w-9 font-semibold ring-2 ring-primary/35 shadow-sm" : "min-w-9"}
-                      onClick={() => setLogPage(item.page)}
-                    >
-                      {item.page}
-                    </Button>
-                  )
-                )}
-              </div>
-              <Button
-                variant="secondary"
-                disabled={logsLoading || logPage >= logTotalPages}
-                onClick={() => setLogPage((prev) => Math.min(logTotalPages, prev + 1))}
-              >
-                下一页
-              </Button>
-              <Button
-                variant="secondary"
-                disabled={logsLoading || logPage >= logTotalPages}
-                onClick={() => setLogPage(Math.max(logTotalPages, 1))}
-              >
-                末页
-              </Button>
-              <div className="ml-0 flex items-center gap-2 sm:ml-2">
-                <span className="text-sm text-muted-foreground">跳转到</span>
-                <Input
-                  inputMode="numeric"
-                  pattern="[0-9]*"
-                  value={logPageInput}
-                  onChange={(event) => setLogPageInput(event.target.value.replace(/[^\d]/g, ""))}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault()
-                      submitLogPageJump()
-                    }
-                  }}
-                  onBlur={submitLogPageJump}
-                  className="h-10 w-20"
-                  aria-label="输入批量日志页码跳转"
-                />
-                <Button
-                  type="button"
-                  variant="secondary"
-                  onClick={submitLogPageJump}
-                  disabled={!canJumpLogPage}
-                >
-                  跳转
-                </Button>
               </div>
             </div>
-          </div>
+          </details>
         </CardContent>
       </Card>
 

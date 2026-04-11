@@ -21,6 +21,7 @@
     "luogu:backfill-tags": "node scripts/luogu-backfill-tags.mjs",
     "luogu:normalize-tags": "node scripts/luogu-normalize-tags.mjs",
     "generator:scaffold": "node scripts/scaffold-problem-generators.mjs",
+    "generator:scaffold:cyaron": "node scripts/scaffold-cyaron-generator.mjs",
     "generator:verify": "node scripts/verify-problem-generator.mjs",
     "generator:generate": "node scripts/generate-hidden-testcases.mjs",
     "graphical:install": "CHROMEDRIVER_SKIP_DOWNLOAD=1 npm --prefix apps/graphical install --ignore-scripts --legacy-peer-deps",

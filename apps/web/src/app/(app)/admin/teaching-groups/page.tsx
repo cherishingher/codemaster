@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 async function fetcher<T>(url: string) {
   const response = await fetch(url, { credentials: "include" })
@@ -91,14 +92,13 @@ export default function AdminTeachingGroupsPage() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
-      <div className="flex items-center justify-between">
+      <AdminSecondaryGroupNav group="teaching" />
+
+      <div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">班级后台</h1>
           <p className="mt-2 text-muted-foreground">先做班级 / 教学组的基础模型、成员导入和题单布置，为三期教师 / 机构版预埋分组能力。</p>
         </div>
-        <Button asChild variant="secondary">
-          <Link href="/admin">返回工具页</Link>
-        </Button>
       </div>
 
       <Card>

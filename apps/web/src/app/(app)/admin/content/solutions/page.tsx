@@ -6,6 +6,7 @@ import type { ContentStudioOverviewResponse } from "@/lib/content-studio"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 async function fetcher(url: string) {
   const response = await fetch(url, { credentials: "include" })
@@ -29,14 +30,13 @@ export default function AdminContentSolutionsPage() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
-      <div className="flex items-center justify-between">
+      <AdminSecondaryGroupNav group="content" />
+
+      <div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">题解编辑页</h1>
           <p className="mt-2 text-muted-foreground">复用现有题解模型，统一维护摘要、模板、视频解析和发布状态。</p>
         </div>
-        <Button asChild variant="secondary">
-          <Link href="/admin/content">返回内容后台</Link>
-        </Button>
       </div>
 
       <div className="space-y-4">

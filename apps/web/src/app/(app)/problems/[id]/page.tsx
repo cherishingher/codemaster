@@ -48,6 +48,7 @@ type ProblemDetail = {
   notes?: string | null
   timeLimitMs?: number | null
   memoryLimitMb?: number | null
+  testcaseCount?: number | null
   judgeConfigs?: Array<{
     id?: string
     language: string
@@ -522,6 +523,8 @@ export default function ProblemDetailPage() {
     () => (problem?.tags ?? []).filter((tag) => !isHiddenProblemTag(tag)),
     [problem?.tags]
   )
+  const testcaseDownloadHref = id ? `/api/problems/${encodeURIComponent(id)}/testcases-zip` : ""
+  const canDownloadTestcases = (problem?.testcaseCount ?? 0) > 0
 
   React.useEffect(() => {
     if (!isScratch) return
@@ -993,8 +996,20 @@ export default function ProblemDetailPage() {
         ) : null}
         {limitText ? <div className="text-xs text-muted-foreground">{limitText}</div> : null}
         </div>
-        {!isScratch ? (
-          <div className="mb-3 flex flex-wrap gap-2">
+        <div className="mb-3 flex flex-wrap gap-2">
+          {canDownloadTestcases ? (
+            <Button asChild size="sm" variant="outline">
+              <a href={testcaseDownloadHref} download>
+                下载测试点
+              </a>
+            </Button>
+          ) : (
+            <Button size="sm" variant="outline" disabled>
+              暂无测试点下载
+            </Button>
+          )}
+          {!isScratch ? (
+            <>
             {problem?.slug ? (
               <Button asChild size="sm" variant="secondary">
                 <Link href={`/submissions?problemSlug=${encodeURIComponent(problem.slug)}`}>
@@ -1015,8 +1030,9 @@ export default function ProblemDetailPage() {
             <Button asChild size="sm" variant="outline">
               <a href="#problem-solutions">题解与视频</a>
             </Button>
-          </div>
-        ) : null}
+            </>
+          ) : null}
+        </div>
         {!isScratch ? (
           <div className="mb-3">
             <ProblemTabs

@@ -1,12 +1,12 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { SubmissionResult } from "@/components/problems/submission-result"
 import { useSubmission } from "@/lib/hooks/use-submission"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 const DEFAULT_CODE = `#include <bits/stdc++.h>
 using namespace std;
@@ -56,14 +56,13 @@ export default function SubmitTestPage() {
 
   return (
     <div className="container py-8 px-4 md:px-6 space-y-6">
-      <div className="flex items-center justify-between">
+      <AdminSecondaryGroupNav group="tools" />
+
+      <div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">提交测试</h1>
           <p className="text-muted-foreground mt-2">快速提交与查看判题结果</p>
         </div>
-        <Link href="/admin">
-          <Button variant="secondary">返回工具页</Button>
-        </Link>
       </div>
 
       <Card>

@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 async function fetcher(url: string) {
   const response = await fetch(url, { credentials: "include" })
@@ -61,14 +62,13 @@ export default function AdminContentPathsPage() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
-      <div className="flex items-center justify-between">
+      <AdminSecondaryGroupNav group="content" />
+
+      <div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">路径编排页</h1>
           <p className="mt-2 text-muted-foreground">复用 ProblemSet 承载训练路径，支持批量关联题目和独立发布状态。</p>
         </div>
-        <Button asChild variant="secondary">
-          <Link href="/admin/content">返回内容后台</Link>
-        </Button>
       </div>
 
       <Card className="bg-background">

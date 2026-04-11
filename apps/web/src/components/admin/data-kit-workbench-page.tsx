@@ -22,6 +22,7 @@ import { ErrorState, LoadingState, StatePanel } from "@/components/patterns/stat
 import { PageHeader } from "@/components/patterns/page-header"
 import { SectionCard } from "@/components/patterns/section-card"
 import { StatCard } from "@/components/patterns/stat-card"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 type DataKitToolDefinition = {
   id: string
@@ -274,6 +275,8 @@ export function DataKitWorkbenchPage() {
   return (
     <div className="page-wrap py-8 md:py-10">
       <div className="space-y-8">
+        <AdminSecondaryGroupNav group="tools" />
+
         <PageHeader
           eyebrow="Admin Data Kit"
           title="把 OI / ICPC 造数据模板、校验器和自检流程放进后台工作台。"

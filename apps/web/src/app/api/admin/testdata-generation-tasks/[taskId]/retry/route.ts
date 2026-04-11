@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { Prisma } from "@prisma/client"
 import { withAuth } from "@/lib/authz"
 import { db } from "@/lib/db"
-import { createStoredFileAsset } from "@/lib/file-assets"
+import { createStoredFileAsset, readStoredTextAssetByUri } from "@/lib/file-assets"
 import { pushTestdataGenerationJob } from "@/lib/queue"
 import { generatePlannedCase, validateAndPlanTestdataConfig } from "@/lib/testdata-gen"
 import {
@@ -12,6 +12,51 @@ import {
   TESTDATA_QUEUE_NAME,
   toInputJsonValue,
 } from "@/lib/testdata-gen/task-utils"
+import type { TestdataGenerationRuntimeContext } from "@/lib/testdata-gen/types"
+
+function buildGenerationRuntimeContext(input: {
+  version: {
+    id: string
+    problemId: string
+    statement: string
+    statementMd: string | null
+    constraints: string | null
+    inputFormat: string | null
+    outputFormat: string | null
+    timeLimitMs: number
+    memoryLimitMb: number
+    problem: {
+      title: string
+      tags: Array<{ tag: { name: string } }>
+    }
+  }
+  standardSolution: {
+    id: string
+    language: string
+  }
+  standardSolutionSource: string | null
+}): TestdataGenerationRuntimeContext {
+  return {
+    problem: {
+      id: input.version.problemId,
+      versionId: input.version.id,
+      title: input.version.problem.title,
+      statement: input.version.statement,
+      statementMd: input.version.statementMd,
+      constraints: input.version.constraints,
+      inputFormat: input.version.inputFormat,
+      outputFormat: input.version.outputFormat,
+      timeLimitMs: input.version.timeLimitMs,
+      memoryLimitMb: input.version.memoryLimitMb,
+      tags: input.version.problem.tags.map((item) => item.tag.name),
+    },
+    standardSolution: {
+      id: input.standardSolution.id,
+      language: input.standardSolution.language,
+      source: input.standardSolutionSource,
+    },
+  }
+}
 
 export const POST = withAuth(async (_req, { params }, user) => {
   const sourceTask = await db.testdataGenerationTask.findUnique({
@@ -34,8 +79,21 @@ export const POST = withAuth(async (_req, { params }, user) => {
         select: {
           id: true,
           problemId: true,
+          statement: true,
+          statementMd: true,
+          constraints: true,
+          inputFormat: true,
+          outputFormat: true,
           timeLimitMs: true,
           memoryLimitMb: true,
+          problem: {
+            select: {
+              title: true,
+              tags: {
+                include: { tag: true },
+              },
+            },
+          },
         },
       },
     },
@@ -59,10 +117,16 @@ export const POST = withAuth(async (_req, { params }, user) => {
     seed,
     configSnapshot,
   })
+  const standardSolutionSource = await readStoredTextAssetByUri(sourceTask.standardSolution.sourceAsset?.uri).catch(() => null)
+  const generationRuntimeContext = buildGenerationRuntimeContext({
+    version: sourceTask.problemVersion,
+    standardSolution: sourceTask.standardSolution,
+    standardSolutionSource,
+  })
 
   const generatedInputs = await Promise.all(
     plans.map(async (plan) => {
-      const generated = generatePlannedCase(plan)
+      const generated = await generatePlannedCase(plan, generationRuntimeContext)
       const inputAsset = await createStoredFileAsset({
         prefix: "generated-inputs",
         fileName: `${plan.groupKey}-${String(plan.ordinal).padStart(3, "0")}.in`,
@@ -73,6 +137,7 @@ export const POST = withAuth(async (_req, { params }, user) => {
         metadata: toInputJsonValue({
           taskSeed: plan.caseSeed,
           generator: plan.generator.type,
+          driver: plan.generator.type === "external" ? plan.generator.params.driver : undefined,
           planOrdinal: plan.ordinal,
         }),
       })
@@ -119,6 +184,7 @@ export const POST = withAuth(async (_req, { params }, user) => {
         caseSeed: plan.caseSeed,
         generatorInput: toInputJsonValue({
           generator: plan.generator.type,
+          driver: plan.generator.type === "external" ? plan.generator.params.driver : undefined,
           metadata: generated.metadata ?? {},
         }),
         inputAssetId: inputAsset.id,

@@ -202,7 +202,7 @@ export default function AdminProblemSetsPage() {
             {copied ? "已复制" : "复制当前分页链接"}
           </Button>
           <Link href="/admin">
-            <Button variant="secondary">返回工具页</Button>
+            <Button variant="secondary">返回后台首页</Button>
           </Link>
         </div>
       </div>

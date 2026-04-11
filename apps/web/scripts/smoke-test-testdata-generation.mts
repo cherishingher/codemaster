@@ -230,7 +230,7 @@ async function main() {
 
     const generatedInputs = await Promise.all(
       plans.map(async (plan) => {
-        const generated = generatePlannedCase(plan)
+        const generated = await generatePlannedCase(plan)
         const inputAsset = await createStoredFileAsset({
           prefix: "generated-inputs",
           fileName: `${plan.groupKey}-${String(plan.ordinal).padStart(3, "0")}.in`,

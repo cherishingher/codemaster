@@ -6,13 +6,10 @@ import useSWR from "swr"
 import {
   AlertTriangle,
   BookOpenText,
-  Database,
   Download,
-  FlaskConical,
   Gauge,
   GraduationCap,
   LayoutPanelTop,
-  Loader2,
   MessageSquareWarning,
   Package,
   Puzzle,
@@ -27,7 +24,6 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
 import { QueueTable } from "@/components/admin/queue-table"
-import { AlertPanel } from "@/components/patterns/alert-panel"
 import { PageHeader } from "@/components/patterns/page-header"
 import { SectionCard } from "@/components/patterns/section-card"
 import { StatCard } from "@/components/patterns/stat-card"
@@ -70,16 +66,18 @@ const defaultPayload = {
   ],
 }
 
-const quickLinks = [
+const coreLinks = [
   { href: "/admin/problems", label: "题库管理", icon: BookOpenText },
   { href: "/admin/problem-sets", label: "题单管理", icon: Puzzle },
-  { href: "/admin/content", label: "内容后台", icon: LayoutPanelTop },
   { href: "/admin/discussions", label: "讨论审核", icon: MessageSquareWarning },
-  { href: "/admin/data-kit", label: "造数据工具箱", icon: FlaskConical },
-  { href: "/admin/organizations", label: "机构后台", icon: Database },
-  { href: "/admin/classes", label: "班级后台", icon: GraduationCap },
-  { href: "/admin/store-products", label: "商品管理", icon: Package },
   { href: "/admin/import-export", label: "导入导出", icon: Download },
+  { href: "/admin/analytics", label: "学习分析", icon: Gauge },
+]
+
+const secondaryLinks = [
+  { href: "/admin/secondary#content", label: "内容运营", icon: LayoutPanelTop },
+  { href: "/admin/secondary#teaching", label: "教学运营", icon: GraduationCap },
+  { href: "/admin/secondary#tools", label: "商品与工具", icon: Package },
 ]
 
 export default function AdminToolsPage() {
@@ -171,14 +169,25 @@ export default function AdminToolsPage() {
       href: "/admin/discussions?tab=reports&status=pending",
     },
   ]
+  const recommendations = [
+    totalPending > 0
+      ? `先处理 ${totalPending} 个讨论待办，尤其是举报和比赛相关内容。`
+      : "讨论审核队列已清空，可以继续题库、题单和内容运营。",
+    opsLoading
+      ? "系统健康状态加载中，批量操作前先确认 DB 和 Redis 正常。"
+      : ops?.health.db && ops?.health.redis
+        ? "基础服务正常，可继续导入导出、批量改题和测试数据生成。"
+        : "DB 或 Redis 异常，先暂停批量操作，优先恢复基础服务。",
+    "低频的内容、机构和商品工具页统一从扩展后台进入，主后台只留高频流程。",
+  ]
 
   return (
     <div className="page-wrap py-8 md:py-10">
       <div className="space-y-8">
         <PageHeader
           eyebrow="Admin Dashboard"
-          title="把教学运营、质量监控和待处理队列收在同一个后台入口。"
-          description="先给管理员看到今天最需要处理的内容：系统健康、讨论审核、内容运营与导入导出。开发自检工具保留，但明确放在下方，不和正式操作入口混在一起。"
+          title="把高频后台入口收成一个更短、更直接的工作台。"
+          description="首页只保留题库、审核、导入导出和监控摘要。内容、机构、商品和调试能力都继续保留，但统一下沉到扩展后台或高级区。"
           meta={
             <>
               <span>教学运营</span>
@@ -191,10 +200,10 @@ export default function AdminToolsPage() {
           actions={
             <div className="flex flex-wrap gap-3">
               <Button asChild>
-                <Link href="/admin/discussions">进入审核队列</Link>
+                <Link href="/admin/problems">进入题库</Link>
               </Button>
               <Button asChild variant="secondary">
-                <Link href="/admin/analytics">查看学习分析</Link>
+                <Link href="/admin/discussions">进入审核队列</Link>
               </Button>
             </div>
           }
@@ -204,17 +213,12 @@ export default function AdminToolsPage() {
                 <p className="text-xs font-semibold uppercase tracking-[0.18em] text-muted-foreground">Today Focus</p>
                 <p className="mt-2 text-2xl font-semibold text-foreground">{totalPending} 个待处理事项</p>
               </div>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">DB / Redis</p>
-                  <div className="mt-2 flex gap-2">
-                    <StatusBadge tone={ops?.health.db ? "success" : "danger"}>DB</StatusBadge>
-                    <StatusBadge tone={ops?.health.redis ? "success" : "danger"}>Redis</StatusBadge>
-                  </div>
-                </div>
-                <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
-                  <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">环境</p>
-                  <p className="mt-2 text-lg font-semibold text-foreground">开发联调中</p>
+              <div className="rounded-[1.3rem] border-[3px] border-border bg-white px-4 py-4">
+                <p className="text-xs uppercase tracking-[0.14em] text-muted-foreground">系统状态</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  <StatusBadge tone={ops?.health.db ? "success" : "danger"}>DB</StatusBadge>
+                  <StatusBadge tone={ops?.health.redis ? "success" : "danger"}>Redis</StatusBadge>
+                  <StatusBadge tone="secondary">开发环境</StatusBadge>
                 </div>
               </div>
             </div>
@@ -255,11 +259,11 @@ export default function AdminToolsPage() {
         <div className="grid gap-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)]">
           <div className="space-y-6">
             <SectionCard
-              title="正式运营入口"
-              description="题库、内容、讨论、商品和机构入口集中摆放，避免在后台里到处找页面。"
+              title="核心后台入口"
+              description="只保留管理员日常高频会用到的题库、题单、审核、导入导出和分析入口。"
             >
               <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-                {quickLinks.map((item) => {
+                {coreLinks.map((item) => {
                   const Icon = item.icon
                   return (
                     <Button key={item.href} asChild variant="secondary" className="h-auto justify-between px-4 py-4">
@@ -274,37 +278,69 @@ export default function AdminToolsPage() {
                   )
                 })}
               </div>
+              <details className="mt-4 rounded-[1.35rem] border-[2px] border-border/70 bg-muted/10 p-4 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground">
+                  <span>更多后台入口</span>
+                  <span className="text-xs font-normal text-muted-foreground">内容、教学和商品等低频功能</span>
+                </summary>
+                <div className="mt-4">
+                  <Button asChild variant="secondary" className="w-full justify-between px-4 py-4 md:w-auto">
+                    <Link href="/admin/secondary">
+                      <span className="inline-flex items-center gap-2">
+                        <Package className="size-4" />
+                        打开扩展后台目录
+                      </span>
+                      <Sparkles className="size-4" />
+                    </Link>
+                  </Button>
+                </div>
+                <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+                  {secondaryLinks.map((item) => {
+                    const Icon = item.icon
+                    return (
+                      <Button key={item.href} asChild variant="ghost" className="h-auto justify-between px-4 py-4">
+                        <Link href={item.href}>
+                          <span className="inline-flex items-center gap-2">
+                            <Icon className="size-4" />
+                            {item.label}
+                          </span>
+                          <Sparkles className="size-4" />
+                        </Link>
+                      </Button>
+                    )
+                  })}
+                </div>
+              </details>
             </SectionCard>
 
             <SectionCard
-              title="异常告警与质量面板"
-              description="先看系统健康和审核堆积，再决定今天先处理教研内容、社区风控还是导入导出。"
+              title="系统与审核"
+              description="首页只保留简明健康状态和讨论审核队列，不再堆静态说明。"
             >
               <div className="space-y-4">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <AlertPanel
-                    title="系统健康"
-                    description="只要 DB 和 Redis 任一异常，就不要继续批量导入或放量审核，先恢复基础服务。"
-                    icon={Gauge}
-                    tone={ops?.health.db && ops?.health.redis ? "success" : "warning"}
-                    action={opsLoading ? <Loader2 className="size-4 animate-spin text-muted-foreground" /> : null}
-                  />
-                  <AlertPanel
-                    title="审核堆积提醒"
-                    description={
-                      totalPending > 0
-                        ? `当前还有 ${totalPending} 个讨论相关待办，优先处理比赛相关、题解延迟公开和举报工单。`
-                        : "当前讨论相关待办已清空，可以继续做题库、课程或导入导出操作。"
-                    }
-                    icon={MessageSquareWarning}
-                    tone={totalPending > 0 ? "warning" : "success"}
-                  />
+                <div className="flex flex-wrap items-center gap-2">
+                  <StatusBadge tone={ops?.health.db ? "success" : "danger"}>
+                    数据库 {ops?.health.db ? "正常" : "异常"}
+                  </StatusBadge>
+                  <StatusBadge tone={ops?.health.redis ? "success" : "danger"}>
+                    Redis {ops?.health.redis ? "正常" : "异常"}
+                  </StatusBadge>
+                  <StatusBadge tone={totalPending > 0 ? "warning" : "success"}>
+                    审核队列 {totalPending > 0 ? `${totalPending} 待处理` : "已清空"}
+                  </StatusBadge>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button asChild size="sm" variant="secondary">
+                    <Link href="/admin/discussions">进入审核队列</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="secondary">
+                    <Link href="/admin/analytics">查看监控分析</Link>
+                  </Button>
+                  <Button asChild size="sm" variant="ghost">
+                    <Link href="/admin/import-export">进入导入导出</Link>
+                  </Button>
                 </div>
                 <div className="surface-inset rounded-[1.5rem] p-4">
-                  <div className="mb-3 flex flex-wrap gap-2">
-                    <StatusBadge tone={ops?.health.db ? "success" : "danger"}>数据库 {ops?.health.db ? "正常" : "异常"}</StatusBadge>
-                    <StatusBadge tone={ops?.health.redis ? "success" : "danger"}>Redis {ops?.health.redis ? "正常" : "异常"}</StatusBadge>
-                  </div>
                   <QueueTable title="讨论队列" rows={moderationQueueRows} />
                 </div>
               </div>
@@ -312,62 +348,54 @@ export default function AdminToolsPage() {
           </div>
 
           <div className="space-y-6">
-            <SectionCard title="今日待办" description="把运营后台从入口集合改成任务看板，管理员一进来就知道先做什么。">
-              <div className="space-y-3 text-sm text-muted-foreground">
-                <div className="surface-inset rounded-[1.35rem] p-4">
-                  <p className="font-semibold text-foreground">1. 先清空讨论审核队列</p>
-                  <p className="mt-2 leading-7">
-                    比赛期和题解相关内容优先，避免剧透或延迟公开配置遗漏。
-                  </p>
-                </div>
-                <div className="surface-inset rounded-[1.35rem] p-4">
-                  <p className="font-semibold text-foreground">2. 检查导入与题库更新</p>
-                  <p className="mt-2 leading-7">
-                    新增题目、题单和内容包时，统一从正式入口进入，减少开发工具误用。
-                  </p>
-                </div>
-                <div className="surface-inset rounded-[1.35rem] p-4">
-                  <p className="font-semibold text-foreground">3. 关注学习分析和异常告警</p>
-                  <p className="mt-2 leading-7">
-                    如果系统正常但通过率异常下降，优先排查题目数据和判题配置。
-                  </p>
-                </div>
+            <SectionCard title="当前建议" description="把首页右侧改成简短行动提示，不再放大段静态说明。">
+              <div className="space-y-3">
+                {recommendations.map((item, index) => (
+                  <div key={item} className="surface-inset rounded-[1.35rem] p-4 text-sm text-muted-foreground">
+                    <p className="font-semibold text-foreground">{index + 1}. 当前动作</p>
+                    <p className="mt-2 leading-7">{item}</p>
+                  </div>
+                ))}
               </div>
             </SectionCard>
 
-            <SectionCard title="开发与诊断工具" description="保留联调能力，但明确作为下层工具，不和日常运营操作混用。">
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <label className="text-sm text-muted-foreground">Endpoint</label>
-                  <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm text-muted-foreground">Method</label>
-                  <select
-                    className="focus-ring ui-field h-11 px-3 text-sm"
-                    value={method}
-                    onChange={(e) => setMethod(e.target.value)}
-                  >
-                    <option>GET</option>
-                    <option>POST</option>
-                    <option>PATCH</option>
-                    <option>DELETE</option>
-                  </select>
-                </div>
-                <div className="grid gap-2">
-                  <label className="text-sm text-muted-foreground">JSON Body</label>
-                  <textarea
-                    className="focus-ring ui-field min-h-[220px] px-4 py-3 text-sm"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                  />
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button onClick={send} disabled={loading}>
-                    {loading ? "请求中..." : "发送请求"}
-                  </Button>
-                  {showAdminDevTools ? (
-                    <>
+            {showAdminDevTools ? (
+              <SectionCard title="开发与诊断工具" description="仅开发环境显示，默认折叠，避免和日常运营内容混排。">
+                <details className="rounded-[1.35rem] border-[2px] border-border/70 bg-muted/10 p-4 [&_summary::-webkit-details-marker]:hidden">
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm font-medium text-foreground">
+                    <span>展开请求调试器</span>
+                    <span className="text-xs font-normal text-muted-foreground">联调、造数据、自测接口</span>
+                  </summary>
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-2">
+                      <label className="text-sm text-muted-foreground">Endpoint</label>
+                      <Input value={endpoint} onChange={(e) => setEndpoint(e.target.value)} />
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm text-muted-foreground">Method</label>
+                      <select
+                        className="focus-ring ui-field h-11 px-3 text-sm"
+                        value={method}
+                        onChange={(e) => setMethod(e.target.value)}
+                      >
+                        <option>GET</option>
+                        <option>POST</option>
+                        <option>PATCH</option>
+                        <option>DELETE</option>
+                      </select>
+                    </div>
+                    <div className="grid gap-2">
+                      <label className="text-sm text-muted-foreground">JSON Body</label>
+                      <textarea
+                        className="focus-ring ui-field min-h-[220px] px-4 py-3 text-sm"
+                        value={body}
+                        onChange={(e) => setBody(e.target.value)}
+                      />
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button onClick={send} disabled={loading}>
+                        {loading ? "请求中..." : "发送请求"}
+                      </Button>
                       <Button
                         variant="secondary"
                         onClick={() => {
@@ -388,27 +416,27 @@ export default function AdminToolsPage() {
                       >
                         生成 Mock 数据
                       </Button>
-                    </>
-                  ) : null}
-                  <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setEndpoint("/api/admin/problems/export")
-                      setMethod("GET")
-                      setBody("")
-                    }}
-                  >
-                    导出题库(JSON)
-                  </Button>
-                </div>
-                <Card className="rounded-[1.5rem] border-[2px] border-border bg-background shadow-none">
-                  <CardContent className="p-5">
-                    <div className="mb-2 text-sm text-muted-foreground">Response</div>
-                    <pre className="whitespace-pre-wrap break-all text-sm text-foreground">{result || "暂无"}</pre>
-                  </CardContent>
-                </Card>
-              </div>
-            </SectionCard>
+                      <Button
+                        variant="secondary"
+                        onClick={() => {
+                          setEndpoint("/api/admin/problems/export")
+                          setMethod("GET")
+                          setBody("")
+                        }}
+                      >
+                        导出题库(JSON)
+                      </Button>
+                    </div>
+                    <Card className="rounded-[1.5rem] border-[2px] border-border bg-background shadow-none">
+                      <CardContent className="p-5">
+                        <div className="mb-2 text-sm text-muted-foreground">Response</div>
+                        <pre className="whitespace-pre-wrap break-all text-sm text-foreground">{result || "暂无"}</pre>
+                      </CardContent>
+                    </Card>
+                  </div>
+                </details>
+              </SectionCard>
+            ) : null}
           </div>
         </div>
       </div>

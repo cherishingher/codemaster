@@ -1,0 +1,101 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "key": "tiny-edge",
+      "title": "Tiny Edge",
+      "count": 1,
+      "score": 10,
+      "visible": false,
+      "groupId": "edge",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/custom/problem",
+          "command": [
+            "python3",
+            "gen.py",
+            "--mode",
+            "tiny-edge",
+            "--seed",
+            "{{caseSeed}}"
+          ],
+          "outputMode": "text",
+          "context": {
+            "profile": "tiny-edge"
+          },
+          "validator": {
+            "command": [
+              "python3",
+              "validator.py"
+            ],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "random",
+      "title": "Random",
+      "count": 2,
+      "score": 40,
+      "visible": false,
+      "groupId": "random",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/custom/problem",
+          "command": [
+            "python3",
+            "gen.py",
+            "--mode",
+            "default",
+            "--seed",
+            "{{caseSeed}}"
+          ],
+          "outputMode": "text",
+          "validator": {
+            "command": [
+              "python3",
+              "validator.py"
+            ],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "max-random",
+      "title": "Max Random",
+      "count": 1,
+      "score": 50,
+      "visible": false,
+      "groupId": "stress",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/custom/problem",
+          "command": [
+            "python3",
+            "gen.py",
+            "--mode",
+            "max-random",
+            "--seed",
+            "{{caseSeed}}"
+          ],
+          "outputMode": "text",
+          "validator": {
+            "command": [
+              "python3",
+              "validator.py"
+            ],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,7 +1,6 @@
 "use client"
 
 import * as React from "react"
-import Link from "next/link"
 import useSWR from "swr"
 import { toast } from "sonner"
 import type { OrganizationsResponse, TeacherProfilesResponse } from "@/lib/edu-admin"
@@ -9,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
+import { AdminSecondaryGroupNav } from "@/components/admin/admin-secondary-group-nav"
 
 async function fetcher<T>(url: string) {
   const response = await fetch(url, { credentials: "include" })
@@ -82,14 +82,13 @@ export default function AdminTeachersPage() {
 
   return (
     <div className="container space-y-6 px-4 py-8 md:px-6">
-      <div className="flex items-center justify-between">
+      <AdminSecondaryGroupNav group="teaching" />
+
+      <div>
         <div>
           <h1 className="text-3xl font-bold tracking-tight">教师资料后台</h1>
           <p className="mt-2 text-muted-foreground">先挂靠教师资料与所属机构，为后续教师 / 机构版做基础身份层。</p>
         </div>
-        <Button asChild variant="secondary">
-          <Link href="/admin">返回工具页</Link>
-        </Button>
       </div>
 
       <Card>

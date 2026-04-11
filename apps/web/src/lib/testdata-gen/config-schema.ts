@@ -1,6 +1,17 @@
 import { z } from "zod"
 import type { TestdataGenerationConfig } from "@/lib/testdata-gen/types"
 
+const JsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string(),
+    z.number(),
+    z.boolean(),
+    z.null(),
+    z.array(JsonValueSchema),
+    z.record(JsonValueSchema),
+  ])
+)
+
 const NumericRangeSchema = z
   .object({
     min: z.number().int().optional(),
@@ -115,6 +126,26 @@ const GridQueriesGeneratorSchema = z.object({
   }),
 })
 
+const ExternalCommandSchema = z.object({
+  command: z.array(z.string().min(1)).min(1),
+  cwd: z.string().min(1).optional(),
+  env: z.record(z.string()).optional(),
+  stdinTemplate: z.string().optional(),
+  timeoutMs: z.number().int().positive().max(120000).optional(),
+})
+
+const ExternalGeneratorSchema = z.object({
+  type: z.literal("external"),
+  params: ExternalCommandSchema.extend({
+    driver: z.enum(["command", "testlib", "tcframe", "cyaron"]),
+    outputMode: z.enum(["text", "json"]).optional(),
+    inputField: z.string().min(1).optional(),
+    metadataField: z.string().min(1).optional(),
+    context: z.record(JsonValueSchema).optional(),
+    validator: ExternalCommandSchema.optional(),
+  }),
+})
+
 const GeneratorSchema = z.discriminatedUnion("type", [
   ScalarsGeneratorSchema,
   ArrayGeneratorSchema,
@@ -122,6 +153,7 @@ const GeneratorSchema = z.discriminatedUnion("type", [
   IntervalsGeneratorSchema,
   QueriesGeneratorSchema,
   GridQueriesGeneratorSchema,
+  ExternalGeneratorSchema,
 ])
 
 const GenerationGroupSchema = z.object({
@@ -147,5 +179,5 @@ export const TestdataGenerationConfigSchema = z.object({
 export function parseTestdataGenerationConfig(
   value: unknown
 ): TestdataGenerationConfig {
-  return TestdataGenerationConfigSchema.parse(value)
+  return TestdataGenerationConfigSchema.parse(value) as TestdataGenerationConfig
 }

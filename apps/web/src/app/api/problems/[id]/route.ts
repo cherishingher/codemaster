@@ -22,6 +22,9 @@ export async function GET(
       tags: { include: { tag: true } },
       currentVersion: {
         include: {
+          _count: {
+            select: { testcases: true },
+          },
           judgeConfigs: {
             where: { isEnabled: true },
             orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }],
@@ -32,6 +35,9 @@ export async function GET(
         orderBy: { version: "desc" },
         take: 1,
         include: {
+          _count: {
+            select: { testcases: true },
+          },
           judgeConfigs: {
             where: { isEnabled: true },
             orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }],
@@ -65,6 +71,9 @@ export async function GET(
           version: requestedVersion,
         },
         include: {
+          _count: {
+            select: { testcases: true },
+          },
           judgeConfigs: {
             where: { isEnabled: true },
             orderBy: [{ isDefault: "desc" }, { sortOrder: "asc" }],
@@ -123,6 +132,7 @@ export async function GET(
     notes: resolvedVersion.notes,
     timeLimitMs: resolvedVersion.timeLimitMs,
     memoryLimitMb: resolvedVersion.memoryLimitMb,
+    testcaseCount: resolvedVersion._count.testcases,
     judgeConfigs,
   });
 }

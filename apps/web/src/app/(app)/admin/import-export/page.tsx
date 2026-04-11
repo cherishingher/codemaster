@@ -151,6 +151,7 @@ export default function AdminImportExportPage() {
   const [testcaseZipFile, setTestcaseZipFile] = React.useState<File | null>(null)
   const [skipTestcaseZipSync, setSkipTestcaseZipSync] = React.useState(true)
   const [busy, setBusy] = React.useState<"json" | "csv" | "zip" | "testcaseZip" | null>(null)
+  const shouldExpandResult = Boolean(result && !result.ok)
 
   const copyText = async (label: string, value: string) => {
     try {
@@ -246,10 +247,10 @@ export default function AdminImportExportPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight">导入 / 导出</h1>
-          <p className="mt-2 text-muted-foreground">支持 JSON / CSV / ZIP，题面字段已兼容 Markdown。</p>
+          <p className="mt-2 text-muted-foreground">常用导出、JSON/CSV 导入、ZIP 导包都集中在这一页。</p>
         </div>
         <Link href="/admin">
-          <Button variant="secondary">返回工具页</Button>
+          <Button variant="secondary">返回后台首页</Button>
         </Link>
       </div>
 
@@ -257,7 +258,7 @@ export default function AdminImportExportPage() {
         <CardContent className="space-y-4 p-6">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <div className="font-medium">导出题库 / 题单</div>
+              <div className="font-medium">常用导出</div>
               <div className="mt-1 flex flex-wrap gap-2">
                 <Badge variant="outline">`statement` + `statementMd`</Badge>
                 <Badge variant="outline">`hints` 与 `notes` 分离</Badge>
@@ -319,12 +320,16 @@ export default function AdminImportExportPage() {
                   </Button>
                 </div>
               </div>
-
-              <div className="grid gap-3 md:grid-cols-3 text-xs text-muted-foreground">
-                <div>`statement`: 纯文本题面兜底</div>
-                <div>`statementMd`: Markdown 题面优先字段</div>
-                <div>`hints`: 做题提示，`notes`: 备注</div>
-              </div>
+              <details className="rounded-md border border-border/70 bg-muted/10 p-3 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+                  展开字段说明
+                </summary>
+                <div className="mt-3 grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
+                  <div>`statement`: 纯文本题面兜底</div>
+                  <div>`statementMd`: Markdown 题面优先字段</div>
+                  <div>`hints`: 做题提示，`notes`: 备注</div>
+                </div>
+              </details>
 
               <textarea
                 className="min-h-[320px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
@@ -387,18 +392,23 @@ export default function AdminImportExportPage() {
                   复制 manifest 模板
                 </Button>
               </div>
-
-              <div className="grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
-                <div>测试点文件示例：`fixtures/case1.in` / `fixtures/case1.out`</div>
-                <div>`manifest.json` 可带 `statementMd`、`hints`、`notes`</div>
-                <div>样例与隐藏点都在 `versions[].testcases` 中声明</div>
-              </div>
-
-              <textarea
-                className="min-h-[260px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
-                readOnly
-                value={stringifyTemplate(ZIP_MANIFEST_TEMPLATE)}
-              />
+              <details className="rounded-md border border-border/70 bg-muted/10 p-3 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+                  展开 manifest 示例与说明
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
+                    <div>测试点文件示例：`fixtures/case1.in` / `fixtures/case1.out`</div>
+                    <div>`manifest.json` 可带 `statementMd`、`hints`、`notes`</div>
+                    <div>样例与隐藏点都在 `versions[].testcases` 中声明</div>
+                  </div>
+                  <textarea
+                    className="min-h-[260px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm font-mono"
+                    readOnly
+                    value={stringifyTemplate(ZIP_MANIFEST_TEMPLATE)}
+                  />
+                </div>
+              </details>
 
               <input
                 type="file"
@@ -430,16 +440,21 @@ export default function AdminImportExportPage() {
                   复制目录示例
                 </Button>
               </div>
-
-              <div className="grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
-                <div>每道题一个目录：`a-b-problem/1.in`、`a-b-problem/1.out`</div>
-                <div>目录内可选 `config.yml/config.yaml`，格式与单题测试点 ZIP 完全一致</div>
-                <div>上传后会覆盖该题最新版本测试点，并同步 HUSTOJ</div>
-              </div>
-
-              <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-muted/20 p-4 text-sm">
-                {TESTCASE_BATCH_ZIP_LAYOUT}
-              </pre>
+              <details className="rounded-md border border-border/70 bg-muted/10 p-3 [&_summary::-webkit-details-marker]:hidden">
+                <summary className="cursor-pointer list-none text-sm font-medium text-foreground">
+                  展开目录规范
+                </summary>
+                <div className="mt-3 space-y-3">
+                  <div className="grid gap-3 text-xs text-muted-foreground md:grid-cols-3">
+                    <div>每道题一个目录：`a-b-problem/1.in`、`a-b-problem/1.out`</div>
+                    <div>目录内可选 `config.yml/config.yaml`，格式与单题测试点 ZIP 完全一致</div>
+                    <div>上传后会覆盖该题最新版本测试点，并同步 HUSTOJ</div>
+                  </div>
+                  <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-muted/20 p-4 text-sm">
+                    {TESTCASE_BATCH_ZIP_LAYOUT}
+                  </pre>
+                </div>
+              </details>
 
               <input
                 type="file"
@@ -465,22 +480,26 @@ export default function AdminImportExportPage() {
 
       <Card>
         <CardContent className="p-6">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <div className="text-sm font-medium">响应结果</div>
-              <div className="text-xs text-muted-foreground">
-                自动格式化 JSON；便于直接看错误码和字段校验信息。
+          <details open={shouldExpandResult} className="[&_summary::-webkit-details-marker]:hidden">
+            <summary className="flex cursor-pointer list-none flex-wrap items-center justify-between gap-2">
+              <div>
+                <div className="text-sm font-medium">最近响应</div>
+                <div className="text-xs text-muted-foreground">
+                  默认收起；导入失败时会自动展开，便于直接看错误码和字段校验信息。
+                </div>
               </div>
-            </div>
-            {result ? (
-              <Badge variant={result.ok ? "outline" : "destructive"}>
-                HTTP {result.status}
-              </Badge>
-            ) : null}
-          </div>
-          <pre className="whitespace-pre-wrap break-all rounded-md border border-border bg-muted/20 p-4 text-sm">
-            {result?.body || "暂无"}
-          </pre>
+              {result ? (
+                <Badge variant={result.ok ? "outline" : "destructive"}>
+                  HTTP {result.status}
+                </Badge>
+              ) : (
+                <Badge variant="outline">暂无</Badge>
+              )}
+            </summary>
+            <pre className="mt-3 whitespace-pre-wrap break-all rounded-md border border-border bg-muted/20 p-4 text-sm">
+              {result?.body || "暂无"}
+            </pre>
+          </details>
         </CardContent>
       </Card>
     </div>

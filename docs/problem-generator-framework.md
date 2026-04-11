@@ -48,6 +48,31 @@ npm run generator:scaffold -- --pids P1002 --force
 - `generator:verify --all` 和 `generator:generate --all` 默认跳过这些草稿目录
 - 当你补完 `std.mjs / brute.mjs / gen.mjs` 后，把 `spec.json` 里的 `draft` 改成 `false`
 
+## CYaRon 脚手架
+
+如果你要给某道新题起一个完整的外部 generator 目录，可以直接跑：
+
+```bash
+cd /Users/cherisher/Desktop/ccf-master/codemaster
+npm run generator:scaffold:cyaron -- --slug my-problem --title "My Problem"
+```
+
+默认会生成到：
+
+```text
+/Users/cherisher/Desktop/ccf-master/codemaster/problem-generators/custom/my-problem
+```
+
+会包含这些文件：
+
+- `gen.py`
+- `validator.py`
+- `std.cpp`
+- `requirements.txt`
+- `problem.json`
+- `testdata-generation-config.example.json`
+- `README.md`
+
 ## 验证命令
 
 ```bash
@@ -98,3 +123,105 @@ npm run generator:generate -- --dirs ./problem-generators/luogu/P1001 \
 - 验证结果：`51` 个检查通过
 - 生成结果：`26` 个测试点
 - 导入方式：直接调用 `/api/admin/testcases/import-zip`
+
+## 外部生成器接入
+
+除了仓库内置的 `array / string / queries` 这类 generator，版本级 `testdataGenerationConfig`
+现在也支持外部 driver。适合把 GitHub 上常见的竞赛出题工具接进来：
+
+- `testlib`：最适合做 `validator / checker / generator`
+- `TCFrame`：适合整题工程化生成，需要你写一个按单 case 输出输入数据的包装命令
+- `CYaRon`：适合 Python 快速造随机和边界数据
+
+### 设计原则
+
+1. 平台负责调度：分组、种子、测试点入库、标准解产出 `.out`
+2. 外部脚本负责输入生成：根据题面、约束、标准代码和 case seed 产出 `.in`
+3. 外部 validator 可选：每个生成 case 可以先过 validator，再进入标准解执行
+
+### 配置结构
+
+`generator.type = "external"` 时，支持以下字段：
+
+```json
+{
+  "version": 1,
+  "groups": [
+    {
+      "key": "edge-small",
+      "count": 4,
+      "score": 10,
+      "visible": false,
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/custom/p1000",
+          "command": ["python3", "gen.py", "--mode", "{{groupKey}}", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "profile": "small-edge"
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    }
+  ]
+}
+```
+
+### 运行时上下文
+
+平台会把完整上下文写到临时 JSON 文件，并通过环境变量传给外部命令：
+
+- `TESTDATA_CONTEXT_PATH`
+- `TESTDATA_REPO_ROOT`
+- `TESTDATA_CASE_SEED`
+- `TESTDATA_GROUP_KEY`
+- `TESTDATA_ORDINAL`
+
+`TESTDATA_CONTEXT_PATH` 对应的 JSON 包含：
+
+- `plan`：当前测试点的分组、序号、seed、score、visible 等信息
+- `problem`：题目标题、题面、约束、输入输出格式、时空限制、标签
+- `standardSolution`：标程语言和源码
+- `context`：你在配置里手工写入的扩展参数
+
+### 模板占位符
+
+`command / env / stdinTemplate` 支持 `{{...}}` 占位符，例如：
+
+- `{{caseSeed}}`
+- `{{groupKey}}`
+- `{{ordinal}}`
+- `{{problem.title}}`
+- `{{problem.constraints}}`
+- `{{standardSolution.language}}`
+- `{{external.profile}}`
+- `{{generatedInput}}`（仅 validator 阶段可用）
+
+### 输出约定
+
+- `outputMode = "text"`：外部命令 stdout 直接作为 `.in`
+- `outputMode = "json"`：stdout 需要输出 JSON，默认读取 `input` 和 `metadata` 字段
+
+示例：
+
+```json
+{
+  "input": "5\n1 2 3 4 5\n",
+  "metadata": {
+    "strategy": "anti-greedy",
+    "edgeCase": "max-duplicates"
+  }
+}
+```
+
+### 接入建议
+
+- `testlib`：优先接 validator，generator 通过命令行参数读取 `caseSeed / profile`
+- `TCFrame`：写一个 wrapper，把单次生成结果打印到 stdout，再让平台负责跑标程
+- `CYaRon`：直接在 `gen.py` 中读取 `TESTDATA_CONTEXT_PATH`，基于题面和标程生成边界数据

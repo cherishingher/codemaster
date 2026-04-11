@@ -124,6 +124,9 @@ export function DiscussionModerationPage() {
       setErrorMessage(error instanceof ApiError ? error.message : "操作失败")
     }
   }, [comments, posts, reports])
+  const postTotal = posts.data?.meta.total ?? 0
+  const commentTotal = comments.data?.meta.total ?? 0
+  const reportTotal = reports.data?.meta.total ?? 0
 
   if (loading) {
     return (
@@ -149,17 +152,36 @@ export function DiscussionModerationPage() {
 
   return (
     <div className="page-wrap py-10 md:py-14">
-      <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-primary">Discussion Moderation</p>
           <h1 className="text-3xl font-semibold tracking-tight text-foreground md:text-4xl">讨论审核后台</h1>
-          <p className="max-w-3xl text-sm leading-7 text-muted-foreground">
-            这里集中处理待审核帖子、评论和举报工单，优先关注比赛期内容、剧透风险和明显灌水。
-          </p>
+          <p className="max-w-3xl text-sm leading-7 text-muted-foreground">只保留待审帖子、待审评论和举报工单三个高频入口。</p>
         </div>
         <Button asChild variant="outline">
-          <Link href="/admin">返回运营后台</Link>
+          <Link href="/admin">返回后台首页</Link>
         </Button>
+      </div>
+
+      <div className="mb-6 grid gap-3 md:grid-cols-3">
+        <Card className="bg-background">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">待审帖子</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground">{postTotal}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-background">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">待审评论</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground">{commentTotal}</div>
+          </CardContent>
+        </Card>
+        <Card className="bg-background">
+          <CardContent className="p-5">
+            <div className="text-xs uppercase tracking-[0.14em] text-muted-foreground">举报工单</div>
+            <div className="mt-2 text-2xl font-semibold text-foreground">{reportTotal}</div>
+          </CardContent>
+        </Card>
       </div>
 
       {message ? (
@@ -175,9 +197,9 @@ export function DiscussionModerationPage() {
 
       <Tabs defaultValue="posts">
         <TabsList>
-          <TabsTrigger value="posts">待审帖子</TabsTrigger>
-          <TabsTrigger value="comments">待审评论</TabsTrigger>
-          <TabsTrigger value="reports">举报工单</TabsTrigger>
+          <TabsTrigger value="posts">待审帖子 ({postTotal})</TabsTrigger>
+          <TabsTrigger value="comments">待审评论 ({commentTotal})</TabsTrigger>
+          <TabsTrigger value="reports">举报工单 ({reportTotal})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="posts" className="space-y-5">
@@ -202,89 +224,95 @@ export function DiscussionModerationPage() {
             </CardContent>
           </Card>
 
-          {(posts.data?.data ?? []).map((post) => (
-            <Card key={post.id} className="bg-background">
-              <CardContent className="space-y-4 p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline" className={getDiscussionPostTypeTone(post.postType)}>
-                    {getDiscussionPostTypeLabel(post.postType)}
-                  </Badge>
-                  <Badge variant="secondary">审核 {post.auditStatus}</Badge>
-                  <Badge variant="secondary">展示 {post.displayStatus}</Badge>
-                  {post.problem ? <Badge variant="outline">题目：{post.problem.title}</Badge> : null}
-                  {post.contest ? <Badge variant="outline">比赛：{post.contest.name}</Badge> : null}
-                </div>
-                <div className="space-y-1">
-                  <div className="text-xl font-semibold text-foreground">{post.title}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {post.author.name || "匿名同学"} · {formatDiscussionDateTime(post.createdAt)} · 举报 {post.reportCount}
+          {posts.data && posts.data.data.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+              当前没有待审帖子。
+            </div>
+          ) : (
+            (posts.data?.data ?? []).map((post) => (
+              <Card key={post.id} className="bg-background">
+                <CardContent className="space-y-4 p-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className={getDiscussionPostTypeTone(post.postType)}>
+                      {getDiscussionPostTypeLabel(post.postType)}
+                    </Badge>
+                    <Badge variant="secondary">审核 {post.auditStatus}</Badge>
+                    <Badge variant="secondary">展示 {post.displayStatus}</Badge>
+                    {post.problem ? <Badge variant="outline">题目：{post.problem.title}</Badge> : null}
+                    {post.contest ? <Badge variant="outline">比赛：{post.contest.name}</Badge> : null}
                   </div>
-                  <p className="text-sm leading-7 text-muted-foreground">{post.excerpt || "暂无摘要"}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.posts.audit(post.id, { auditStatus: "approved" }),
-                        "帖子已审核通过",
-                      )
-                    }
-                  >
-                    <CheckCircle2 className="size-4" />
-                    通过
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.posts.audit(post.id, { auditStatus: "rejected" }),
-                        "帖子已驳回",
-                      )
-                    }
-                  >
-                    <XCircle className="size-4" />
-                    驳回
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () =>
-                          api.discussions.moderation.posts.action(post.id, {
-                            actionType: post.displayStatus === "hidden" ? "unhide" : "hide",
-                          }),
-                        post.displayStatus === "hidden" ? "帖子已恢复显示" : "帖子已隐藏",
-                      )
-                    }
-                  >
-                    <EyeOff className="size-4" />
-                    {post.displayStatus === "hidden" ? "恢复显示" : "隐藏"}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () =>
-                          api.discussions.moderation.posts.action(post.id, {
-                            actionType: post.isLocked ? "unlock" : "lock",
-                          }),
-                        post.isLocked ? "帖子已解锁" : "帖子已锁定",
-                      )
-                    }
-                  >
-                    {post.isLocked ? "解锁" : "锁帖"}
-                  </Button>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={`/discuss/topics/${post.id}`}>查看详情</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="space-y-1">
+                    <div className="text-xl font-semibold text-foreground">{post.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {post.author.name || "匿名同学"} · {formatDiscussionDateTime(post.createdAt)} · 举报 {post.reportCount}
+                    </div>
+                    <p className="text-sm leading-7 text-muted-foreground">{post.excerpt || "暂无摘要"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.posts.audit(post.id, { auditStatus: "approved" }),
+                          "帖子已审核通过",
+                        )
+                      }
+                    >
+                      <CheckCircle2 className="size-4" />
+                      通过
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.posts.audit(post.id, { auditStatus: "rejected" }),
+                          "帖子已驳回",
+                        )
+                      }
+                    >
+                      <XCircle className="size-4" />
+                      驳回
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () =>
+                            api.discussions.moderation.posts.action(post.id, {
+                              actionType: post.displayStatus === "hidden" ? "unhide" : "hide",
+                            }),
+                          post.displayStatus === "hidden" ? "帖子已恢复显示" : "帖子已隐藏",
+                        )
+                      }
+                    >
+                      <EyeOff className="size-4" />
+                      {post.displayStatus === "hidden" ? "恢复显示" : "隐藏"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () =>
+                            api.discussions.moderation.posts.action(post.id, {
+                              actionType: post.isLocked ? "unlock" : "lock",
+                            }),
+                          post.isLocked ? "帖子已解锁" : "帖子已锁定",
+                        )
+                      }
+                    >
+                      {post.isLocked ? "解锁" : "锁帖"}
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/discuss/topics/${post.id}`}>查看详情</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </TabsContent>
 
         <TabsContent value="comments" className="space-y-5">
@@ -309,71 +337,77 @@ export function DiscussionModerationPage() {
             </CardContent>
           </Card>
 
-          {(comments.data?.data ?? []).map((comment) => (
-            <Card key={comment.id} className="bg-background">
-              <CardContent className="space-y-4 p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">审核 {comment.auditStatus}</Badge>
-                  <Badge variant="secondary">展示 {comment.displayStatus}</Badge>
-                  <Badge variant="outline">{getDiscussionPostTypeLabel(comment.post.postType)}</Badge>
-                  <Badge variant="outline">楼层 #{comment.floorNo || "-"}</Badge>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-base font-semibold text-foreground">{comment.post.title}</div>
-                  <div className="text-sm text-muted-foreground">
-                    {comment.author.name || "匿名同学"} · {formatDiscussionDateTime(comment.createdAt)} · 举报 {comment.reportCount}
+          {comments.data && comments.data.data.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+              当前没有待审评论。
+            </div>
+          ) : (
+            (comments.data?.data ?? []).map((comment) => (
+              <Card key={comment.id} className="bg-background">
+                <CardContent className="space-y-4 p-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">审核 {comment.auditStatus}</Badge>
+                    <Badge variant="secondary">展示 {comment.displayStatus}</Badge>
+                    <Badge variant="outline">{getDiscussionPostTypeLabel(comment.post.postType)}</Badge>
+                    <Badge variant="outline">楼层 #{comment.floorNo || "-"}</Badge>
                   </div>
-                  <p className="text-sm leading-7 text-muted-foreground">{comment.contentPreview || "暂无正文预览"}</p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.comments.audit(comment.id, { auditStatus: "approved" }),
-                        "评论已审核通过",
-                      )
-                    }
-                  >
-                    <CheckCircle2 className="size-4" />
-                    通过
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.comments.audit(comment.id, { auditStatus: "rejected" }),
-                        "评论已驳回",
-                      )
-                    }
-                  >
-                    <XCircle className="size-4" />
-                    驳回
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () =>
-                          api.discussions.moderation.comments.action(comment.id, {
-                            actionType: comment.displayStatus === "hidden" ? "unhide" : "hide",
-                          }),
-                        comment.displayStatus === "hidden" ? "评论已恢复显示" : "评论已隐藏",
-                      )
-                    }
-                  >
-                    <EyeOff className="size-4" />
-                    {comment.displayStatus === "hidden" ? "恢复显示" : "隐藏"}
-                  </Button>
-                  <Button asChild size="sm" variant="outline">
-                    <Link href={`/discuss/topics/${comment.post.id}`}>查看所在帖子</Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                  <div className="space-y-1">
+                    <div className="text-base font-semibold text-foreground">{comment.post.title}</div>
+                    <div className="text-sm text-muted-foreground">
+                      {comment.author.name || "匿名同学"} · {formatDiscussionDateTime(comment.createdAt)} · 举报 {comment.reportCount}
+                    </div>
+                    <p className="text-sm leading-7 text-muted-foreground">{comment.contentPreview || "暂无正文预览"}</p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.comments.audit(comment.id, { auditStatus: "approved" }),
+                          "评论已审核通过",
+                        )
+                      }
+                    >
+                      <CheckCircle2 className="size-4" />
+                      通过
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.comments.audit(comment.id, { auditStatus: "rejected" }),
+                          "评论已驳回",
+                        )
+                      }
+                    >
+                      <XCircle className="size-4" />
+                      驳回
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () =>
+                            api.discussions.moderation.comments.action(comment.id, {
+                              actionType: comment.displayStatus === "hidden" ? "unhide" : "hide",
+                            }),
+                          comment.displayStatus === "hidden" ? "评论已恢复显示" : "评论已隐藏",
+                        )
+                      }
+                    >
+                      <EyeOff className="size-4" />
+                      {comment.displayStatus === "hidden" ? "恢复显示" : "隐藏"}
+                    </Button>
+                    <Button asChild size="sm" variant="outline">
+                      <Link href={`/discuss/topics/${comment.post.id}`}>查看所在帖子</Link>
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </TabsContent>
 
         <TabsContent value="reports" className="space-y-5">
@@ -388,77 +422,83 @@ export function DiscussionModerationPage() {
             </CardContent>
           </Card>
 
-          {(reports.data?.data ?? []).map((report) => (
-            <Card key={report.id} className="bg-background">
-              <CardContent className="space-y-4 p-6">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="outline">{report.targetType === "post" ? "帖子举报" : "评论举报"}</Badge>
-                  <Badge variant="secondary">{getDiscussionReportReasonLabel(report.reasonCode)}</Badge>
-                  <Badge variant="secondary">状态 {report.status}</Badge>
-                </div>
-                <div className="space-y-1">
-                  <div className="text-sm text-muted-foreground">
-                    举报人：{report.reporter?.name || report.reporter?.id || "未知用户"} · {formatDiscussionDateTime(report.createdAt)}
+          {reports.data && reports.data.data.length === 0 ? (
+            <div className="rounded-lg border border-dashed border-border p-6 text-sm text-muted-foreground">
+              当前没有待处理举报。
+            </div>
+          ) : (
+            (reports.data?.data ?? []).map((report) => (
+              <Card key={report.id} className="bg-background">
+                <CardContent className="space-y-4 p-6">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline">{report.targetType === "post" ? "帖子举报" : "评论举报"}</Badge>
+                    <Badge variant="secondary">{getDiscussionReportReasonLabel(report.reasonCode)}</Badge>
+                    <Badge variant="secondary">状态 {report.status}</Badge>
                   </div>
-                  <div className="text-base font-semibold text-foreground">
-                    {report.targetPreview?.title || `目标 ${report.targetId}`}
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">
+                      举报人：{report.reporter?.name || report.reporter?.id || "未知用户"} · {formatDiscussionDateTime(report.createdAt)}
+                    </div>
+                    <div className="text-base font-semibold text-foreground">
+                      {report.targetPreview?.title || `目标 ${report.targetId}`}
+                    </div>
+                    <p className="text-sm leading-7 text-muted-foreground">
+                      {report.reasonText || report.targetPreview?.excerpt || "暂无补充说明"}
+                    </p>
                   </div>
-                  <p className="text-sm leading-7 text-muted-foreground">
-                    {report.reasonText || report.targetPreview?.excerpt || "暂无补充说明"}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    size="sm"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.reports.resolve(report.id, { status: "accepted" }),
-                        "举报已标记为成立",
-                      )
-                    }
-                  >
-                    <CheckCircle2 className="size-4" />
-                    举报成立
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.reports.resolve(report.id, { status: "rejected" }),
-                        "举报已驳回",
-                      )
-                    }
-                  >
-                    <XCircle className="size-4" />
-                    驳回举报
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() =>
-                      runAction(
-                        () => api.discussions.moderation.reports.resolve(report.id, { status: "closed" }),
-                        "举报工单已关闭",
-                      )
-                    }
-                  >
-                    <FileWarning className="size-4" />
-                    关闭工单
-                  </Button>
-                  {report.targetType === "post" ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/discuss/topics/${report.targetId}`}>查看帖子</Link>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.reports.resolve(report.id, { status: "accepted" }),
+                          "举报已标记为成立",
+                        )
+                      }
+                    >
+                      <CheckCircle2 className="size-4" />
+                      举报成立
                     </Button>
-                  ) : report.targetPreview?.postId ? (
-                    <Button asChild size="sm" variant="outline">
-                      <Link href={`/discuss/topics/${report.targetPreview.postId}`}>查看评论所在帖子</Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.reports.resolve(report.id, { status: "rejected" }),
+                          "举报已驳回",
+                        )
+                      }
+                    >
+                      <XCircle className="size-4" />
+                      驳回举报
                     </Button>
-                  ) : null}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() =>
+                        runAction(
+                          () => api.discussions.moderation.reports.resolve(report.id, { status: "closed" }),
+                          "举报工单已关闭",
+                        )
+                      }
+                    >
+                      <FileWarning className="size-4" />
+                      关闭工单
+                    </Button>
+                    {report.targetType === "post" ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/discuss/topics/${report.targetId}`}>查看帖子</Link>
+                      </Button>
+                    ) : report.targetPreview?.postId ? (
+                      <Button asChild size="sm" variant="outline">
+                        <Link href={`/discuss/topics/${report.targetPreview.postId}`}>查看评论所在帖子</Link>
+                      </Button>
+                    ) : null}
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
         </TabsContent>
       </Tabs>
     </div>

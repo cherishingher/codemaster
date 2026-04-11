@@ -19,8 +19,7 @@ const supportLinks = [
   { label: "登录", href: "/login" },
   { label: "注册", href: "/register" },
   { label: "找回密码", href: "/forgot-password" },
-  { label: "提交测试", href: "/admin/submit-test" },
-  { label: "帮助中心", href: "/admin" },
+  { label: "后台入口", href: "/admin" },
 ];
 
 const socialLinks = [

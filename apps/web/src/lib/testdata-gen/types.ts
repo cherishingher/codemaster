@@ -4,6 +4,12 @@ export type NumericRangeSpec = {
   values?: number[]
 }
 
+export type JsonPrimitive = string | number | boolean | null
+export type JsonValue = JsonPrimitive | JsonObject | JsonValue[]
+export type JsonObject = {
+  [key: string]: JsonValue
+}
+
 export type TestdataGeneratorType =
   | "scalars"
   | "array"
@@ -11,6 +17,7 @@ export type TestdataGeneratorType =
   | "intervals"
   | "queries"
   | "grid_queries"
+  | "external"
 
 export type ScalarsGeneratorParams = {
   layout: number[]
@@ -80,6 +87,29 @@ export type GridQueriesGeneratorParams = {
   distinctCoordinatePairs?: boolean
 }
 
+export type ExternalDriverKind =
+  | "command"
+  | "testlib"
+  | "tcframe"
+  | "cyaron"
+
+export type ExternalCommandConfig = {
+  command: string[]
+  cwd?: string
+  env?: Record<string, string>
+  stdinTemplate?: string
+  timeoutMs?: number
+}
+
+export type ExternalGeneratorParams = ExternalCommandConfig & {
+  driver: ExternalDriverKind
+  outputMode?: "text" | "json"
+  inputField?: string
+  metadataField?: string
+  context?: JsonObject
+  validator?: ExternalCommandConfig
+}
+
 export type GeneratorConfig =
   | { type: "scalars"; params: ScalarsGeneratorParams }
   | { type: "array"; params: ArrayGeneratorParams }
@@ -87,6 +117,7 @@ export type GeneratorConfig =
   | { type: "intervals"; params: IntervalsGeneratorParams }
   | { type: "queries"; params: QueriesGeneratorParams }
   | { type: "grid_queries"; params: GridQueriesGeneratorParams }
+  | { type: "external"; params: ExternalGeneratorParams }
 
 export type GenerationGroupConfig = {
   key: string
@@ -128,9 +159,34 @@ export type GeneratorContext = {
   seed: string
 }
 
+export type TestdataProblemRuntimeContext = {
+  id: string
+  versionId: string
+  title: string
+  statement: string
+  statementMd?: string | null
+  constraints?: string | null
+  inputFormat?: string | null
+  outputFormat?: string | null
+  timeLimitMs?: number
+  memoryLimitMb?: number
+  tags?: string[]
+}
+
+export type TestdataStandardSolutionRuntimeContext = {
+  id: string
+  language: string
+  source?: string | null
+}
+
+export type TestdataGenerationRuntimeContext = {
+  problem?: TestdataProblemRuntimeContext
+  standardSolution?: TestdataStandardSolutionRuntimeContext
+}
+
 export type GeneratedCase = {
   input: string
-  metadata?: Record<string, unknown>
+  metadata?: JsonObject
 }
 
 export interface TestdataGenerator<TParams> {

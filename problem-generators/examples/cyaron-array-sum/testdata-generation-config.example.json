@@ -1,0 +1,194 @@
+{
+  "version": 1,
+  "groups": [
+    {
+      "key": "edge-min-zero",
+      "title": "最小规模零值",
+      "count": 1,
+      "score": 5,
+      "visible": false,
+      "groupId": "edge",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "min-single-zero", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "edge-negative",
+      "title": "单点负边界",
+      "count": 1,
+      "score": 5,
+      "visible": false,
+      "groupId": "edge",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "min-single-negative", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "edge-alternating",
+      "title": "正负极值交替",
+      "count": 1,
+      "score": 10,
+      "visible": false,
+      "groupId": "edge",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "alternating-extremes", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "edge-overflow",
+      "title": "32 位溢出边界",
+      "count": 1,
+      "score": 10,
+      "visible": false,
+      "groupId": "edge",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "near-overflow-32", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "random-small",
+      "title": "小随机",
+      "count": 2,
+      "score": 10,
+      "visible": false,
+      "groupId": "random",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "random-small", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "random-large",
+      "title": "大随机",
+      "count": 2,
+      "score": 20,
+      "visible": false,
+      "groupId": "random",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "random-large", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    },
+    {
+      "key": "max-scale",
+      "title": "最大规模随机",
+      "count": 1,
+      "score": 20,
+      "visible": false,
+      "groupId": "stress",
+      "generator": {
+        "type": "external",
+        "params": {
+          "driver": "cyaron",
+          "cwd": "problem-generators/examples/cyaron-array-sum",
+          "command": ["python3", "gen.py", "--mode", "max-n-random", "--seed", "{{caseSeed}}"],
+          "outputMode": "text",
+          "context": {
+            "n_min": 1,
+            "n_max": 200000,
+            "value_min": -1000000000,
+            "value_max": 1000000000
+          },
+          "validator": {
+            "command": ["python3", "validator.py"],
+            "timeoutMs": 5000
+          }
+        }
+      }
+    }
+  ]
+}

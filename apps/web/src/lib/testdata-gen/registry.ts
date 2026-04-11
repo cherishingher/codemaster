@@ -1,4 +1,4 @@
-import type { GeneratorConfig, TestdataGeneratorType } from "@/lib/testdata-gen/types"
+import type { ExternalGeneratorParams, GeneratorConfig } from "@/lib/testdata-gen/types"
 import { scalarsGenerator } from "@/lib/testdata-gen/generators/scalars"
 import { arrayGenerator } from "@/lib/testdata-gen/generators/array"
 import { stringGenerator } from "@/lib/testdata-gen/generators/string"
@@ -15,11 +15,14 @@ const generators = {
   grid_queries: gridQueriesGenerator,
 } as const
 
-export function getTestdataGenerator(type: TestdataGeneratorType) {
+export function getTestdataGenerator(type: keyof typeof generators) {
   return generators[type]
 }
 
 export function validateGeneratorConfig(config: GeneratorConfig) {
+  if (config.type === "external") {
+    return config.params as ExternalGeneratorParams
+  }
   const generator = getTestdataGenerator(config.type)
   return generator.validateParams(config.params)
 }

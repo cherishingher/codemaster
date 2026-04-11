@@ -121,6 +121,8 @@ type ZipResult = {
   message: string
 }
 
+type ProblemAdminTab = "overview" | "code" | "scratch" | "content" | "advanced"
+
 type StandardSolutionItem = {
   id: string
   label: string
@@ -219,6 +221,14 @@ type TestdataAnalysisResult = {
   reviewRequired: boolean
 }
 
+type TestdataFrameworkDraftResult = {
+  framework: string
+  targetDir: string
+  scaffolded: boolean
+  scaffoldSkipped: boolean
+  configDraft: unknown
+}
+
 type JsonObject = Record<string, unknown>
 
 function asObject(value: unknown): JsonObject | null {
@@ -244,6 +254,11 @@ function formatJson(value: unknown) {
   } catch {
     return ""
   }
+}
+
+function defaultExternalFrameworkTargetDir(problem: Pick<ProblemMeta, "id" | "slug"> | null) {
+  if (!problem) return "problem-generators/custom/problem"
+  return `problem-generators/custom/${problem.slug || problem.id}`
 }
 
 function getProblemStatusLabel(status: number) {
@@ -472,6 +487,36 @@ function SamplePreviewCard({
   )
 }
 
+function AdminDisclosure({
+  title,
+  description,
+  children,
+  defaultOpen = false,
+}: {
+  title: string
+  description?: string
+  children: React.ReactNode
+  defaultOpen?: boolean
+}) {
+  return (
+    <details
+      open={defaultOpen}
+      className="rounded-xl border border-border/70 bg-muted/10 [&_summary::-webkit-details-marker]:hidden"
+    >
+      <summary className="flex cursor-pointer list-none items-start justify-between gap-4 px-4 py-3">
+        <div>
+          <div className="text-sm font-medium text-foreground">{title}</div>
+          {description ? (
+            <div className="mt-1 text-xs leading-6 text-muted-foreground">{description}</div>
+          ) : null}
+        </div>
+        <span className="shrink-0 text-xs text-muted-foreground">展开 / 收起</span>
+      </summary>
+      <div className="border-t border-border/70 p-4">{children}</div>
+    </details>
+  )
+}
+
 export default function AdminProblemDetailPage() {
   const params = useParams<{ id?: string | string[] }>()
   const pathname = usePathname()
@@ -549,6 +594,11 @@ export default function AdminProblemDetailPage() {
   const [selectedStandardSolutionId, setSelectedStandardSolutionId] = React.useState("")
   const [autoTestdataBusy, setAutoTestdataBusy] = React.useState(false)
   const [autoTestdataResult, setAutoTestdataResult] = React.useState<ZipResult | null>(null)
+  const [externalFramework, setExternalFramework] = React.useState<"cyaron">("cyaron")
+  const [externalFrameworkTargetDir, setExternalFrameworkTargetDir] = React.useState("")
+  const [externalFrameworkForceScaffold, setExternalFrameworkForceScaffold] = React.useState(false)
+  const [externalFrameworkBusy, setExternalFrameworkBusy] = React.useState(false)
+  const [externalFrameworkResult, setExternalFrameworkResult] = React.useState<ZipResult | null>(null)
   const [testdataTaskMode, setTestdataTaskMode] = React.useState<"APPEND" | "REPLACE_GENERATED" | "REPLACE_ALL">("REPLACE_GENERATED")
   const [testdataTaskCaseCount, setTestdataTaskCaseCount] = React.useState("10")
   const [testdataTaskTotalScore, setTestdataTaskTotalScore] = React.useState("100")
@@ -752,6 +802,10 @@ export default function AdminProblemDetailPage() {
     }
     prevTestdataConfigVersionIdRef.current = selectedVersionId
   }, [selectedVersion, selectedVersionId, testdataConfigDirty])
+
+  React.useEffect(() => {
+    setExternalFrameworkTargetDir((current) => current.trim() || defaultExternalFrameworkTargetDir(problem))
+  }, [problem])
 
   const loadTestdataResources = React.useCallback(async () => {
     if (!selectedVersionId) {
@@ -1508,25 +1562,78 @@ export default function AdminProblemDetailPage() {
     }
   }
 
-  const requestCreateTestdataGenerationTask = async (standardSolutionId: string) => {
-    if (!selectedVersionId || !standardSolutionId) {
-      throw new Error("请先选择版本和标程")
+  const requestExternalFrameworkDraft = async () => {
+    if (!selectedVersionId) {
+      throw new Error("请先选择题目版本")
     }
 
     const testcaseCount = parseOptionalPositiveInt(testdataTaskCaseCount)
     if (!testcaseCount) {
-      throw new Error("请填写测试点个数")
+      throw new Error("请先填写测试点个数")
     }
 
     const totalScore = parseOptionalPositiveInt(testdataTaskTotalScore)
+    const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-framework-draft`, {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        framework: externalFramework,
+        testcaseCount,
+        totalScore,
+        targetDir: externalFrameworkTargetDir.trim() || undefined,
+        scaffold: true,
+        force: externalFrameworkForceScaffold,
+      }),
+    })
+    const text = await res.text()
+    let data: JsonObject | null = null
+    try {
+      data = asObject(JSON.parse(text))
+    } catch {
+      data = null
+    }
+
+    if (!res.ok || !data) {
+      const message = data?.error ? String(data.error) : text || res.statusText
+      throw new Error(message)
+    }
+
+    return {
+      framework: String(data.framework ?? externalFramework),
+      targetDir: String(data.targetDir ?? externalFrameworkTargetDir),
+      scaffolded: data.scaffolded === true,
+      scaffoldSkipped: data.scaffoldSkipped === true,
+      configDraft: data.configDraft ?? null,
+    } satisfies TestdataFrameworkDraftResult
+  }
+
+  const requestCreateTestdataGenerationTask = async (
+    standardSolutionId: string,
+    options?: { useSavedConfig?: boolean },
+  ) => {
+    if (!selectedVersionId || !standardSolutionId) {
+      throw new Error("请先选择版本和标程")
+    }
+
     const payload: Record<string, unknown> = {
       standardSolutionId,
       mode: testdataTaskMode,
-      testcaseCount,
       seed: testdataTaskSeed.trim() || undefined,
     }
-    if (totalScore) {
-      payload.totalScore = totalScore
+
+    if (!options?.useSavedConfig) {
+      const testcaseCount = parseOptionalPositiveInt(testdataTaskCaseCount)
+      if (!testcaseCount) {
+        throw new Error("请填写测试点个数")
+      }
+
+      payload.testcaseCount = testcaseCount
+
+      const totalScore = parseOptionalPositiveInt(testdataTaskTotalScore)
+      if (totalScore) {
+        payload.totalScore = totalScore
+      }
     }
 
     const res = await fetch(`/api/admin/versions/${selectedVersionId}/testdata-generation-tasks`, {
@@ -1640,6 +1747,98 @@ export default function AdminProblemDetailPage() {
     }
 
     setTestdataTaskCreating(false)
+  }
+
+  const applyExternalFrameworkDraft = async () => {
+    if (!selectedVersionId) return
+
+    setExternalFrameworkBusy(true)
+    setExternalFrameworkResult(null)
+
+    try {
+      const draft = await requestExternalFrameworkDraft()
+      setExternalFrameworkTargetDir(draft.targetDir)
+      setTestdataConfigText(JSON.stringify(draft.configDraft, null, 2))
+      await requestSaveTestdataGenerationConfig(draft.configDraft)
+      setTestdataConfigDirty(false)
+      const message = [
+        draft.scaffolded ? `已创建框架目录 ${draft.targetDir}` : null,
+        draft.scaffoldSkipped ? `沿用已有目录 ${draft.targetDir}` : null,
+        "已写入外部框架配置",
+      ]
+        .filter(Boolean)
+        .join("，")
+      setExternalFrameworkResult({ type: "success", message })
+      setTestdataConfigResult({ type: "success", message })
+      toast.success("外部框架配置已应用", { description: message })
+      await load()
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "external_framework_apply_failed"
+      setExternalFrameworkResult({ type: "error", message })
+      toast.error("外部框架配置失败", { description: message })
+    }
+
+    setExternalFrameworkBusy(false)
+  }
+
+  const generateWithExternalFramework = async () => {
+    if (!selectedVersionId) return
+
+    setExternalFrameworkBusy(true)
+    setExternalFrameworkResult(null)
+    setTestdataTaskResult(null)
+    setStandardSolutionResult(null)
+
+    try {
+      let standardSolutionId = selectedStandardSolutionId
+      let uploadedLabel = ""
+
+      if (standardSolutionFile) {
+        const uploaded = await requestUploadStandardSolution()
+        standardSolutionId = uploaded.id
+        uploadedLabel = uploaded.label
+        setSelectedStandardSolutionId(uploaded.id)
+        setStandardSolutionResult({ type: "success", message: `已上传标程 ${uploaded.label}` })
+        setStandardSolutionFile(null)
+        setStandardSolutionLabel("")
+      }
+
+      if (!standardSolutionId) {
+        throw new Error("请先上传标程，或选择已有标程")
+      }
+
+      const draft = await requestExternalFrameworkDraft()
+      setExternalFrameworkTargetDir(draft.targetDir)
+      setTestdataConfigText(JSON.stringify(draft.configDraft, null, 2))
+      await requestSaveTestdataGenerationConfig(draft.configDraft)
+      setTestdataConfigDirty(false)
+
+      const task = await requestCreateTestdataGenerationTask(standardSolutionId, { useSavedConfig: true })
+      await loadTestdataResources()
+      if (task.id) {
+        setSelectedTestdataTaskId(task.id)
+      }
+
+      const message = [
+        uploadedLabel ? `标程 ${uploadedLabel}` : "已使用当前标程",
+        draft.scaffolded ? `已创建框架目录 ${draft.targetDir}` : `使用框架目录 ${draft.targetDir}`,
+        task.status === "SUCCEEDED"
+          ? `已直接写入 ${task.persistedCaseCount} 个测试点`
+          : `已创建 ${task.plannedCaseCount} 组测试点任务`,
+      ].join("，")
+
+      setExternalFrameworkResult({ type: "success", message })
+      setTestdataTaskResult({ type: "success", message })
+      toast.success(task.status === "SUCCEEDED" ? "外部框架生成完成" : "外部框架生成任务已创建", {
+        description: message,
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "external_framework_generation_failed"
+      setExternalFrameworkResult({ type: "error", message })
+      toast.error("外部框架生成失败", { description: message })
+    }
+
+    setExternalFrameworkBusy(false)
   }
 
   const uploadSolutionAndAutoGenerateTestdata = async () => {
@@ -1760,6 +1959,15 @@ export default function AdminProblemDetailPage() {
     window.open(`/api/admin/testdata-generation-tasks/${selectedTestdataTaskId}/package`, "_blank", "noopener,noreferrer")
   }
 
+  const downloadSelectedVersionTestcases = () => {
+    if (!problemId || !selectedVersionId) return
+    window.open(
+      `/api/problems/${encodeURIComponent(problemId)}/testcases-zip?versionId=${encodeURIComponent(selectedVersionId)}`,
+      "_blank",
+      "noopener,noreferrer",
+    )
+  }
+
   const addSolution = async () => {
     await fetch(`/api/admin/problems/${problemId}/solutions`, {
       method: "POST",
@@ -1796,19 +2004,74 @@ export default function AdminProblemDetailPage() {
     setSyncResult(await res.text())
   }
 
+  const problemAdminTabs = React.useMemo(() => {
+    const items: Array<{ value: ProblemAdminTab; label: string }> = [
+      { value: "overview", label: "基础" },
+    ]
+
+    if (supportsCodeWorkflow) {
+      items.push({ value: "code", label: "代码题" })
+    }
+
+    if (supportsScratchWorkflow) {
+      items.push({ value: "scratch", label: "Scratch" })
+    }
+
+    items.push(
+      { value: "content", label: "题解" },
+      { value: "advanced", label: "低频" },
+    )
+
+    return items
+  }, [supportsCodeWorkflow, supportsScratchWorkflow])
+  const [adminSectionTab, setAdminSectionTab] = React.useState<ProblemAdminTab>("overview")
+
+  React.useEffect(() => {
+    if (problemAdminTabs.some((item) => item.value === adminSectionTab)) return
+    setAdminSectionTab(problemAdminTabs[0]?.value ?? "overview")
+  }, [adminSectionTab, problemAdminTabs])
+
   return (
     <div className="container py-8 px-4 md:px-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">题目详情</h1>
-          <p className="text-muted-foreground mt-2">{problemId}</p>
+          <h1 className="text-3xl font-bold tracking-tight">{problem?.title || "题目详情"}</h1>
+          <div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+            <span>{problemId}</span>
+            {problem?.slug ? <span>slug: {problem.slug}</span> : null}
+            {problem?.version ? <span>版本 {problem.version}</span> : null}
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Badge variant="outline">{getProblemStatusLabel(problem?.status ?? 0)}</Badge>
+            <Badge variant="outline">{problem?.visibility ?? visibility}</Badge>
+            <Badge variant="outline">{problem?.visible ? "visible" : "hidden"}</Badge>
+            <Badge variant="outline">{problem?.defunct === "Y" ? "defunct=Y" : "defunct=N"}</Badge>
+          </div>
         </div>
         <Link href="/admin/problems">
           <Button variant="secondary">返回列表</Button>
         </Link>
       </div>
 
-      <Card>
+      <Tabs
+        value={adminSectionTab}
+        onValueChange={(value) => setAdminSectionTab(value as ProblemAdminTab)}
+        className="space-y-6"
+      >
+        <Card className="scroll-mt-24">
+          <CardContent className="p-4">
+            <TabsList className="flex h-auto w-full flex-wrap justify-start gap-2 p-2">
+              {problemAdminTabs.map((item) => (
+                <TabsTrigger key={item.value} value={item.value} className="min-w-[5.5rem]">
+                  {item.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+          </CardContent>
+        </Card>
+
+      <TabsContent value="overview" className="mt-0 space-y-6">
+      <Card id="problem-meta" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1892,7 +2155,7 @@ export default function AdminProblemDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="workflow" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -1934,7 +2197,7 @@ export default function AdminProblemDetailPage() {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="version-draft" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">新增版本</h2>
           <Tabs
@@ -2082,10 +2345,17 @@ export default function AdminProblemDetailPage() {
           <Button onClick={createVersion}>创建版本</Button>
         </CardContent>
       </Card>
+      </TabsContent>
 
       {supportsCodeWorkflow ? (
+      <TabsContent value="code" className="mt-0 space-y-6">
         <Card>
-          <CardContent className="p-6 space-y-4">
+          <CardContent className="p-6">
+            <AdminDisclosure
+              title="代码题 Judge 配置"
+              description="低频功能。这里维护语言模板、编译运行命令和默认语言，Scratch 配置仍在下方专区。"
+            >
+              <div className="space-y-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h2 className="text-lg font-semibold">代码题 Judge 配置</h2>
@@ -2257,12 +2527,12 @@ export default function AdminProblemDetailPage() {
                 ))}
               </div>
             )}
-          </CardContent>
-        </Card>
-      ) : null}
+              </div>
+            </AdminDisclosure>
+        </CardContent>
+      </Card>
 
-      {supportsCodeWorkflow ? (
-      <Card>
+      <Card id="code-workflow" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -2294,8 +2564,6 @@ export default function AdminProblemDetailPage() {
               </Button>
             </div>
           </div>
-
-          <div className="space-y-2">
             <div className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 p-4 space-y-3">
               <div className="text-sm font-medium">0. 推荐流程：上传标程并自动生成测试点</div>
               <div className="text-xs text-muted-foreground">
@@ -2388,10 +2656,10 @@ export default function AdminProblemDetailPage() {
                   </span>
                 </div>
               ) : null}
-              {autoTestdataResult && (
-                <div
-                  className={`text-xs break-all ${
-                    autoTestdataResult.type === "success"
+            {autoTestdataResult && (
+              <div
+                className={`text-xs break-all ${
+                  autoTestdataResult.type === "success"
                       ? "text-emerald-400"
                       : autoTestdataResult.type === "error"
                         ? "text-red-400"
@@ -2403,6 +2671,72 @@ export default function AdminProblemDetailPage() {
               )}
             </div>
 
+            <div className="rounded-lg border border-sky-500/30 bg-sky-500/5 p-4 space-y-3">
+              <div className="text-sm font-medium">0.5 外部框架直连</div>
+              <div className="text-xs text-muted-foreground">
+                这条路径适合每道题维护自己的外部 generator 目录。后台会先创建或复用框架目录，再自动写入
+                `testdataGenerationConfig`，随后你可以直接生成测试点。当前管理员界面先内置接好
+                CYaRon，目录模板起好后再按题意修改 `gen.py / validator.py`。
+              </div>
+              <div className="grid gap-3 md:grid-cols-[180px_minmax(0,1fr)]">
+                <select
+                  className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                  value={externalFramework}
+                  onChange={(e) => setExternalFramework(e.target.value as "cyaron")}
+                >
+                  <option value="cyaron">CYaRon</option>
+                </select>
+                <Input
+                  placeholder="框架目录，例如 problem-generators/custom/my-problem"
+                  value={externalFrameworkTargetDir}
+                  onChange={(e) => setExternalFrameworkTargetDir(e.target.value)}
+                />
+              </div>
+              <label className="text-sm text-muted-foreground flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={externalFrameworkForceScaffold}
+                  onChange={(e) => setExternalFrameworkForceScaffold(e.target.checked)}
+                />
+                覆盖已有框架模板文件
+              </label>
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  variant="secondary"
+                  onClick={applyExternalFrameworkDraft}
+                  disabled={!selectedVersionId || externalFrameworkBusy}
+                >
+                  {externalFrameworkBusy ? "处理中..." : "创建/刷新框架并写入配置"}
+                </Button>
+                <Button
+                  onClick={generateWithExternalFramework}
+                  disabled={
+                    !selectedVersionId ||
+                    externalFrameworkBusy ||
+                    (!standardSolutionFile && !selectedStandardSolutionId)
+                  }
+                >
+                  {externalFrameworkBusy ? "处理中..." : "用外部框架直接生成测试点"}
+                </Button>
+              </div>
+              <div className="text-xs text-muted-foreground">
+                默认目录会按题目 slug 生成为 `problem-generators/custom/&lt;slug&gt;`。如果目录已存在且不勾选覆盖，
+                后台会保留你当前写好的 `gen.py` 和 `validator.py`，只更新 JSON 配置。
+              </div>
+              {externalFrameworkResult ? (
+                <div
+                  className={`text-xs break-all ${
+                    externalFrameworkResult.type === "success"
+                      ? "text-emerald-400"
+                      : externalFrameworkResult.type === "error"
+                        ? "text-red-400"
+                        : "text-amber-400"
+                  }`}
+                >
+                  {externalFrameworkResult.message}
+                </div>
+              ) : null}
+            </div>
             <div className="text-sm font-medium">1. 高级配置（可选）</div>
             <div className="text-xs text-muted-foreground">
               如果自动流程生成的范围或分组不符合预期，再手动改这里的 JSON。正常使用优先走上面的自动模式。
@@ -2479,7 +2813,6 @@ export default function AdminProblemDetailPage() {
                 ) : null}
               </div>
             ) : null}
-          </div>
 
           <div className="space-y-3 rounded-lg border border-border/70 p-4">
             <div className="text-sm font-medium">2. 单独上传 / 切换标程（可选）</div>
@@ -2792,11 +3125,14 @@ export default function AdminProblemDetailPage() {
           </div>
         </CardContent>
       </Card>
-      ) : null}
 
-      {supportsCodeWorkflow ? (
       <Card>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6">
+          <AdminDisclosure
+            title="代码题测试点录入"
+            description="低频功能。主流程优先用自动生成或 ZIP 导入，这里只保留单条手工录入和导包。"
+          >
+            <div className="space-y-4">
           <h2 className="text-lg font-semibold">代码题测试点录入</h2>
           <div className="grid md:grid-cols-2 gap-3">
             <select
@@ -2895,17 +3231,17 @@ export default function AdminProblemDetailPage() {
               {zipWarnings.slice(0, 6).map((warning) => (
                 <div key={warning}>• {warning}</div>
               ))}
-              {zipWarnings.length > 6 && (
+          {zipWarnings.length > 6 && (
                 <div>…另外 {zipWarnings.length - 6} 条警告</div>
               )}
             </div>
           )}
+            </div>
+          </AdminDisclosure>
         </CardContent>
       </Card>
-      ) : null}
 
-      {supportsCodeWorkflow ? (
-      <Card>
+      <Card id="testcase-management" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
@@ -2914,18 +3250,27 @@ export default function AdminProblemDetailPage() {
                 可直接编辑 sample / hidden / stress、分组、顺序、分值和可见性。
               </div>
             </div>
-            <select
-              className="h-10 rounded-md border border-input bg-background px-3 text-sm"
-              value={selectedVersionId}
-              onChange={(e) => setSelectedVersionId(e.target.value)}
-            >
-              <option value="">选择版本</option>
-              {versions.map((v) => (
-                <option key={v.id} value={v.id}>
-                  v{v.version}
-                </option>
-              ))}
-            </select>
+            <div className="flex flex-wrap items-center gap-2">
+              <select
+                className="h-10 rounded-md border border-input bg-background px-3 text-sm"
+                value={selectedVersionId}
+                onChange={(e) => setSelectedVersionId(e.target.value)}
+              >
+                <option value="">选择版本</option>
+                {versions.map((v) => (
+                  <option key={v.id} value={v.id}>
+                    v{v.version}
+                  </option>
+                ))}
+              </select>
+              <Button
+                variant="secondary"
+                onClick={downloadSelectedVersionTestcases}
+                disabled={!selectedVersionId || editableTestcases.length === 0}
+              >
+                下载测试点
+              </Button>
+            </div>
           </div>
 
           {!selectedVersionId ? (
@@ -3014,10 +3359,12 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
+      </TabsContent>
       ) : null}
 
       {supportsScratchWorkflow ? (
-      <Card>
+      <TabsContent value="scratch" className="mt-0 space-y-6">
+      <Card id="scratch-workflow" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">Scratch 评测规则生成</h2>
           <div className="text-xs text-muted-foreground">
@@ -3090,11 +3437,14 @@ export default function AdminProblemDetailPage() {
           )}
         </CardContent>
       </Card>
-      ) : null}
 
-      {supportsScratchWorkflow ? (
       <Card>
-        <CardContent className="p-6 space-y-4">
+        <CardContent className="p-6">
+          <AdminDisclosure
+            title="Scratch 规则 JSON / 验证"
+            description="低频功能。只有维护自定义判题 JSON 或校验上传答案时才需要展开。"
+          >
+            <div className="space-y-4">
           <h2 className="text-lg font-semibold">Scratch 规则 JSON / 验证</h2>
           <div className="text-xs text-muted-foreground">
             这里用于维护可复用的自定义 Scratch 判题 JSON。保存后会写入当前题目版本的
@@ -3167,11 +3517,15 @@ export default function AdminProblemDetailPage() {
               {scratchValidateResult.message}
             </div>
           )}
+            </div>
+          </AdminDisclosure>
         </CardContent>
       </Card>
+      </TabsContent>
       ) : null}
 
-      <Card>
+      <TabsContent value="content" className="mt-0 space-y-6">
+      <Card id="solutions" className="scroll-mt-24">
         <CardContent className="p-6 space-y-4">
           <h2 className="text-lg font-semibold">题解管理</h2>
           <Input
@@ -3235,21 +3589,35 @@ export default function AdminProblemDetailPage() {
           </div>
         </CardContent>
       </Card>
+      </TabsContent>
 
+      <TabsContent value="advanced" className="mt-0 space-y-6">
       {supportsCodeWorkflow ? (
-      <Card>
-        <CardContent className="p-6 space-y-2">
+      <Card id="version-list" className="scroll-mt-24">
+        <CardContent className="p-6">
+          <AdminDisclosure
+            title="代码题同步到 HUSTOJ"
+            description="低频功能。只有需要把当前题同步到外部 HUSTOJ 实例时才使用。"
+          >
+            <div className="space-y-2">
           <h2 className="text-lg font-semibold">代码题同步到 HUSTOJ</h2>
           <Button onClick={syncHustoj} disabled={!problemId}>立即同步</Button>
           <div className="text-xs text-muted-foreground break-all">
             {syncResult || `未同步 (problemId: ${problemId || "missing"})`}
           </div>
+            </div>
+          </AdminDisclosure>
         </CardContent>
       </Card>
       ) : null}
 
       <Card>
-        <CardContent className="p-6 space-y-2">
+        <CardContent className="p-6">
+          <AdminDisclosure
+            title="版本列表"
+            description="低频信息。默认收起完整版本清单，避免占满页面底部。"
+          >
+            <div className="space-y-2">
           <h2 className="text-lg font-semibold">版本列表</h2>
           {versions.map((v) => (
             <div key={v.id} className="border-b border-border pb-2">
@@ -3291,8 +3659,12 @@ export default function AdminProblemDetailPage() {
               </div>
             </div>
           ))}
+            </div>
+          </AdminDisclosure>
         </CardContent>
       </Card>
+      </TabsContent>
+      </Tabs>
     </div>
   )
 }
