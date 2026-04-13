@@ -225,6 +225,22 @@ body > div:first-child {
   }
 }
 
+.ui-shell-grid[data-problem-detail="true"] {
+  margin-inline: 0;
+  max-width: none;
+  padding-inline: 0.75rem;
+  padding-top: 1rem;
+  padding-bottom: 1.5rem;
+}
+
+@media (min-width: 1280px) {
+  .ui-shell-grid[data-problem-detail="true"] {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: 1rem 1rem 1.5rem 5.75rem;
+  }
+}
+
 .ui-shell-rail {
   position: sticky;
   top: 7rem;

@@ -917,12 +917,12 @@ export default function ProblemDetailPage() {
     <div
       className={cn(
         isScratch
-          ? "mx-auto w-full max-w-[min(100vw-0.5rem,1920px)] px-1 py-1 md:px-2 md:py-2"
-          : "page-wrap py-2 md:py-3"
+          ? "mx-auto flex h-full min-h-0 w-full max-w-[min(100vw-0.5rem,1920px)] flex-col px-1 py-1 md:px-2 md:py-2"
+          : "flex h-full min-h-0 w-full flex-col overflow-hidden py-2 md:py-3 xl:py-0"
       )}
     >
     {!isScratch ? (
-      <div className="mb-3 rounded-[1.5rem] border-[3px] border-border bg-card px-4 py-3 shadow-[8px_8px_0_hsl(var(--border))]">
+      <div className="mb-3 shrink-0 rounded-[1.5rem] border-[3px] border-border bg-card px-4 py-3 shadow-[8px_8px_0_hsl(var(--border))] md:sticky md:top-0 md:z-20 xl:fixed xl:left-[5.75rem] xl:right-4 xl:top-2 xl:z-30 xl:mb-0">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
           <div className="min-w-0 space-y-2">
             <Breadcrumbs
@@ -961,7 +961,7 @@ export default function ProblemDetailPage() {
         "flex flex-col gap-3 md:min-h-0 md:flex-row md:overflow-hidden",
         isScratch
           ? "min-h-0"
-          : "min-h-[calc(100vh-10rem)] md:h-[calc(100vh-11.5rem)]"
+          : "min-h-0 flex-1 xl:fixed xl:bottom-3 xl:left-[5.75rem] xl:right-4 xl:top-[5.5rem]"
       )}
       style={isScratch && scratchViewportHeight ? { height: `${scratchViewportHeight}px` } : undefined}
     >

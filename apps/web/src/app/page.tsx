@@ -257,9 +257,8 @@ export default async function Home() {
               {HOME_TRACKS.slice(0, 3).map((track) => {
                 const Icon = track.icon
                 return (
-                  <Link
+                  <div
                     key={track.slug}
-                    href={track.primaryHref}
                     className="surface-inset block rounded-[1.7rem] p-5 transition hover:-translate-y-0.5 hover:shadow-[8px_8px_0_hsl(var(--border))]"
                   >
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
@@ -269,7 +268,12 @@ export default async function Home() {
                         </div>
                         <div className="space-y-2">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-2xl font-semibold tracking-tight text-foreground">{track.title}</h3>
+                            <Link
+                              href={track.primaryHref}
+                              className="text-2xl font-semibold tracking-tight text-foreground underline-offset-4 hover:underline"
+                            >
+                              {track.title}
+                            </Link>
                             <StatusBadge tone="info">{track.rating} 分推荐</StatusBadge>
                           </div>
                           <p className="text-sm leading-7 text-muted-foreground">{track.description}</p>
@@ -298,7 +302,7 @@ export default async function Home() {
                         </Button>
                       </div>
                     </div>
-                  </Link>
+                  </div>
                 )
               })}
             </div>
