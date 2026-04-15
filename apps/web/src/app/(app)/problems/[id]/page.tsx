@@ -917,7 +917,7 @@ export default function ProblemDetailPage() {
     <div
       className={cn(
         isScratch
-          ? "mx-auto flex h-full min-h-0 w-full max-w-[min(100vw-0.5rem,1920px)] flex-col px-1 py-1 md:px-2 md:py-2"
+          ? "mx-auto flex h-full min-h-0 w-full max-w-[min(100vw-0.5rem,1920px)] flex-col px-1 py-1 md:px-2 md:py-2 xl:mx-0 xl:max-w-none xl:px-0 xl:py-0"
           : "flex h-full min-h-0 w-full flex-col overflow-hidden py-2 md:py-3 xl:py-0"
       )}
     >
@@ -960,7 +960,7 @@ export default function ProblemDetailPage() {
       className={cn(
         "flex flex-col gap-3 md:min-h-0 md:flex-row md:overflow-hidden",
         isScratch
-          ? "min-h-0"
+          ? "min-h-0 xl:fixed xl:bottom-3 xl:left-[5.75rem] xl:right-4 xl:top-2"
           : "min-h-0 flex-1 xl:fixed xl:bottom-3 xl:left-[5.75rem] xl:right-4 xl:top-[5.5rem]"
       )}
       style={isScratch && scratchViewportHeight ? { height: `${scratchViewportHeight}px` } : undefined}
@@ -1281,7 +1281,7 @@ export default function ProblemDetailPage() {
         <div
           className={cn(
             "flex flex-col md:min-h-0 md:flex-1 md:overscroll-contain",
-            isScratch ? "gap-0 p-0 md:overflow-hidden" : "gap-3 p-3 md:overflow-y-auto"
+            isScratch ? "gap-0 p-0 md:overflow-hidden" : "gap-3 p-3 md:overflow-hidden"
           )}
         >
           {isScratch ? (
@@ -1347,7 +1347,7 @@ export default function ProblemDetailPage() {
               </div>
             </div>
           ) : (
-            <div className="h-[62vh] min-h-[420px]">
+            <div className="min-h-[420px] flex-1 overflow-hidden">
               <CodeEditor
                 value={code}
                 onChange={(val) => {

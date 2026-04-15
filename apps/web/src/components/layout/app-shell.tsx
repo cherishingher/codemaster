@@ -53,7 +53,7 @@ export function AppShell({ children }: AppShellProps) {
       html.style.overflow = previousHtmlOverflow
       body.style.overflow = previousBodyOverflow
     }
-  }, [isProblemDetail])
+  }, [isProblemDetail, pathname])
 
   if (shellDisabled) {
     return (
